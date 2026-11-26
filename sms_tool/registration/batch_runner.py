@@ -1,5 +1,9 @@
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait as futures_wait
 from collections.abc import Mapping
+import importlib
+import os
+from pathlib import Path
+import sys
 import time
 import uuid
 import threading
@@ -33,6 +37,28 @@ from ..storage import (
 )
 
 
+def _load_native_batch_proxy() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_BATCH_PROXY") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "batch-proxy-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("batch_proxy_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_BATCH_PROXY = _load_native_batch_proxy()
+_NATIVE_INTERLEAVE_PROXY_ENDPOINTS = getattr(_NATIVE_BATCH_PROXY, "_interleave_proxy_endpoints", None)
+
+
 class RegistrationProxyPool(list):
     """Selected registration proxies plus sanitized preflight observations."""
 
@@ -54,6 +80,12 @@ def _proxy_endpoint_group(proxy: str) -> str:
 
 def _interleave_proxy_endpoints(proxies) -> list[str]:
     """Keep healthy endpoints represented instead of flattening them by score."""
+    if (
+        _NATIVE_INTERLEAVE_PROXY_ENDPOINTS is not None
+        and isinstance(proxies, list)
+        and all(isinstance(p, str) for p in proxies)
+    ):
+        return _NATIVE_INTERLEAVE_PROXY_ENDPOINTS(proxies)
     groups: dict[str, list[str]] = {}
     for proxy in dict.fromkeys(proxies or []):
         groups.setdefault(_proxy_endpoint_group(proxy), []).append(proxy)

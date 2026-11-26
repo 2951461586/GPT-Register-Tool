@@ -8,12 +8,41 @@ PayPal-specific business meaning, and no dependency on any sibling module.
 from __future__ import annotations
 
 import contextlib
+import importlib
+import os
 import random
 import re
+import sys
 import time
+from pathlib import Path
+from typing import Any
+
+
+def _load_native_paypal_dom() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_PAYPAL_DOM") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "paypal-dom-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("paypal_dom_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_PAYPAL_DOM = _load_native_paypal_dom()
+_NATIVE_VALUE_MATCHES = getattr(_NATIVE_PAYPAL_DOM, "_value_matches", None)
 
 
 def _value_matches(actual: str | None, expected: str | None) -> bool:
+    if _NATIVE_VALUE_MATCHES is not None and isinstance(actual, str) and isinstance(expected, str):
+        return bool(_NATIVE_VALUE_MATCHES(actual, expected))
     actual_s = str(actual or "").strip()
     expected_s = str(expected or "").strip()
     if not expected_s:

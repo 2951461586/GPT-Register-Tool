@@ -536,6 +536,111 @@ pub fn proxy_egress_key(proxy: serde_json::Value) -> Result<String, String> {
     }
 }
 
+#[inline]
+fn b64_val(b: u8) -> Option<u8> {
+    match b {
+        b'A'..=b'Z' => Some(b - b'A'),
+        b'a'..=b'z' => Some(b - b'a' + 26),
+        b'0'..=b'9' => Some(b - b'0' + 52),
+        b'+' | b'-' => Some(62),
+        b'/' | b'_' => Some(63),
+        _ => None,
+    }
+}
+
+fn py_urlsafe_b64decode_ascii(segment: &str) -> Option<Vec<u8>> {
+    if !segment.is_ascii() {
+        return None;
+    }
+    let pad_len = (4 - (segment.len() % 4)) % 4;
+    let mut buf: Vec<u8> = Vec::with_capacity(segment.len() + pad_len);
+    buf.extend_from_slice(segment.as_bytes());
+    buf.resize(segment.len() + pad_len, b'=');
+
+    let mut out = Vec::with_capacity(buf.len() * 3 / 4);
+    let mut quad = [0u8; 4];
+    let mut qlen = 0usize;
+    let mut eq_seen = 0usize;
+
+    for &b in &buf {
+        if b == b'=' {
+            if qlen >= 2 {
+                eq_seen += 1;
+                if qlen + eq_seen >= 4 {
+                    break;
+                }
+            }
+            continue;
+        }
+        if eq_seen > 0 {
+            continue;
+        }
+        if let Some(v) = b64_val(b) {
+            quad[qlen] = v;
+            qlen += 1;
+            if qlen == 4 {
+                out.push((quad[0] << 2) | (quad[1] >> 4));
+                out.push((quad[1] << 4) | (quad[2] >> 2));
+                out.push((quad[2] << 6) | quad[3]);
+                qlen = 0;
+            }
+        }
+    }
+
+    match (qlen, eq_seen) {
+        (0, _) => Some(out),
+        (2, e) if e >= 2 => {
+            out.push((quad[0] << 2) | (quad[1] >> 4));
+            Some(out)
+        }
+        (3, e) if e >= 1 => {
+            out.push((quad[0] << 2) | (quad[1] >> 4));
+            out.push((quad[1] << 4) | (quad[2] >> 2));
+            Some(out)
+        }
+        _ => None,
+    }
+}
+
+fn pick_claim_account_id(map: &serde_json::Map<String, Value>) -> String {
+    let raw = map
+        .get("chatgpt_account_id")
+        .map(py_str_or_empty)
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            map.get("chatgptAccountId")
+                .map(py_str_or_empty)
+                .filter(|s| !s.is_empty())
+        })
+        .unwrap_or_default();
+    py_trim(&raw).to_string()
+}
+
+pub fn chatgpt_account_id_from_token(value: String) -> Result<String, String> {
+    let token = py_trim(&value);
+    let mut parts = token.split('.');
+    let _header = parts.next();
+    let Some(segment) = parts.next() else {
+        return Ok(String::new());
+    };
+    let Some(decoded) = py_urlsafe_b64decode_ascii(segment) else {
+        return Ok(String::new());
+    };
+    let Ok(text) = std::str::from_utf8(&decoded) else {
+        return Ok(String::new());
+    };
+    let Ok(Value::Object(map)) = serde_json::from_str::<Value>(text) else {
+        return Ok(String::new());
+    };
+    if let Some(Value::Object(auth)) = map.get("https://api.openai.com/auth") {
+        let account_id = pick_claim_account_id(auth);
+        if !account_id.is_empty() {
+            return Ok(account_id);
+        }
+    }
+    Ok(pick_claim_account_id(&map))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -549,6 +654,15 @@ mod tests {
             ))
             .unwrap(),
             "http://gw.example:8000|sid=abc123"
+        );
+    }
+
+    #[test]
+    fn extracts_chatgpt_account_id_from_jwt() {
+        let tok = "eyJhbGciOiJub25lIn0.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC0xMjMifX0.sig";
+        assert_eq!(
+            chatgpt_account_id_from_token(tok.to_string()).unwrap(),
+            "acct-123"
         );
     }
 }

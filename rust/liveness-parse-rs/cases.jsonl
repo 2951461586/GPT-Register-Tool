@@ -1,0 +1,254 @@
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "Hello World"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [9007199254740992.0, "line1\nline2"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-2.5, "hello"], "ok": false}
+{"fn": "_is_token_invalid", "args": [2, "  padded  "], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.5, "trailing."], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.5, "a..b"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-0"}, "é"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.5, "tab\tseparated"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.0, "{name} has {count} items"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "NaN"}, "{name} has {count} itemsa..b"], "ok": false}
+{"fn": "_is_token_invalid", "args": [2.0, "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000000, "a.b.cünïcödé"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-2.5, "straße"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1.0, "line1\nline2"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "NaN"}, ":"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.5, "./x/**/*.json"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000.0, "trailing."], "ok": false}
+{"fn": "_is_token_invalid", "args": [10.0, "hello world"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-1.0, "hello world"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.5, "日本語のテキスト"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1.0, "ünïcödé"], "ok": false}
+{"fn": "_is_token_invalid", "args": [2.0, "straße"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1.0, "abca"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "NaN"}, "a:b:c"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-Infinity"}, "a..bHello World"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [100.0, "a..b"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "HELLO"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [42, "ab"], "ok": false}
+{"fn": "_is_token_invalid", "args": [42.0, "a"], "ok": false}
+{"fn": "_is_token_invalid", "args": [100.0, "﻿bom"], "ok": false}
+{"fn": "_is_token_invalid", "args": [3.0, "{name} has {count} items"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-Infinity"}, "a.b.c"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "NaN"}, "  padded  "], "ok": false}
+{"fn": "_is_token_invalid", "args": [100.0, "ΣΊΣΥΦΟΣ😀"], "ok": false}
+{"fn": "_is_token_invalid", "args": [2.0, "HELLO"], "ok": false}
+{"fn": "_is_token_invalid", "args": [3, "hello world"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-Infinity"}, "{name} has {count} items"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [3.0, "İstanbula..b"], "ok": false}
+{"fn": "_is_token_invalid", "args": [2.0, "hello world"], "ok": false}
+{"fn": "_is_token_invalid", "args": [100, "key_name-1"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-2.5, "ns:key.path"], "ok": false}
+{"fn": "_is_token_invalid", "args": [9007199254740992.0, "  padded  a..b"], "ok": false}
+{"fn": "_is_token_invalid", "args": [2.0, "line1\nline2"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-Infinity"}, "src/a/b.ts"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [0.5, "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.5, "a"], "ok": false}
+{"fn": "_is_token_invalid", "args": [42.0, "{name} has {count} items"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-0"}, "İstanbul"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-Infinity"}, "key_name-1hello world"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "-0"}, "straßestraße"], "ok": false}
+{"fn": "_is_token_invalid", "args": [42.0, "a:b:ctab\tseparated"], "ok": false}
+{"fn": "_is_token_invalid", "args": [42, "line1\nline2"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-Infinity"}, "HELLO"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "NaN"}, "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-Infinity"}, "straße﻿bom"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "-0"}, "ünïcödé"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000.0, "a😀b😀c"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000.0, "a:b:cabc"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1.0, "a😀b😀c"], "ok": false}
+{"fn": "_is_token_invalid", "args": [2147483648, "😀"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.5, "😀"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.5, "İstanbul"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1.0, "key_name-1hello"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-Infinity"}, "ab"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [1.0, "hello world"], "ok": false}
+{"fn": "_is_token_invalid", "args": [100.0, "a..btab\tseparated"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000000.0, "line1\nline2ünïcödé"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-0"}, ":"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1.0, "src/a/b.tsa:b:c"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "NaN"}, "hello.leading"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000000.0, "ab"], "ok": false}
+{"fn": "_is_token_invalid", "args": [100, ".leading"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000.0, "./x/**/*.json"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1.0, "trailing."], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.5, "key_name-1"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1, "é"], "ok": false}
+{"fn": "_is_token_invalid", "args": [100.0, "😀"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000000.0, "日本語のテキスト"], "ok": false}
+{"fn": "_is_token_invalid", "args": [10.0, "emoji 👍🏽 mixstraße"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-2.5, ".leading"], "ok": false}
+{"fn": "_is_token_invalid", "args": [42.0, "{name} has {count} items😀"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-1.0, "emoji 👍🏽 mix"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000.0, "line1\nline2ünïcödé"], "ok": false}
+{"fn": "_is_token_invalid", "args": [2, "trailing.line1\nline2"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-Infinity"}, "  padded  "], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [100.0, "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-1.0, "straße"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-Infinity"}, "a😀b😀c﻿bom"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [-1.0, ".leading"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-1.0, "ünïcödé"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.5, "HELLO"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-1, "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_token_invalid", "args": [42.0, "ns:key.path"], "ok": false}
+{"fn": "_is_token_invalid", "args": [100.0, "trailing."], "ok": false}
+{"fn": "_is_token_invalid", "args": [42.0, "./x/**/*.json"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0, "ab"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000000.0, "a😀b😀c"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-2.5, "src/a/b.ts"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-2.5, "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "{name} has {count} itemstab\tseparated"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [-2.5, "line1\nline2"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "a"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [0.5, "straße"], "ok": false}
+{"fn": "_is_token_invalid", "args": [3, "é"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "key_name-1"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [-2.5, "trailing."], "ok": false}
+{"fn": "_is_token_invalid", "args": [100.0, "  padded  "], "ok": false}
+{"fn": "_is_token_invalid", "args": [2, "{name} has {count} items"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000000.0, "é"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-0"}, "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-0"}, "abc"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.5, "{name} has {count} items"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-0"}, "tab\tseparated"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.0, "﻿bom"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.5, "a.b.c"], "ok": false}
+{"fn": "_is_token_invalid", "args": [2147483648, "Hello World"], "ok": false}
+{"fn": "_is_token_invalid", "args": [100.0, "hello world"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000000.0, "aba.b.c"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-0"}, "./x/**/*.json"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-Infinity"}, "./x/**/*.json"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [2.0, "İstanbul  padded  "], "ok": false}
+{"fn": "_is_token_invalid", "args": [10.0, "a..b"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-Infinity"}, "trailing.ns:key.path"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [9007199254740992.0, "a"], "ok": false}
+{"fn": "_is_token_invalid", "args": [9007199254740992.0, ":"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000.0, ":"], "ok": false}
+{"fn": "_is_token_invalid", "args": [10.0, "  padded  "], "ok": false}
+{"fn": "_is_token_invalid", "args": [-2.5, ".leadinghello world"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-2.5, "İstanbulns:key.path"], "ok": false}
+{"fn": "_is_token_invalid", "args": [100.0, "  padded  hello"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-0"}, "Hello World"], "ok": false}
+{"fn": "_is_token_invalid", "args": [3, "tab\tseparated"], "ok": false}
+{"fn": "_is_token_invalid", "args": [42.0, "emoji 👍🏽 mix日本語のテキスト"], "ok": false}
+{"fn": "_is_token_invalid", "args": [100.0, "line1\nline2ab"], "ok": false}
+{"fn": "_is_token_invalid", "args": [2.0, "emoji 👍🏽 mix"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "NaN"}, "a.b.c"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.0, "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "NaN"}, "line1\nline2"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1.0, "a.b.c"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0, "  padded  "], "ok": false}
+{"fn": "_is_token_invalid", "args": [42.0, ".leading"], "ok": false}
+{"fn": "_is_token_invalid", "args": [2147483648.0, "ns:key.path"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1.0, "{name} has {count} items"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1, "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-Infinity"}, "ns:key.path"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [10.0, "HELLO"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-1.0, "{name} has {count} items"], "ok": false}
+{"fn": "_is_token_invalid", "args": [10, "key_name-1"], "ok": false}
+{"fn": "_is_token_invalid", "args": [10.0, "😀"], "ok": false}
+{"fn": "_is_token_invalid", "args": [100.0, "İstanbula😀b😀c"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-2.5, "é"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-1, "  padded  "], "ok": false}
+{"fn": "_is_token_invalid", "args": [100.0, "hello"], "ok": false}
+{"fn": "_is_token_invalid", "args": [9007199254740992.0, "日本語のテキスト{name} has {count} items"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000000.0, "abtab\tseparated"], "ok": false}
+{"fn": "_is_token_invalid", "args": [100, ""], "ok": false}
+{"fn": "_is_token_invalid", "args": [1.0, "src/a/b.ts"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1.0, "abc"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-1.0, "HELLO"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "NaN"}, "tab\tseparated"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-Infinity"}, "é"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [42.0, "hello"], "ok": false}
+{"fn": "_is_token_invalid", "args": [3.0, "key_name-1"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.5, "line1\nline2"], "ok": false}
+{"fn": "_is_token_invalid", "args": [2147483648.0, "İstanbulstraße"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "NaN"}, "emoji 👍🏽 mixa:b:c"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-Infinity"}, ".leading"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [42, "line1\nline2ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_token_invalid", "args": [10.0, "a😀b😀c😀"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "NaN"}, "abc"], "ok": false}
+{"fn": "_is_token_invalid", "args": [100.0, "a"], "ok": false}
+{"fn": "_is_token_invalid", "args": [10, "ünïcödé"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-1.0, "a:b:c"], "ok": false}
+{"fn": "_is_token_invalid", "args": [2.0, "﻿bom"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-2.5, "Hello World"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1, "日本語のテキスト"], "ok": false}
+{"fn": "_is_token_invalid", "args": [2.0, "trailing."], "ok": false}
+{"fn": "_is_token_invalid", "args": [42.0, "a..b"], "ok": false}
+{"fn": "_is_token_invalid", "args": [42.0, "﻿bom日本語のテキスト"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000000, "  padded  "], "ok": false}
+{"fn": "_is_token_invalid", "args": [42.0, "key_name-1ns:key.path"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "tab\tseparated"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [2147483648.0, "  padded  "], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000, "emoji 👍🏽 mix"], "ok": false}
+{"fn": "_is_token_invalid", "args": [9007199254740992.0, "trailing."], "ok": false}
+{"fn": "_is_token_invalid", "args": [10.0, "é"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000.0, "tab\tseparated"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1, "😀src/a/b.ts"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "-Infinity"}, "tab\tseparated"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [-1.0, "src/a/b.ts"], "ok": false}
+{"fn": "_is_token_invalid", "args": [42.0, "hello  padded  "], "ok": false}
+{"fn": "_is_token_invalid", "args": [1000, "é"], "ok": false}
+{"fn": "_is_token_invalid", "args": [9007199254740992.0, "a..b"], "ok": false}
+{"fn": "_is_token_invalid", "args": [9007199254740992.0, "éhello"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.5, "ΣΊΣΥΦΟΣ😀"], "ok": false}
+{"fn": "_is_token_invalid", "args": [2, "./x/**/*.json"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.5, "a😀b😀c"], "ok": false}
+{"fn": "_is_token_invalid", "args": [10.0, "{name} has {count} itemsline1\nline2"], "ok": false}
+{"fn": "_is_token_invalid", "args": [3.0, "src/a/b.ts"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0, "abc"], "ok": false}
+{"fn": "_is_token_invalid", "args": [-7.5, "Hello World"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.1, "Hello World"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0.30000000000000004, "Hello World"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1e+21, "Hello World"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1e-07, "Hello World"], "ok": false}
+{"fn": "_is_token_invalid", "args": [5e-324, "Hello World"], "ok": false}
+{"fn": "_is_token_invalid", "args": [1.7976931348623157e+308, "Hello World"], "ok": false}
+{"fn": "_is_token_invalid", "args": [9007199254740992.0, "Hello World"], "ok": false}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "héllo wörld"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "👍🏽 thumbs"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "日本語"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, ""], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "é"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "İstanbul"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "straße"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "ılık ırmak"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "👨‍👩‍👧 family"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "a b"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "ΣΊΣΥΦΟΣ"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "a😀b"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "﻿bom"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "a²b x½ y①"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "aⅠb Ⅻ"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "a𐐀b 𝐀bc"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "कि ٣٤"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "Iı İi"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "K K k"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "ſ s S"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "x‍y 👨‍👩‍👧"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "a b c　d"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "١٢٣ ٤٥"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "𝟘𝟙 ²³"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "snake_case foo-bar o'neil"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "ǅungla Ǆ"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "one\r\ntwo threefour"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "café café"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [{"$num": "Infinity"}, "ΣΑΣ σας ς"], "error": "OverflowError: cannot convert float infinity to integer"}
+{"fn": "_is_token_invalid", "args": [401, ""], "ok": true}
+{"fn": "_is_token_invalid", "args": [200, ""], "ok": false}
+{"fn": "_is_token_invalid", "args": [200, "ok"], "ok": false}
+{"fn": "_is_token_invalid", "args": [200, "HTTP 401 unauthorized"], "ok": true}
+{"fn": "_is_token_invalid", "args": [403, "error 401: denied"], "ok": true}
+{"fn": "_is_token_invalid", "args": [403, "code 14012 rate limited"], "ok": false}
+{"fn": "_is_token_invalid", "args": [403, "401_custom"], "ok": false}
+{"fn": "_is_token_invalid", "args": [403, "x401"], "ok": false}
+{"fn": "_is_token_invalid", "args": [403, "Your authentication token has been invalidated, please sign in again"], "ok": true}
+{"fn": "_is_token_invalid", "args": [400, "token has been invalidated"], "ok": true}
+{"fn": "_is_token_invalid", "args": [400, "OAuth error: INVALID_GRANT"], "ok": true}
+{"fn": "_is_token_invalid", "args": [400, "missing refresh_token in payload"], "ok": true}
+{"fn": "_is_token_invalid", "args": [500, "upstream gateway timeout"], "ok": false}
+{"fn": "_is_token_invalid", "args": [429, "too many requests"], "ok": false}
+{"fn": "_is_token_invalid", "args": [0, "Unauthorized access"], "ok": true}
+{"fn": "_is_token_invalid", "args": [0, "中文401中文"], "ok": false}
+{"fn": "_is_token_invalid", "args": [200, "status=401; retry=false"], "ok": true}

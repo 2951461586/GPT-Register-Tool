@@ -467,7 +467,7 @@ def test_there_are_exactly_three_unbound_re_raise_sites():
         for stmt in node.body:
             if isinstance(stmt, ast.Raise) and stmt.exc is not None and stmt.cause is None:
                 sites.append(stmt.lineno)
-    assert sorted(sites) == [324, 490, 606]
+    assert sorted(sites) == [365, 531, 647]
 
 
 def test_captcha_error_is_a_plain_exception_subclass():

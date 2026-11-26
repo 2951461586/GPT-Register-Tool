@@ -1,0 +1,43 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/registration/batch_runner.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "batch-proxy-rs",
+  "exports": [
+    {
+      "name": "_interleave_proxy_endpoints",
+      "file": "sms_tool/registration/batch_runner.py",
+      "line": 55,
+      "params": [
+        {
+          "name": "proxies",
+          "ts_type": "string[]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_proxy_endpoint_group",
+      "file": "sms_tool/registration/batch_runner.py",
+      "line": 50,
+      "reason": "measured 1.06x tie due to PyO3 call-crossing cost; kept in Python"
+    },
+    {
+      "name": "select_registration_proxy_pool",
+      "file": "sms_tool/registration/batch_runner.py",
+      "line": 86,
+      "reason": "orchestrates dynamic generation, preflight probing, and console output"
+    }
+  ]
+}

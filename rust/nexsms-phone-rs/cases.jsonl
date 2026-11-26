@@ -1,0 +1,221 @@
+{"fn": "api_phone_number", "args": ["ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "api_phone_number", "args": ["HELLO"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a..b"], "ok": ""}
+{"fn": "api_phone_number", "args": ["abc"], "ok": ""}
+{"fn": "api_phone_number", "args": ["hello worldünïcödé"], "ok": ""}
+{"fn": "api_phone_number", "args": ["./x/**/*.json"], "ok": ""}
+{"fn": "api_phone_number", "args": ["  padded  "], "ok": ""}
+{"fn": "api_phone_number", "args": ["src/a/b.ts"], "ok": ""}
+{"fn": "api_phone_number", "args": ["﻿bom"], "ok": ""}
+{"fn": "api_phone_number", "args": ["ünïcödé./x/**/*.json"], "ok": ""}
+{"fn": "api_phone_number", "args": ["tab\tseparated"], "ok": ""}
+{"fn": "api_phone_number", "args": ["emoji 👍🏽 mix"], "ok": ""}
+{"fn": "api_phone_number", "args": ["straße"], "ok": ""}
+{"fn": "api_phone_number", "args": ["trailing."], "ok": ""}
+{"fn": "api_phone_number", "args": ["hello world"], "ok": ""}
+{"fn": "api_phone_number", "args": ["straßeline1\nline2"], "ok": "12"}
+{"fn": "api_phone_number", "args": ["ns:key.path"], "ok": ""}
+{"fn": "api_phone_number", "args": ["{name} has {count} items"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a:b:c"], "ok": ""}
+{"fn": "api_phone_number", "args": [".leading"], "ok": ""}
+{"fn": "api_phone_number", "args": ["Hello World"], "ok": ""}
+{"fn": "api_phone_number", "args": ["  padded  ns:key.path"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a"], "ok": ""}
+{"fn": "api_phone_number", "args": ["é"], "ok": ""}
+{"fn": "api_phone_number", "args": ["İstanbul"], "ok": ""}
+{"fn": "api_phone_number", "args": ["hello"], "ok": ""}
+{"fn": "api_phone_number", "args": ["ab"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a.b.c"], "ok": ""}
+{"fn": "api_phone_number", "args": [""], "ok": ""}
+{"fn": "api_phone_number", "args": ["tab\tseparateda"], "ok": ""}
+{"fn": "api_phone_number", "args": ["line1\nline2"], "ok": "12"}
+{"fn": "api_phone_number", "args": ["ünïcödéab"], "ok": ""}
+{"fn": "api_phone_number", "args": ["abHello World"], "ok": ""}
+{"fn": "api_phone_number", "args": ["key_name-1"], "ok": "1"}
+{"fn": "api_phone_number", "args": ["line1\nline2a:b:c"], "ok": "12"}
+{"fn": "api_phone_number", "args": [".leading{name} has {count} items"], "ok": ""}
+{"fn": "api_phone_number", "args": ["abcHELLO"], "ok": ""}
+{"fn": "api_phone_number", "args": ["😀"], "ok": ""}
+{"fn": "api_phone_number", "args": ["HELLOa"], "ok": ""}
+{"fn": "api_phone_number", "args": ["日本語のテキスト"], "ok": ""}
+{"fn": "api_phone_number", "args": ["İstanbulline1\nline2"], "ok": "12"}
+{"fn": "api_phone_number", "args": ["é😀"], "ok": ""}
+{"fn": "api_phone_number", "args": ["ünïcödéline1\nline2"], "ok": "12"}
+{"fn": "api_phone_number", "args": ["aa.b.c"], "ok": ""}
+{"fn": "api_phone_number", "args": ["﻿boma:b:c"], "ok": ""}
+{"fn": "api_phone_number", "args": ["﻿bomtab\tseparated"], "ok": ""}
+{"fn": "api_phone_number", "args": [":./x/**/*.json"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a😀b😀c"], "ok": ""}
+{"fn": "api_phone_number", "args": ["ΣΊΣΥΦΟΣ:"], "ok": ""}
+{"fn": "api_phone_number", "args": ["helloİstanbul"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a😀b😀cline1\nline2"], "ok": "12"}
+{"fn": "api_phone_number", "args": ["é  padded  "], "ok": ""}
+{"fn": "api_phone_number", "args": ["﻿bomHello World"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a:b:cé"], "ok": ""}
+{"fn": "api_phone_number", "args": ["line1\nline2{name} has {count} items"], "ok": "12"}
+{"fn": "api_phone_number", "args": ["line1\nline2trailing."], "ok": "12"}
+{"fn": "api_phone_number", "args": ["😀a😀b😀c"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a.b.ca"], "ok": ""}
+{"fn": "api_phone_number", "args": ["ns:key.pathkey_name-1"], "ok": "1"}
+{"fn": "api_phone_number", "args": ["éa:b:c"], "ok": ""}
+{"fn": "api_phone_number", "args": [":"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a:b:cab"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a.b.ckey_name-1"], "ok": "1"}
+{"fn": "api_phone_number", "args": ["ünïcödé"], "ok": ""}
+{"fn": "api_phone_number", "args": ["ünïcödé  padded  "], "ok": ""}
+{"fn": "api_phone_number", "args": ["hello world./x/**/*.json"], "ok": ""}
+{"fn": "api_phone_number", "args": ["{name} has {count} itemssrc/a/b.ts"], "ok": ""}
+{"fn": "api_phone_number", "args": ["emoji 👍🏽 mixHELLO"], "ok": ""}
+{"fn": "api_phone_number", "args": ["  padded  key_name-1"], "ok": "1"}
+{"fn": "api_phone_number", "args": [".leadinghello world"], "ok": ""}
+{"fn": "api_phone_number", "args": ["abcemoji 👍🏽 mix"], "ok": ""}
+{"fn": "api_phone_number", "args": [".leadingab"], "ok": ""}
+{"fn": "api_phone_number", "args": ["straßeemoji 👍🏽 mix"], "ok": ""}
+{"fn": "api_phone_number", "args": ["emoji 👍🏽 mix./x/**/*.json"], "ok": ""}
+{"fn": "api_phone_number", "args": ["HELLOhello world"], "ok": ""}
+{"fn": "api_phone_number", "args": ["hello worldstraße"], "ok": ""}
+{"fn": "api_phone_number", "args": ["helloa"], "ok": ""}
+{"fn": "api_phone_number", "args": [":abc"], "ok": ""}
+{"fn": "api_phone_number", "args": ["😀a:b:c"], "ok": ""}
+{"fn": "api_phone_number", "args": ["abcsrc/a/b.ts"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a..ba..b"], "ok": ""}
+{"fn": "api_phone_number", "args": ["hello worlda"], "ok": ""}
+{"fn": "api_phone_number", "args": ["key_name-1ünïcödé"], "ok": "1"}
+{"fn": "api_phone_number", "args": ["﻿bom{name} has {count} items"], "ok": ""}
+{"fn": "api_phone_number", "args": ["key_name-1😀"], "ok": "1"}
+{"fn": "api_phone_number", "args": ["hellohello"], "ok": ""}
+{"fn": "api_phone_number", "args": ["{name} has {count} itemsé"], "ok": ""}
+{"fn": "api_phone_number", "args": ["abkey_name-1"], "ok": "1"}
+{"fn": "api_phone_number", "args": ["a:b:c  padded  "], "ok": ""}
+{"fn": "api_phone_number", "args": ["ünïcödé日本語のテキスト"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a😀b😀ca"], "ok": ""}
+{"fn": "api_phone_number", "args": ["key_name-1tab\tseparated"], "ok": "1"}
+{"fn": "api_phone_number", "args": ["Hello Worldab"], "ok": ""}
+{"fn": "api_phone_number", "args": ["ns:key.pathhello world"], "ok": ""}
+{"fn": "api_phone_number", "args": ["straße日本語のテキスト"], "ok": ""}
+{"fn": "api_phone_number", "args": ["hello日本語のテキスト"], "ok": ""}
+{"fn": "api_phone_number", "args": ["ab﻿bom"], "ok": ""}
+{"fn": "api_phone_number", "args": ["src/a/b.ts{name} has {count} items"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a😀b😀ca..b"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a..bΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "api_phone_number", "args": ["日本語のテキストa😀b😀c"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a:b:cHello World"], "ok": ""}
+{"fn": "api_phone_number", "args": ["😀.leading"], "ok": ""}
+{"fn": "api_phone_number", "args": ["ünïcödétrailing."], "ok": ""}
+{"fn": "api_phone_number", "args": ["HELLOns:key.path"], "ok": ""}
+{"fn": "api_phone_number", "args": ["hello:"], "ok": ""}
+{"fn": "api_phone_number", "args": ["straßetab\tseparated"], "ok": ""}
+{"fn": "api_phone_number", "args": ["key_name-1abc"], "ok": "1"}
+{"fn": "api_phone_number", "args": ["key_name-1trailing."], "ok": "1"}
+{"fn": "api_phone_number", "args": ["a.b.c:"], "ok": ""}
+{"fn": "api_phone_number", "args": ["{name} has {count} items  padded  "], "ok": ""}
+{"fn": "api_phone_number", "args": ["emoji 👍🏽 mixline1\nline2"], "ok": "12"}
+{"fn": "api_phone_number", "args": ["astraße"], "ok": ""}
+{"fn": "api_phone_number", "args": ["hellotab\tseparated"], "ok": ""}
+{"fn": "api_phone_number", "args": ["key_name-1line1\nline2"], "ok": "112"}
+{"fn": "api_phone_number", "args": ["key_name-1Hello World"], "ok": "1"}
+{"fn": "api_phone_number", "args": ["src/a/b.tsemoji 👍🏽 mix"], "ok": ""}
+{"fn": "api_phone_number", "args": ["😀Hello World"], "ok": ""}
+{"fn": "api_phone_number", "args": ["﻿bomab"], "ok": ""}
+{"fn": "api_phone_number", "args": ["😀hello world"], "ok": ""}
+{"fn": "api_phone_number", "args": ["tab\tseparateda.b.c"], "ok": ""}
+{"fn": "api_phone_number", "args": ["HELLOstraße"], "ok": ""}
+{"fn": "api_phone_number", "args": [":hello world"], "ok": ""}
+{"fn": "api_phone_number", "args": ["abns:key.path"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a:b:cΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "api_phone_number", "args": ["./x/**/*.json﻿bom"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a:b:ca..b"], "ok": ""}
+{"fn": "api_phone_number", "args": ["HELLOa.b.c"], "ok": ""}
+{"fn": "api_phone_number", "args": [":  padded  "], "ok": ""}
+{"fn": "api_phone_number", "args": ["{name} has {count} itemsa..b"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a{name} has {count} items"], "ok": ""}
+{"fn": "api_phone_number", "args": ["./x/**/*.json{name} has {count} items"], "ok": ""}
+{"fn": "api_phone_number", "args": ["Hello World  padded  "], "ok": ""}
+{"fn": "api_phone_number", "args": ["src/a/b.tsa..b"], "ok": ""}
+{"fn": "api_phone_number", "args": ["straßekey_name-1"], "ok": "1"}
+{"fn": "api_phone_number", "args": ["::"], "ok": ""}
+{"fn": "api_phone_number", "args": ["./x/**/*.json.leading"], "ok": ""}
+{"fn": "api_phone_number", "args": ["ΣΊΣΥΦΟΣé"], "ok": ""}
+{"fn": "api_phone_number", "args": ["ΣΊΣΥΦΟΣkey_name-1"], "ok": "1"}
+{"fn": "api_phone_number", "args": ["trailing.Hello World"], "ok": ""}
+{"fn": "api_phone_number", "args": ["abcΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "api_phone_number", "args": ["  padded  emoji 👍🏽 mix"], "ok": ""}
+{"fn": "api_phone_number", "args": ["line1\nline2é"], "ok": "12"}
+{"fn": "api_phone_number", "args": ["trailing.hello world"], "ok": ""}
+{"fn": "api_phone_number", "args": ["./x/**/*.jsonns:key.path"], "ok": ""}
+{"fn": "api_phone_number", "args": ["key_name-1a😀b😀c"], "ok": "1"}
+{"fn": "api_phone_number", "args": ["{name} has {count} itemsemoji 👍🏽 mix"], "ok": ""}
+{"fn": "api_phone_number", "args": ["Hello World日本語のテキスト"], "ok": ""}
+{"fn": "api_phone_number", "args": ["😀İstanbul"], "ok": ""}
+{"fn": "api_phone_number", "args": ["﻿bomhello"], "ok": ""}
+{"fn": "api_phone_number", "args": ["emoji 👍🏽 mixa:b:c"], "ok": ""}
+{"fn": "api_phone_number", "args": ["😀ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "api_phone_number", "args": [":{name} has {count} items"], "ok": ""}
+{"fn": "api_phone_number", "args": ["{name} has {count} items.leading"], "ok": ""}
+{"fn": "api_phone_number", "args": ["日本語のテキストemoji 👍🏽 mix"], "ok": ""}
+{"fn": "api_phone_number", "args": ["İstanbul日本語のテキスト"], "ok": ""}
+{"fn": "api_phone_number", "args": ["日本語のテキストabc"], "ok": ""}
+{"fn": "api_phone_number", "args": [".leadingns:key.path"], "ok": ""}
+{"fn": "api_phone_number", "args": ["akey_name-1"], "ok": "1"}
+{"fn": "api_phone_number", "args": ["{name} has {count} items日本語のテキスト"], "ok": ""}
+{"fn": "api_phone_number", "args": ["line1\nline2ns:key.path"], "ok": "12"}
+{"fn": "api_phone_number", "args": ["ünïcödéé"], "ok": ""}
+{"fn": "api_phone_number", "args": [":.leading"], "ok": ""}
+{"fn": "api_phone_number", "args": ["hello./x/**/*.json"], "ok": ""}
+{"fn": "api_phone_number", "args": ["﻿bomünïcödé"], "ok": ""}
+{"fn": "api_phone_number", "args": ["line1\nline2:"], "ok": "12"}
+{"fn": "api_phone_number", "args": ["hello worldHELLO"], "ok": ""}
+{"fn": "api_phone_number", "args": ["emoji 👍🏽 mixhello world"], "ok": ""}
+{"fn": "api_phone_number", "args": [".leading./x/**/*.json"], "ok": ""}
+{"fn": "api_phone_number", "args": ["emoji 👍🏽 mixns:key.path"], "ok": ""}
+{"fn": "api_phone_number", "args": ["ΣΊΣΥΦΟΣabc"], "ok": ""}
+{"fn": "api_phone_number", "args": ["😀ünïcödé"], "ok": ""}
+{"fn": "api_phone_number", "args": ["{name} has {count} itemshello world"], "ok": ""}
+{"fn": "api_phone_number", "args": ["key_name-1.leading"], "ok": "1"}
+{"fn": "api_phone_number", "args": ["line1\nline2İstanbul"], "ok": "12"}
+{"fn": "api_phone_number", "args": ["abckey_name-1"], "ok": "1"}
+{"fn": "api_phone_number", "args": ["helloa:b:c"], "ok": ""}
+{"fn": "api_phone_number", "args": ["Hello Worldstraße"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a..ba😀b😀c"], "ok": ""}
+{"fn": "api_phone_number", "args": ["éa😀b😀c"], "ok": ""}
+{"fn": "api_phone_number", "args": ["aba😀b😀c"], "ok": ""}
+{"fn": "api_phone_number", "args": ["abhello"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a😀b😀cHello World"], "ok": ""}
+{"fn": "api_phone_number", "args": ["hello worldabc"], "ok": ""}
+{"fn": "api_phone_number", "args": ["ünïcödétab\tseparated"], "ok": ""}
+{"fn": "api_phone_number", "args": [".leadingstraße"], "ok": ""}
+{"fn": "api_phone_number", "args": ["tab\tseparatedabc"], "ok": ""}
+{"fn": "api_phone_number", "args": ["aba..b"], "ok": ""}
+{"fn": "api_phone_number", "args": ["HELLOemoji 👍🏽 mix"], "ok": ""}
+{"fn": "api_phone_number", "args": ["éünïcödé"], "ok": ""}
+{"fn": "api_phone_number", "args": ["ΣΊΣΥΦΟΣstraße"], "ok": ""}
+{"fn": "api_phone_number", "args": ["ns:key.pathtrailing."], "ok": ""}
+{"fn": "api_phone_number", "args": ["a..ba:b:c"], "ok": ""}
+{"fn": "api_phone_number", "args": ["Hello World.leading"], "ok": ""}
+{"fn": "api_phone_number", "args": ["tab\tseparateda:b:c"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a:b:c:"], "ok": ""}
+{"fn": "api_phone_number", "args": [":line1\nline2"], "ok": "12"}
+{"fn": "api_phone_number", "args": ["İstanbula"], "ok": ""}
+{"fn": "api_phone_number", "args": ["hello😀"], "ok": ""}
+{"fn": "api_phone_number", "args": ["abcİstanbul"], "ok": ""}
+{"fn": "api_phone_number", "args": ["héllo wörld"], "ok": ""}
+{"fn": "api_phone_number", "args": ["👍🏽 thumbs"], "ok": ""}
+{"fn": "api_phone_number", "args": ["日本語"], "ok": ""}
+{"fn": "api_phone_number", "args": ["ılık ırmak"], "ok": ""}
+{"fn": "api_phone_number", "args": ["👨‍👩‍👧 family"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a b"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a😀b"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a²b x½ y①"], "ok": "²①"}
+{"fn": "api_phone_number", "args": ["aⅠb Ⅻ"], "ok": ""}
+{"fn": "api_phone_number", "args": ["a𐐀b 𝐀bc"], "ok": ""}
+{"fn": "api_phone_number", "args": ["कि ٣٤"], "ok": "٣٤"}
+{"fn": "api_phone_number", "args": ["+233 55-123-4567"], "ok": "233551234567"}
+{"fn": "api_phone_number", "args": ["0086-138-0013-8000"], "ok": "8613800138000"}
+{"fn": "api_phone_number", "args": ["  +001 (415) 555-0199  "], "ok": "14155550199"}
+{"fn": "api_phone_number", "args": ["+63 917 888 9999"], "ok": "639178889999"}
+{"fn": "api_phone_number", "args": ["0044 7700 900123"], "ok": "447700900123"}
+{"fn": "api_phone_number", "args": ["233551234567"], "ok": "233551234567"}
+{"fn": "api_phone_number", "args": ["+00"], "ok": ""}
+{"fn": "api_phone_number", "args": [""], "ok": ""}
+{"fn": "api_phone_number", "args": ["abc-def+ghi"], "ok": ""}
+{"fn": "api_phone_number", "args": ["+84 (0)90-123-4567 ext 89"], "ok": "84090123456789"}

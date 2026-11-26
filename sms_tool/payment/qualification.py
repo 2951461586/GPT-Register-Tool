@@ -55,9 +55,13 @@ with its token already attached, so nothing here reads the account store.
 
 from __future__ import annotations
 
+import importlib
 import logging
+import os
+import sys
 import uuid
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 from .capability import payment_method_capability_probe
@@ -78,6 +82,28 @@ from .qualification_states import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _load_native_qualification_parse() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_QUALIFICATION_PARSE") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "qualification-parse-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("qualification_parse_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_QUALIFICATION_PARSE = _load_native_qualification_parse()
+_NATIVE_PARSE_METHOD_SELECTION = getattr(_NATIVE_QUALIFICATION_PARSE, "parse_method_selection", None)
 
 #: ``auto`` = every catalogue method whose country matches the exit country.
 #: Kept as the default so an operator does not have to know which method a
@@ -180,6 +206,8 @@ def parse_method_selection(value: Any) -> list[str]:
     ``auto`` (and an empty value) yields an empty list, which callers read as
     "derive from the country".
     """
+    if _NATIVE_PARSE_METHOD_SELECTION is not None and isinstance(value, str):
+        return _NATIVE_PARSE_METHOD_SELECTION(value)
     if isinstance(value, (list, tuple)):
         raw = [str(item) for item in value]
     else:

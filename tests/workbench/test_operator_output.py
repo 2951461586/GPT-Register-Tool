@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -75,10 +76,10 @@ def test_emit_passes_extra_fields_to_the_log(capsys):
 
 
 def _count(source: str) -> int:
-    path = ROOT / "runtime" / "tmp" / "_ratchet_probe.py"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(source, encoding="utf-8")
-    return ratchet._bare_print_count(path)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "_ratchet_probe.py"
+        path.write_text(source, encoding="utf-8")
+        return ratchet._bare_print_count(path)
 
 
 def test_bare_print_is_counted():

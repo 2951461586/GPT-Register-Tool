@@ -8,9 +8,34 @@ while making local driver configuration convenient.
 
 from __future__ import annotations
 
+import importlib
 import os
 import re
+import sys
 from pathlib import Path
+from typing import Any
+
+
+def _load_native_env_loader() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_ENV_LOADER") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "env-loader-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("env_loader_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_ENV_LOADER = _load_native_env_loader()
+_NATIVE_PARSE_LINES = getattr(_NATIVE_ENV_LOADER, "_parse_lines", None)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -60,6 +85,8 @@ def _decode_value(raw: str) -> str:
 
 
 def _parse_lines(lines: list[str]) -> dict[str, str]:
+    if _NATIVE_PARSE_LINES is not None and isinstance(lines, list) and all(isinstance(line, str) for line in lines):
+        return _NATIVE_PARSE_LINES(lines)
     values: dict[str, str] = {}
     for raw_line in lines:
         line = raw_line.strip()

@@ -1,0 +1,53 @@
+{
+    "schema":  "rust-anything/bridge@1",
+    "root":  "F:\\epsoft\\GPT-Register-Tool",
+    "unit":  "sms_tool/paypal/dom_fields.py",
+    "language":  "python",
+    "kind":  "pyo3",
+    "crate_name":  "paypal-dom-rs",
+    "exports":  [
+                    {
+                        "name":  "_value_matches",
+                        "file":  "sms_tool/paypal/dom_fields.py",
+                        "line":  16,
+                        "params":  [
+                                       {
+                                           "name":  "actual",
+                                           "ts_type":  "string",
+                                           "optional":  false,
+                                           "rest":  false
+                                       },
+                                       {
+                                           "name":  "expected",
+                                           "ts_type":  "string",
+                                           "optional":  false,
+                                           "rest":  false
+                                       }
+                                   ],
+                        "returns":  "boolean",
+                        "is_async":  false,
+                        "is_generator":  false,
+                        "type_params":  [
+
+                                        ],
+                        "uses_instanceof":  false
+                    }
+                ],
+    "classes":  [
+
+                ],
+    "js_only":  [
+                    {
+                        "name":  "_set_field_value",
+                        "file":  "sms_tool/paypal/dom_fields.py",
+                        "line":  39,
+                        "reason":  "Playwright DOM interaction stays in Python"
+                    },
+                    {
+                        "name":  "_fill_dom_id",
+                        "file":  "sms_tool/paypal/dom_fields.py",
+                        "line":  92,
+                        "reason":  "Playwright frame JS evaluation stays in Python"
+                    }
+                ]
+}

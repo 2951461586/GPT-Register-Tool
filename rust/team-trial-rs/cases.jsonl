@@ -1,0 +1,237 @@
+{"fn": "_jwt_chatgpt_account_id", "args": ["a..b"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["src/a/b.ts"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["  padded  "], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hello world"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["😀"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["😀hello"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["line1\nline2"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": [".leadingé"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hello  padded  "], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["abc"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["  padded  İstanbul"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ünïcödé"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ns:key.path"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a😀b😀c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hello"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a.b.c{name} has {count} items"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["é"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["éa..b"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["İstanbul"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": [".leading"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["abcΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["tab\tseparated"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["﻿bom"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["line1\nline2é"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["key_name-1"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["HELLO"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a.b.chello world"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["{name} has {count} items"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["日本語のテキスト"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["emoji 👍🏽 mix"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["atrailing."], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["Hello World"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a:b:c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["./x/**/*.json"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ab"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a.b.c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ΣΊΣΥΦΟΣ{name} has {count} items"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["trailing."], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": [""], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["Hello Worldline1\nline2"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ahello world"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ns:key.pathstraße"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["straße"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ns:key.pathns:key.path"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["line1\nline2abc"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ünïcödéé"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["straßesrc/a/b.ts"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a:b:ca.b.c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": [".leading日本語のテキスト"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["./x/**/*.json﻿bom"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["./x/**/*.jsona.b.c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["{name} has {count} itemsünïcödé"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["./x/**/*.jsona😀b😀c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": [":"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["日本語のテキストline1\nline2"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hello worldHELLO"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": [":ab"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a..bhello"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a.b.cns:key.path"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["src/a/b.tstrailing."], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["src/a/b.tsünïcödé"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["İstanbula😀b😀c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["😀ns:key.path"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ünïcödésrc/a/b.ts"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["trailing.a"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["src/a/b.tsa..b"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": [":a:b:c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["abc./x/**/*.json"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["HELLOtab\tseparated"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["éHello World"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["{name} has {count} itemsΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["emoji 👍🏽 mixline1\nline2"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["{name} has {count} itemsa..b"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["﻿bomemoji 👍🏽 mix"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ΣΊΣΥΦΟΣemoji 👍🏽 mix"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a:b:cé"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a.b.ca:b:c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["İstanbulemoji 👍🏽 mix"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["line1\nline2  padded  "], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ns:key.path😀"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["HELLOns:key.path"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["İstanbulé"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["src/a/b.tsİstanbul"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["./x/**/*.jsoné"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["aba😀b😀c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["./x/**/*.jsonHELLO"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["key_name-1./x/**/*.json"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a:b:ca:b:c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ünïcödé日本語のテキスト"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a😀b😀c﻿bom"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["日本語のテキストkey_name-1"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["日本語のテキストhello world"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["src/a/b.ts:"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a:b:c😀"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["aline1\nline2"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ΣΊΣΥΦΟΣΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ΣΊΣΥΦΟΣabc"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["abc﻿bom"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["abcHello World"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": [".leadinghello world"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["abctab\tseparated"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["emoji 👍🏽 mixa"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["emoji 👍🏽 mixHello World"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["trailing../x/**/*.json"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["astraße"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["key_name-1emoji 👍🏽 mix"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["Hello World:"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["line1\nline2key_name-1"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ünïcödétab\tseparated"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["日本語のテキストemoji 👍🏽 mix"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["./x/**/*.json  padded  "], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["tab\tseparatedünïcödé"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["éns:key.path"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["﻿bom😀"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["İstanbulhello world"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ékey_name-1"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["éabc"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["tab\tseparatedHello World"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": [".leading﻿bom"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["  padded    padded  "], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["{name} has {count} itemsemoji 👍🏽 mix"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["Hello World😀"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["éa😀b😀c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["straßea:b:c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["akey_name-1"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["src/a/b.tsline1\nline2"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["  padded  a..b"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["İstanbul{name} has {count} items"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["line1\nline2日本語のテキスト"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ns:key.path.leading"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ΣΊΣΥΦΟΣünïcödé"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["src/a/b.tshello"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["tab\tseparated.leading"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hello worlda..b"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["abc:"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["src/a/b.tsa😀b😀c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["src/a/b.tsstraße"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["trailing.{name} has {count} items"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ab{name} has {count} items"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ΣΊΣΥΦΟΣ./x/**/*.json"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a..bİstanbul"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["éa"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["emoji 👍🏽 mixemoji 👍🏽 mix"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["key_name-1{name} has {count} items"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["日本語のテキストtab\tseparated"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["😀a:b:c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ünïcödéemoji 👍🏽 mix"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a..bstraße"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["İstanbula:b:c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["key_name-1a😀b😀c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ns:key.pathünïcödé"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a😀b😀c{name} has {count} items"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["Hello Worldstraße"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["abtrailing."], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ünïcödékey_name-1"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["😀straße"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hello worldΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["Hello Worldtab\tseparated"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["日本語のテキストHello World"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["emoji 👍🏽 mixhello"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["İstanbulHello World"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["😀ünïcödé"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ΣΊΣΥΦΟΣhello world"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a😀b😀c.leading"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["./x/**/*.jsonsrc/a/b.ts"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["é😀"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["aHELLO"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["😀./x/**/*.json"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": [":{name} has {count} items"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hello world﻿bom"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["  padded  ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["İstanbula..b"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a:b:cab"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": [".leadinga😀b😀c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["line1\nline2src/a/b.ts"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["tab\tseparated{name} has {count} items"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["éHELLO"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["trailing.abc"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["{name} has {count} itemstab\tseparated"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["trailing.ns:key.path"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hellohello world"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["straßeİstanbul"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["src/a/b.tsHELLO"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["  padded  straße"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["src/a/b.tsa.b.c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["src/a/b.tsa:b:c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["straßeHello World"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a..bab"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["😀﻿bom"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a.b.csrc/a/b.ts"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ΣΊΣΥΦΟΣtrailing."], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": [":line1\nline2"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ΣΊΣΥΦΟΣ﻿bom"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hello﻿bom"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["key_name-1:"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["  padded  日本語のテキスト"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["HELLOHELLO"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["trailing.hello"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["héllo wörld"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["👍🏽 thumbs"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["日本語"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ılık ırmak"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["👨‍👩‍👧 family"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a b"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a😀b"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a²b x½ y①"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["aⅠb Ⅻ"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a𐐀b 𝐀bc"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["कि ٣٤"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["Iı İi"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["K K k"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ſ s S"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["x‍y 👨‍👩‍👧"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a b c　d"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["١٢٣ ٤٥"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["𝟘𝟙 ²³"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["snake_case foo-bar o'neil"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ǅungla Ǆ"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["one\r\ntwo threefour"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["café café"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["ΣΑΣ σας ς"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": [""], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["not-a-jwt"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["onlyone"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a..c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a.!!!notbase64!!!.c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["a.中文.c"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hdr.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIn19.sig"], "ok": "550e8400-e29b-41d4-a716-446655440000"}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hdr.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiICBhY2N0LXBhZGRlZCAgIn19.sig"], "ok": "acct-padded"}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hdr.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZGVmYXVsdCJ9fQ.sig"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hdr.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiIn19.sig"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hdr.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjpudWxsfX0.sig"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hdr.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOiJub3QtZGljdCJ9.sig"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hdr.WyJub3QiLCJhIiwiZGljdCJd.sig"], "ok": ""}
+{"fn": "_jwt_chatgpt_account_id", "args": ["hdr.eyJzdWIiOiJhdXRoMHwxMjMiLCJleHAiOjE5MDAwMDAwMDAsImh0dHBzOi8vYXBpLm9wZW5haS5jb20vYXV0aCI6eyJjaGF0Z3B0X2FjY291bnRfaWQiOiJhY2N0LXJlYWwtOTk5IiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJmcmVlIn19.sig"], "ok": "acct-real-999"}

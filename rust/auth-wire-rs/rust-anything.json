@@ -1,0 +1,55 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/transport/auth_wire.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "auth-wire-rs",
+  "exports": [
+    {
+      "name": "_is_existing_login_redirect",
+      "file": "sms_tool/transport/auth_wire.py",
+      "line": 42,
+      "params": [
+        {
+          "name": "url",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_with_query_param",
+      "file": "sms_tool/transport/auth_wire.py",
+      "line": 56,
+      "reason": "measured 0.73x on rust-anything bench due to PyO3 call-crossing cost; kept in Python"
+    },
+    {
+      "name": "_invalid_state_auth_response",
+      "file": "sms_tool/transport/auth_wire.py",
+      "line": 64,
+      "reason": "small dict inspection; PyO3 dict crossing exceeds body cost"
+    },
+    {
+      "name": "_strip_chatgpt_only_headers",
+      "file": "sms_tool/transport/auth_wire.py",
+      "line": 82,
+      "reason": "small header dict comprehension; PyO3 dict crossing exceeds body cost"
+    },
+    {
+      "name": "_auth_request_headers",
+      "file": "sms_tool/transport/auth_wire.py",
+      "line": 87,
+      "reason": "calls openai_auth_headers reading thread-local fingerprint state"
+    }
+  ]
+}

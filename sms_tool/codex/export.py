@@ -1,9 +1,13 @@
 import base64
+import importlib
 import json
+import os
 import re
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from curl_cffi import requests as curl_requests
 
@@ -12,8 +16,29 @@ from .oauth import refresh_codex_oauth_session
 from ..kernel.paths import output_dir
 from ..session.refresh import _load_seed_session, _session_token, refresh_session
 from ..storage import _looks_codex_refresh_token, upsert_account
-from typing import Any
 from ..transport import endpoints
+
+
+def _load_native_codex_jwt() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_CODEX_JWT") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "codex-jwt-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("codex_jwt_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_CODEX_JWT = _load_native_codex_jwt()
+_NATIVE_JWT_CLAIMS = getattr(_NATIVE_CODEX_JWT, "_jwt_claims", None)
 
 
 def export_codex_session(
@@ -405,6 +430,8 @@ def _codex_export_path(email, export_dir):
 
 
 def _jwt_claims(token):
+    if _NATIVE_JWT_CLAIMS is not None and isinstance(token, str):
+        return _NATIVE_JWT_CLAIMS(token)
     try:
         parts = str(token or "").split(".")
         if len(parts) < 2:

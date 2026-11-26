@@ -5,7 +5,7 @@
   python -m scripts.manual.probe_single_account_liveness --session sessions/session_<email>_<ts>.json
   python -m scripts.manual.probe_single_account_liveness --latest --proxy http://127.0.0.1:7890
 
-判定规则（基于 sms_tool.account_liveness.probe_account_liveness 返回）:
+判定规则（基于 sms_tool.accounts.account_liveness.probe_account_liveness 返回）:
   status == "active"                -> 账号存活（ok=True, 2xx）
   status == "token_invalid"         -> 掉号（401/403/token 失效）
   其余 / 检测失败                   -> 不确定（需人工复核）

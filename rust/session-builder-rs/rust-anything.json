@@ -1,0 +1,37 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/session/builder.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "session-builder-rs",
+  "exports": [
+    {
+      "name": "_session_token_from_cookie_header",
+      "file": "sms_tool/session/builder.py",
+      "line": 24,
+      "params": [
+        {
+          "name": "cookie_header",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "build_session_file",
+      "file": "sms_tool/session/builder.py",
+      "line": 46,
+      "reason": "uses wall clock time and builds nested session payload dict in Python"
+    }
+  ]
+}

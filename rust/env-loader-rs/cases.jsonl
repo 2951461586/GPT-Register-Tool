@@ -1,0 +1,205 @@
+{"fn": "_parse_lines", "args": [["abc", "a"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["key_name-1é"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["emoji 👍🏽 mix", ""]], "ok": {}}
+{"fn": "_parse_lines", "args": [["emoji 👍🏽 mix.leading", "a"]], "ok": {}}
+{"fn": "_parse_lines", "args": [[]], "ok": {}}
+{"fn": "_parse_lines", "args": [["./x/**/*.json"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["  padded  ", "a:b:c{name} has {count} items", "ünïcödé"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["İstanbulabc", "key_name-1", "ΣΊΣΥΦΟΣ"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ab", "a😀b😀cİstanbul", "straße"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["İstanbul", "ns:key.path", "trailing.trailing."]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ab", "./x/**/*.json"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["src/a/b.ts", "a:b:chello", "HELLO"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["İstanbul", "ünïcödé", ""]], "ok": {}}
+{"fn": "_parse_lines", "args": [["emoji 👍🏽 mix", "aΣΊΣΥΦΟΣ"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ns:key.path"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a😀b😀c", "ünïcödé"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ns:key.path", "ΣΊΣΥΦΟΣ", "a:b:c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["line1\nline2"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ns:key.path", "  padded  "]], "ok": {}}
+{"fn": "_parse_lines", "args": [["key_name-1a..b", "abc", "İstanbul"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["日本語のテキスト", "{name} has {count} items", "日本語のテキスト"]], "ok": {}}
+{"fn": "_parse_lines", "args": [[":key_name-1", "İstanbul"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["./x/**/*.jsonns:key.path", "HELLO"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["{name} has {count} items", "a.b.c{name} has {count} items", "日本語のテキスト:"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["key_name-1", "é"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["{name} has {count} items", "a:b:c", "hello"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["é", "key_name-1"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["Hello World", "日本語のテキストa:b:c", "İstanbul"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["hello"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["  padded  ", "line1\nline2key_name-1"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["{name} has {count} items", "a:b:c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["日本語のテキスト", ".leading"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["😀ab"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["src/a/b.tsünïcödé", "ns:key.pathhello", "trailing."]], "ok": {}}
+{"fn": "_parse_lines", "args": [["😀"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["HELLO"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["İstanbulkey_name-1", "ns:key.path", "Hello World"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["HELLO", "abc", "abchello world"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["trailing."]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ab", "line1\nline2"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["aba.b.c", "😀.leading", "hello world"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a😀b😀c./x/**/*.json"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["éİstanbul"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a:b:ca", "trailing.hello"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a", "a😀b😀c", "a:b:c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["emoji 👍🏽 mix:", "line1\nline2"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a:b:c", "straßea"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["Hello World"]], "ok": {}}
+{"fn": "_parse_lines", "args": [[":", "HELLO"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ns:key.path", "a:b:c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["😀", ""]], "ok": {}}
+{"fn": "_parse_lines", "args": [["😀", "a:b:c", "a..bkey_name-1"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["hello world", "src/a/b.ts日本語のテキスト"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["straße", "é日本語のテキスト"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["src/a/b.ts", "src/a/b.tskey_name-1"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["日本語のテキスト"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a..b"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["", "./x/**/*.json"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["hello worldkey_name-1"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a:b:c", "trailing.", "a.b.c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["﻿bom"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["tab\tseparated{name} has {count} items"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["﻿bom", "Hello World"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ΣΊΣΥΦΟΣ", "tab\tseparated"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ΣΊΣΥΦΟΣ", "Hello World", "ab"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ab", "hello", "emoji 👍🏽 mix"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ns:key.path", "Hello World"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["hello world"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["éa😀b😀c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a", "a:b:c", ":"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["😀emoji 👍🏽 mix", "😀trailing."]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a..b", ".leading"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ns:key.patha..b", "./x/**/*.json"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["straße", "emoji 👍🏽 mix"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["./x/**/*.json", "😀"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["İstanbul", "trailing.abc", "İstanbulé"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a..ba😀b😀c", "  padded  a.b.c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["abc", "key_name-1"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a😀b😀c", "a.b.c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["﻿bom", "ab"]], "ok": {}}
+{"fn": "_parse_lines", "args": [[":", "line1\nline2", "Hello World"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a😀b😀ckey_name-1", "a:b:c", "ns:key.path"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["straße"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ünïcödé", "  padded  ", "hello world"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["key_name-1", "ns:key.path"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["é"]], "ok": {}}
+{"fn": "_parse_lines", "args": [[":", "abc", "emoji 👍🏽 mix"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["src/a/b.ts"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["aemoji 👍🏽 mix", "a.b.c日本語のテキスト", "a..b"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ns:key.pathab", "line1\nline2", "hello world"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ünïcödé", "line1\nline2tab\tseparated"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["  padded  ", "日本語のテキスト", "ns:key.path"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["./x/**/*.json", ".leading"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["﻿bomtrailing.", "😀", "straße😀"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a.b.c", ".leadingsrc/a/b.ts"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["﻿bomsrc/a/b.ts", "src/a/b.ts.leading", "a.b.c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["tab\tseparated", "a😀b😀c", "straßea"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a.b.c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["key_name-1", ".leading", "ünïcödé"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["{name} has {count} items", "a", "a:b:c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ΣΊΣΥΦΟΣ"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["./x/**/*.json", "trailing.ns:key.path", "a:b:c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["key_name-1a😀b😀c", "İstanbula:b:c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [[""]], "ok": {}}
+{"fn": "_parse_lines", "args": [["﻿bom", "a:b:c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["😀", "﻿bom"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["étrailing.", "ünïcödé", "é"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["İstanbul", "src/a/b.ts", "日本語のテキスト"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["src/a/b.tsΣΊΣΥΦΟΣ", "./x/**/*.json", "ΣΊΣΥΦΟΣ"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ünïcödé", "a"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ünïcödé"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["日本語のテキストline1\nline2", "tab\tseparated", "hello world"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a..b", "a", "é😀"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["key_name-1", "a.b.c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["HELLO", "{name} has {count} items", "İstanbul"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["hello world", "aHELLO", "😀a.b.c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["trailing.", "﻿bom", "a..bİstanbul"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["HELLO  padded  ", "ΣΊΣΥΦΟΣ"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["abc", ""]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a  padded  ", "ΣΊΣΥΦΟΣ", "a😀b😀c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["{name} has {count} itemssrc/a/b.ts", "a", "hello😀"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["line1\nline2", "éhello"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["src/a/b.ts", "a:b:c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["{name} has {count} itemsΣΊΣΥΦΟΣ", "a😀b😀c", "Hello World"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["tab\tseparated", "ΣΊΣΥΦΟΣ"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["{name} has {count} items"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ΣΊΣΥΦΟΣ", "{name} has {count} items"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["trailing.", "trailing."]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a😀b😀c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["日本語のテキストa..b", "ünïcödé"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["straße", "  padded  ", "Hello World"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["abc", "İstanbul", "hello"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a:b:c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["abc", "src/a/b.ts", ""]], "ok": {}}
+{"fn": "_parse_lines", "args": [["hello", "tab\tseparated", ":"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["HELLO", "tab\tseparated", ":"]], "ok": {}}
+{"fn": "_parse_lines", "args": [[":", "emoji 👍🏽 mix"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["emoji 👍🏽 mix", "ünïcödé"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a.b.c", "{name} has {count} items", ".leading"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["﻿bom", "key_name-1", "﻿bom"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["./x/**/*.json", "a", "﻿bom"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["abc", "src/a/b.ts﻿bom"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["  padded  ", "hello"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["key_name-1", "emoji 👍🏽 mix﻿bom"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["tab\tseparated", "hello world", ".leading"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["src/a/b.ts", "ünïcödé"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ab", "a:b:ca"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["﻿bom", "a😀b😀c", "a..b"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["  padded  "]], "ok": {}}
+{"fn": "_parse_lines", "args": [["tab\tseparated"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ünïcödé", "ΣΊΣΥΦΟΣ"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["emoji 👍🏽 mix", "  padded  "]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a.b.cab", "a:b:ca", "line1\nline2"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["emoji 👍🏽 mix", ":"]], "ok": {}}
+{"fn": "_parse_lines", "args": [[":"]], "ok": {}}
+{"fn": "_parse_lines", "args": [[":", "straße", "ΣΊΣΥΦΟΣ"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["src/a/b.ts", "abcHello World"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["İstanbul"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["line1\nline2", ":"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a﻿bom", "ünïcödé", "src/a/b.ts"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ünïcödé", "", "ab"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a😀b😀c日本語のテキスト", ""]], "ok": {}}
+{"fn": "_parse_lines", "args": [["Hello WorldHELLO", "日本語のテキスト"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ns:key.path", "straße", "a.b.c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["straße", "Hello World"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["emoji 👍🏽 mix"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["😀", "日本語のテキストünïcödé"]], "ok": {}}
+{"fn": "_parse_lines", "args": [[".leading.leading", "key_name-1line1\nline2", "./x/**/*.jsona"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["./x/**/*.json", "src/a/b.ts", "日本語のテキスト"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a.b.c", "trailing.", ""]], "ok": {}}
+{"fn": "_parse_lines", "args": [["İstanbul", "﻿bom"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a..b", "﻿bom"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["  padded  ", "ns:key.path", "straße"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a日本語のテキスト", "key_name-1", "straße"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["😀", "﻿bomHELLO", "src/a/b.ts"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a..bemoji 👍🏽 mix", "./x/**/*.json", ":"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["emoji 👍🏽 mix", "a..bns:key.path", "abc"]], "ok": {}}
+{"fn": "_parse_lines", "args": [[":", "Hello World"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["abc"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["key_name-1", "straße", "  padded  "]], "ok": {}}
+{"fn": "_parse_lines", "args": [["Hello World", "😀", "abca:b:c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ns:key.pathHELLO"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["./x/**/*.json", "hello world"]], "ok": {}}
+{"fn": "_parse_lines", "args": [[".leadinga😀b😀c", "  padded  trailing."]], "ok": {}}
+{"fn": "_parse_lines", "args": [["HELLO", "日本語のテキスト", "﻿bom"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["İstanbul", "src/a/b.ts  padded  ", "tab\tseparated"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["trailing.", ":"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["Hello World", "a😀b😀chello", "tab\tseparateda.b.c"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ΣΊΣΥΦΟΣ", "﻿bom./x/**/*.json", "straße"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["Hello World", "ns:key.pathHello World"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["ΣΊΣΥΦΟΣ", "ΣΊΣΥΦΟΣ"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a..b", "emoji 👍🏽 mix"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["straße", "src/a/b.ts", "a..b"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["hello world", "emoji 👍🏽 mix"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a", "HELLOa..b"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["", "  padded  "]], "ok": {}}
+{"fn": "_parse_lines", "args": [["hello world", "hello"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["İstanbula", "straße"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["a.b.cé", "{name} has {count} items"]], "ok": {}}
+{"fn": "_parse_lines", "args": [["b", "a", "B", "é", "10", "9", "a"]], "ok": {}}
+{"fn": "_parse_lines", "args": [[]], "ok": {}}
+{"fn": "_parse_lines", "args": [["# comment", "   ", "API_KEY=\"abc\\n123\"", "export TOKEN = 'sec\\'ret'", "BAD-KEY=1", "NO_EQ", "PLAIN=val=with=eq"]], "ok": {"API_KEY": "abc\n123", "TOKEN": "sec'ret", "PLAIN": "val=with=eq"}}
+{"fn": "_parse_lines", "args": [["KEY_0=\"val_0_\\t\\n_0\"", "KEY_1=\"val_1_\\t\\n_1\"", "KEY_2=\"val_2_\\t\\n_2\"", "KEY_3=\"val_3_\\t\\n_3\"", "KEY_4=\"val_4_\\t\\n_4\"", "KEY_5=\"val_5_\\t\\n_5\"", "KEY_6=\"val_6_\\t\\n_6\"", "KEY_7=\"val_7_\\t\\n_7\"", "KEY_8=\"val_8_\\t\\n_8\"", "KEY_9=\"val_9_\\t\\n_9\"", "KEY_10=\"val_10_\\t\\n_10\"", "KEY_11=\"val_11_\\t\\n_11\"", "KEY_12=\"val_12_\\t\\n_12\"", "KEY_13=\"val_13_\\t\\n_13\"", "KEY_14=\"val_14_\\t\\n_14\"", "KEY_15=\"val_15_\\t\\n_15\"", "KEY_16=\"val_16_\\t\\n_16\"", "KEY_17=\"val_17_\\t\\n_17\"", "KEY_18=\"val_18_\\t\\n_18\"", "KEY_19=\"val_19_\\t\\n_19\"", "KEY_20=\"val_20_\\t\\n_20\"", "KEY_21=\"val_21_\\t\\n_21\"", "KEY_22=\"val_22_\\t\\n_22\"", "KEY_23=\"val_23_\\t\\n_23\"", "KEY_24=\"val_24_\\t\\n_24\"", "KEY_25=\"val_25_\\t\\n_25\"", "KEY_26=\"val_26_\\t\\n_26\"", "KEY_27=\"val_27_\\t\\n_27\"", "KEY_28=\"val_28_\\t\\n_28\"", "KEY_29=\"val_29_\\t\\n_29\""]], "ok": {"KEY_0": "val_0_\t\n_0", "KEY_1": "val_1_\t\n_1", "KEY_2": "val_2_\t\n_2", "KEY_3": "val_3_\t\n_3", "KEY_4": "val_4_\t\n_4", "KEY_5": "val_5_\t\n_5", "KEY_6": "val_6_\t\n_6", "KEY_7": "val_7_\t\n_7", "KEY_8": "val_8_\t\n_8", "KEY_9": "val_9_\t\n_9", "KEY_10": "val_10_\t\n_10", "KEY_11": "val_11_\t\n_11", "KEY_12": "val_12_\t\n_12", "KEY_13": "val_13_\t\n_13", "KEY_14": "val_14_\t\n_14", "KEY_15": "val_15_\t\n_15", "KEY_16": "val_16_\t\n_16", "KEY_17": "val_17_\t\n_17", "KEY_18": "val_18_\t\n_18", "KEY_19": "val_19_\t\n_19", "KEY_20": "val_20_\t\n_20", "KEY_21": "val_21_\t\n_21", "KEY_22": "val_22_\t\n_22", "KEY_23": "val_23_\t\n_23", "KEY_24": "val_24_\t\n_24", "KEY_25": "val_25_\t\n_25", "KEY_26": "val_26_\t\n_26", "KEY_27": "val_27_\t\n_27", "KEY_28": "val_28_\t\n_28", "KEY_29": "val_29_\t\n_29"}}
+{"fn": "_parse_lines", "args": [["export  A=1", "exportB=2", "export=3", "A=overwrite", "  _UNDER_1 = \"ok\"  "]], "ok": {"A": "overwrite", "exportB": "2", "export": "3", "_UNDER_1": "ok"}}

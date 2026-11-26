@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
 import json
+import os
+import sys
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +15,28 @@ from typing import Any, Mapping, Iterable
 
 from ..config import ConfigInput, resolve_config_file, resolve_runtime_config
 from ..storage import database_path
+
+
+def _load_native_account_lifecycle() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_ACCOUNT_LIFECYCLE") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "account-lifecycle-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("account_lifecycle_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_ACCOUNT_LIFECYCLE = _load_native_account_lifecycle()
+_NATIVE_EMAIL_CORE = getattr(_NATIVE_ACCOUNT_LIFECYCLE, "_email_core", None)
 
 
 @dataclass(frozen=True)
@@ -199,6 +224,8 @@ def _email_core(email: str) -> str:
     ``sampleaccount66+oai01@hotmail.com`` both yield
     ``sampleaccount66oai01hotmailcom``.
     """
+    if _NATIVE_EMAIL_CORE is not None and isinstance(email, str):
+        return _NATIVE_EMAIL_CORE(email)
     return "".join(ch for ch in email.lower() if ch.isalnum())
 
 

@@ -1,0 +1,270 @@
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["ΣΊΣΥΦΟΣ", "hello world  padded  "], "ok": false}
+{"fn": "_value_matches", "args": ["./x/**/*.json", "trailing."], "ok": false}
+{"fn": "_value_matches", "args": ["﻿bom", "Hello World"], "ok": false}
+{"fn": "_value_matches", "args": ["hello world", "trailing."], "ok": false}
+{"fn": "_value_matches", "args": ["straße", "  padded  .leading"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.pathstraße", "straße:"], "ok": false}
+{"fn": "_value_matches", "args": ["😀b", "a😀b😀ctab\tseparated"], "ok": false}
+{"fn": "_value_matches", "args": ["hello", "a😀b😀c﻿bom"], "ok": false}
+{"fn": "_value_matches", "args": ["İstanbul", "emoji 👍🏽 mixHello World"], "ok": false}
+{"fn": "_value_matches", "args": ["{name} has {count} items", "Hello World"], "ok": false}
+{"fn": "_value_matches", "args": ["hello", "hello"], "ok": true}
+{"fn": "_value_matches", "args": ["ünïcödé", "nïc"], "ok": true}
+{"fn": "_value_matches", "args": ["aba.b.c", "."], "ok": true}
+{"fn": "_value_matches", "args": ["a", "A"], "ok": true}
+{"fn": "_value_matches", "args": ["abc", "a😀b😀cns:key.path"], "ok": false}
+{"fn": "_value_matches", "args": ["emoji 👍🏽 mix", "I"], "ok": true}
+{"fn": "_value_matches", "args": ["日本語のテキスト", "ス"], "ok": true}
+{"fn": "_value_matches", "args": ["abc", "HELLO.leading"], "ok": false}
+{"fn": "_value_matches", "args": ["TRA", "straße"], "ok": false}
+{"fn": "_value_matches", "args": ["a:b:ca😀b😀c", ""], "ok": true}
+{"fn": "_value_matches", "args": ["a", "HELLOHello World"], "ok": false}
+{"fn": "_value_matches", "args": ["  padded  ", "a.b.c"], "ok": false}
+{"fn": "_value_matches", "args": ["hello worldsrc/a/b.ts", "emoji 👍🏽 mix"], "ok": false}
+{"fn": "_value_matches", "args": ["trailing.😀", ""], "ok": true}
+{"fn": "_value_matches", "args": ["OM", "﻿bom"], "ok": false}
+{"fn": "_value_matches", "args": ["a..b", "..b"], "ok": true}
+{"fn": "_value_matches", "args": [":", "HELLO"], "ok": false}
+{"fn": "_value_matches", "args": [":", "﻿bom"], "ok": false}
+{"fn": "_value_matches", "args": ["ΣΊΣΥΦΟΣ", "hello worldΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_value_matches", "args": ["straße", "line1\nline2"], "ok": false}
+{"fn": "_value_matches", "args": ["tab\tseparated", "tab\tseparat"], "ok": true}
+{"fn": "_value_matches", "args": ["", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_value_matches", "args": ["a😀b😀c", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["😀", ""], "ok": true}
+{"fn": "_value_matches", "args": ["﻿bom", "a.b.c"], "ok": false}
+{"fn": "_value_matches", "args": ["ΣΊΣΥΦΟΣ", "tab\tseparated"], "ok": false}
+{"fn": "_value_matches", "args": ["helloemoji 👍🏽 mix", ""], "ok": true}
+{"fn": "_value_matches", "args": ["c/a", "src/a/b.ts"], "ok": false}
+{"fn": "_value_matches", "args": ["a.b.c", "abc"], "ok": false}
+{"fn": "_value_matches", "args": ["emoji 👍🏽 mixHELLO", "a:b:c"], "ok": false}
+{"fn": "_value_matches", "args": ["é", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_value_matches", "args": ["./x/**/*.json", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_value_matches", "args": ["a.b.c", "tab\tseparated"], "ok": false}
+{"fn": "_value_matches", "args": ["﻿bom", "straße"], "ok": false}
+{"fn": "_value_matches", "args": ["./x/**/*.json", "a.b.c"], "ok": false}
+{"fn": "_value_matches", "args": ["hello world", "rld"], "ok": true}
+{"fn": "_value_matches", "args": ["O", "Hello World"], "ok": false}
+{"fn": "_value_matches", "args": ["a", "  padded  .leading"], "ok": false}
+{"fn": "_value_matches", "args": ["é", "line1\nline2"], "ok": false}
+{"fn": "_value_matches", "args": ["ünïcödé", "trailing."], "ok": false}
+{"fn": "_value_matches", "args": ["﻿bom", "trailing."], "ok": false}
+{"fn": "_value_matches", "args": ["abc", "abca:b:c"], "ok": false}
+{"fn": "_value_matches", "args": ["line1\nline2", ""], "ok": true}
+{"fn": "_value_matches", "args": ["😀", "é"], "ok": false}
+{"fn": "_value_matches", "args": ["key_name-1", "M"], "ok": true}
+{"fn": "_value_matches", "args": ["a.b.cabc", "abİstanbul"], "ok": false}
+{"fn": "_value_matches", "args": ["é", "́"], "ok": true}
+{"fn": "_value_matches", "args": ["a:b:c", "日本語のテキスト"], "ok": false}
+{"fn": "_value_matches", "args": ["ße", "straße"], "ok": false}
+{"fn": "_value_matches", "args": ["  padded  .leading", "a😀b😀c"], "ok": false}
+{"fn": "_value_matches", "args": [".leading", ":"], "ok": false}
+{"fn": "_value_matches", "args": [":", ":"], "ok": true}
+{"fn": "_value_matches", "args": ["a:b:c", "HELLO"], "ok": false}
+{"fn": "_value_matches", "args": ["./x/**/*.json", "./x/**/*.json"], "ok": true}
+{"fn": "_value_matches", "args": [":", "a:b:c"], "ok": false}
+{"fn": "_value_matches", "args": ["a..b", "{name} has {count} itemsa:b:c"], "ok": false}
+{"fn": "_value_matches", "args": ["src/a/b.ts", "src/a/b.ts"], "ok": true}
+{"fn": "_value_matches", "args": ["😀", "😀"], "ok": true}
+{"fn": "_value_matches", "args": ["{name} has {count} items", "ns:key.path"], "ok": false}
+{"fn": "_value_matches", "args": ["Hello World", "./x/**/*.json"], "ok": false}
+{"fn": "_value_matches", "args": ["lo World", "Hello World"], "ok": false}
+{"fn": "_value_matches", "args": ["{name} has {count} items", "key_name-1"], "ok": false}
+{"fn": "_value_matches", "args": ["HELLO", "﻿bom"], "ok": false}
+{"fn": "_value_matches", "args": ["emoji 👍🏽 mix", "{name} has {count} itemsa:b:c"], "ok": false}
+{"fn": "_value_matches", "args": ["tab\tseparated", "key_name-1"], "ok": false}
+{"fn": "_value_matches", "args": ["li", "line1\nline2"], "ok": false}
+{"fn": "_value_matches", "args": [".leading", "  padded  "], "ok": false}
+{"fn": "_value_matches", "args": ["ELLO", "hello world"], "ok": false}
+{"fn": "_value_matches", "args": ["a😀b😀c", ":"], "ok": false}
+{"fn": "_value_matches", "args": ["  padded  hello world", "./x/**/*.json"], "ok": false}
+{"fn": "_value_matches", "args": ["trailing.", "ra"], "ok": true}
+{"fn": "_value_matches", "args": ["straße", "ünïcödé"], "ok": false}
+{"fn": "_value_matches", "args": [":", "é"], "ok": false}
+{"fn": "_value_matches", "args": ["日本語のテキストa:b:c", "Hello World"], "ok": false}
+{"fn": "_value_matches", "args": ["hello", "a:b:c"], "ok": false}
+{"fn": "_value_matches", "args": ["HELLOsrc/a/b.ts", "hello"], "ok": true}
+{"fn": "_value_matches", "args": ["trailing.", "  padded  "], "ok": false}
+{"fn": "_value_matches", "args": ["hello world", "İstanbul"], "ok": false}
+{"fn": "_value_matches", "args": [":", "İstanbul"], "ok": false}
+{"fn": "_value_matches", "args": ["./x/**/*.json", "*/*."], "ok": true}
+{"fn": "_value_matches", "args": ["src/a/b.ts", "İstanbul"], "ok": false}
+{"fn": "_value_matches", "args": ["tab\tseparated", ".leading"], "ok": false}
+{"fn": "_value_matches", "args": ["", ":"], "ok": false}
+{"fn": "_value_matches", "args": ["", "😀a:b:c"], "ok": false}
+{"fn": "_value_matches", "args": ["HELLO", "HELLO"], "ok": true}
+{"fn": "_value_matches", "args": ["./x/**/*.json", "ns:key.path"], "ok": false}
+{"fn": "_value_matches", "args": ["emoji 👍🏽 mix", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["", "{name} has {count} items"], "ok": false}
+{"fn": "_value_matches", "args": ["Hello World", "İstanbul"], "ok": false}
+{"fn": "_value_matches", "args": [" PADDED", "  padded  "], "ok": true}
+{"fn": "_value_matches", "args": ["B", "ab"], "ok": false}
+{"fn": "_value_matches", "args": ["hello", "ünïcödé"], "ok": false}
+{"fn": "_value_matches", "args": ["語のテキ", "日本語のテキスト"], "ok": false}
+{"fn": "_value_matches", "args": ["tab\tseparatedab", "a:b:c"], "ok": false}
+{"fn": "_value_matches", "args": ["  padded  ", "d  "], "ok": true}
+{"fn": "_value_matches", "args": ["日本語のテキスト", "ns:key.path"], "ok": false}
+{"fn": "_value_matches", "args": ["HELLO", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_value_matches", "args": ["hello", "L"], "ok": true}
+{"fn": "_value_matches", "args": ["a:b:c", "b:"], "ok": true}
+{"fn": "_value_matches", "args": ["ab", "src/a/b.ts"], "ok": false}
+{"fn": "_value_matches", "args": ["a", "key_name-1hello"], "ok": false}
+{"fn": "_value_matches", "args": ["trailing.", ":"], "ok": false}
+{"fn": "_value_matches", "args": ["hello world", ".leading"], "ok": false}
+{"fn": "_value_matches", "args": ["B", "abc"], "ok": false}
+{"fn": "_value_matches", "args": ["a", "ns:key.path"], "ok": false}
+{"fn": "_value_matches", "args": ["EY_NAME-1", "key_name-1"], "ok": true}
+{"fn": "_value_matches", "args": ["hello world", "é"], "ok": false}
+{"fn": "_value_matches", "args": ["HELLO", "a"], "ok": false}
+{"fn": "_value_matches", "args": ["a😀b😀c", "a:b:c"], "ok": false}
+{"fn": "_value_matches", "args": ["éab", "ns:key.path"], "ok": false}
+{"fn": "_value_matches", "args": ["a", "{name} has {count} items"], "ok": false}
+{"fn": "_value_matches", "args": ["😀B😀", "a😀b😀c"], "ok": false}
+{"fn": "_value_matches", "args": ["b", "a.b.c"], "ok": false}
+{"fn": "_value_matches", "args": ["tab\tseparated", "a😀b😀c"], "ok": false}
+{"fn": "_value_matches", "args": ["İstanbula.b.c", ":"], "ok": false}
+{"fn": "_value_matches", "args": [":", "./x/**/*.json"], "ok": false}
+{"fn": "_value_matches", "args": ["  padded  ΣΊΣΥΦΟΣ", "日本語のテキスト"], "ok": false}
+{"fn": "_value_matches", "args": ["ab", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_value_matches", "args": ["key_name-1", "tab\tseparated"], "ok": false}
+{"fn": "_value_matches", "args": ["é", "e"], "ok": true}
+{"fn": "_value_matches", "args": ["ΣΊΣΥΦΟΣ", "abHello World"], "ok": false}
+{"fn": "_value_matches", "args": ["hello world", ""], "ok": true}
+{"fn": "_value_matches", "args": ["abc", "é"], "ok": false}
+{"fn": "_value_matches", "args": ["hello", "tab\tseparated"], "ok": false}
+{"fn": "_value_matches", "args": ["é", "aba"], "ok": false}
+{"fn": "_value_matches", "args": ["abc", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_value_matches", "args": ["a", "a.b.c"], "ok": false}
+{"fn": "_value_matches", "args": ["key_name-1src/a/b.ts", "line1\nline2"], "ok": false}
+{"fn": "_value_matches", "args": ["", ".leading"], "ok": false}
+{"fn": "_value_matches", "args": ["tab\tseparated", "😀"], "ok": false}
+{"fn": "_value_matches", "args": ["key_name-1", "  padded  "], "ok": false}
+{"fn": "_value_matches", "args": ["a😀b😀c", "﻿bom"], "ok": false}
+{"fn": "_value_matches", "args": ["oma:b:", "﻿boma:b:c"], "ok": false}
+{"fn": "_value_matches", "args": ["{name} has {count} itemsab", "HELLO"], "ok": false}
+{"fn": "_value_matches", "args": ["./x/**/*.json😀", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["trailing.", "HELLO"], "ok": false}
+{"fn": "_value_matches", "args": ["emoji 👍🏽 mix", "  padded  "], "ok": false}
+{"fn": "_value_matches", "args": [":", "a.b.c"], "ok": false}
+{"fn": "_value_matches", "args": ["Hello World", "  padded  a..b"], "ok": false}
+{"fn": "_value_matches", "args": ["a:b:c", "key_name-1"], "ok": false}
+{"fn": "_value_matches", "args": ["😀", "ΣΊΣΥΦΟΣünïcödé"], "ok": false}
+{"fn": "_value_matches", "args": ["日本語のテキスト", "é"], "ok": false}
+{"fn": "_value_matches", "args": ["n", "trailing."], "ok": false}
+{"fn": "_value_matches", "args": ["hello world", "  padded  "], "ok": false}
+{"fn": "_value_matches", "args": ["ünïcödé", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["😀", "tab\tseparated"], "ok": false}
+{"fn": "_value_matches", "args": ["B😀", "a😀b😀c"], "ok": false}
+{"fn": "_value_matches", "args": ["tab\tseparated", "a:b:c"], "ok": false}
+{"fn": "_value_matches", "args": ["😀line1\nline2", "key_name-1"], "ok": false}
+{"fn": "_value_matches", "args": ["  padded  ", " "], "ok": true}
+{"fn": "_value_matches", "args": ["a.b.c", ""], "ok": true}
+{"fn": "_value_matches", "args": ["", "a.b.c"], "ok": false}
+{"fn": "_value_matches", "args": ["n", "./x/**/*.json"], "ok": false}
+{"fn": "_value_matches", "args": ["ΣΊΣΥΦΟΣ", "ab"], "ok": false}
+{"fn": "_value_matches", "args": ["abc", "line1\nline2"], "ok": false}
+{"fn": "_value_matches", "args": ["﻿bom", "HELLO"], "ok": false}
+{"fn": "_value_matches", "args": ["ünïcödé", ""], "ok": true}
+{"fn": "_value_matches", "args": ["a..b", "hello world"], "ok": false}
+{"fn": "_value_matches", "args": ["", "😀"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path", "trailing."], "ok": false}
+{"fn": "_value_matches", "args": ["ΣΊΣΥΦΟΣ", "line1\nline2é"], "ok": false}
+{"fn": "_value_matches", "args": ["trailing.hello", "﻿bom"], "ok": false}
+{"fn": "_value_matches", "args": ["HELLOHELLO", "ns:key.path"], "ok": false}
+{"fn": "_value_matches", "args": ["﻿bom", "a..bé"], "ok": false}
+{"fn": "_value_matches", "args": ["./x/**/*.json", "abc"], "ok": false}
+{"fn": "_value_matches", "args": ["a.b.c", "日本語のテキスト"], "ok": false}
+{"fn": "_value_matches", "args": ["trailing.", "g."], "ok": true}
+{"fn": "_value_matches", "args": ["helloünïcödé", ":"], "ok": false}
+{"fn": "_value_matches", "args": ["key.p", "ns:key.path"], "ok": false}
+{"fn": "_value_matches", "args": ["a..b", "."], "ok": true}
+{"fn": "_value_matches", "args": ["trailing.", "abcstraße"], "ok": false}
+{"fn": "_value_matches", "args": ["a😀b😀c", ":é"], "ok": false}
+{"fn": "_value_matches", "args": ["line1\nline2", "a😀b😀c"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path", ":ünïcödé"], "ok": false}
+{"fn": "_value_matches", "args": [":HELLO", "emoji 👍🏽 mix"], "ok": false}
+{"fn": "_value_matches", "args": ["́", "é"], "ok": false}
+{"fn": "_value_matches", "args": ["l", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["ahello world", "abc"], "ok": false}
+{"fn": "_value_matches", "args": ["ab", "b"], "ok": true}
+{"fn": "_value_matches", "args": ["ab", "./x/**/*.json"], "ok": false}
+{"fn": "_value_matches", "args": ["ine", "line1\nline2"], "ok": false}
+{"fn": "_value_matches", "args": ["./x/**/*.json", "a:b:cé"], "ok": false}
+{"fn": "_value_matches", "args": ["ünïcödé", "line1\nline2"], "ok": false}
+{"fn": "_value_matches", "args": ["hello world", "hello world"], "ok": true}
+{"fn": "_value_matches", "args": ["a..bab", "a"], "ok": true}
+{"fn": "_value_matches", "args": ["Hello World", "a"], "ok": false}
+{"fn": "_value_matches", "args": ["日本語のテキスト", "😀.leading"], "ok": false}
+{"fn": "_value_matches", "args": ["tab\tseparated", "a"], "ok": true}
+{"fn": "_value_matches", "args": [".leading", "DIN"], "ok": true}
+{"fn": "_value_matches", "args": ["héllo wörld", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["👍🏽 thumbs", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["日本語", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["é", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["İstanbul", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["straße", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["ılık ırmak", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["👨‍👩‍👧 family", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["a b", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["ΣΊΣΥΦΟΣ", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["a😀b", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["﻿bom", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["a²b x½ y①", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["aⅠb Ⅻ", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["a𐐀b 𝐀bc", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["कि ٣٤", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["Iı İi", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["K K k", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["ſ s S", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["x‍y 👨‍👩‍👧", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["a b c　d", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["١٢٣ ٤٥", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["𝟘𝟙 ²³", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["snake_case foo-bar o'neil", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["ǅungla Ǆ", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["one\r\ntwo threefour", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["café café", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["ΣΑΣ σας ς", "hello"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "héllo wörld"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "👍🏽 thumbs"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "日本語"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", ""], "ok": true}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "é"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "İstanbul"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "straße"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "ılık ırmak"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "👨‍👩‍👧 family"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "a b"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "a😀b"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "﻿bom"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "a²b x½ y①"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "aⅠb Ⅻ"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "a𐐀b 𝐀bc"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "कि ٣٤"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "Iı İi"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "K K k"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "ſ s S"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "x‍y 👨‍👩‍👧"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "a b c　d"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "١٢٣ ٤٥"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "𝟘𝟙 ²³"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "snake_case foo-bar o'neil"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "ǅungla Ǆ"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "one\r\ntwo threefour"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "café café"], "ok": false}
+{"fn": "_value_matches", "args": ["ns:key.path  padded  ", "ΣΑΣ σας ς"], "ok": false}
+{"fn": "_value_matches", "args": ["+1 (415) 555-0199", "4155550199"], "ok": true}
+{"fn": "_value_matches", "args": ["(415) 555-0199", "555-0199"], "ok": true}
+{"fn": "_value_matches", "args": ["Alice Smith", "alice"], "ok": true}
+{"fn": "_value_matches", "args": ["anything", ""], "ok": true}
+{"fn": "_value_matches", "args": ["anything", "   "], "ok": true}
+{"fn": "_value_matches", "args": ["1234", "5678"], "ok": false}
+{"fn": "_value_matches", "args": ["4111 1111 1111 4242", "4242"], "ok": true}
+{"fn": "_value_matches", "args": ["08 / 28", "0828"], "ok": true}
+{"fn": "_value_matches", "args": ["United States", "UNITED STATES"], "ok": true}
+{"fn": "_value_matches", "args": ["Straße 12", "straße"], "ok": true}
+{"fn": "_value_matches", "args": ["电话：+86 138-0013-8000", "13800138000"], "ok": true}
+{"fn": "_value_matches", "args": ["abc", "def"], "ok": false}

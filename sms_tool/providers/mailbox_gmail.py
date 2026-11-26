@@ -44,6 +44,7 @@ def _load_native_gmail_html() -> Any | None:
 
 _NATIVE_GMAIL_HTML = _load_native_gmail_html()
 _NATIVE_HTML_TO_TEXT = getattr(_NATIVE_GMAIL_HTML, "_html_to_text", None)
+_NATIVE_PARSE_PROXY_URL = getattr(_NATIVE_GMAIL_HTML, "_parse_proxy_url", None)
 _NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
 
 
@@ -353,6 +354,8 @@ def _create_proxied_socket(host, port, proxy, timeout=30):
 
 
 def _parse_proxy_url(proxy):
+    if _NATIVE_PARSE_PROXY_URL is not None and isinstance(proxy, _NATIVE_SCALAR_TYPES):
+        return _NATIVE_PARSE_PROXY_URL(proxy)
     value = str(proxy or "").strip()
     if not value:
         raise RuntimeError("empty gmail imap proxy")

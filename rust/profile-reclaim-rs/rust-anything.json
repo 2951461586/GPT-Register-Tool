@@ -1,0 +1,43 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/browser/profile_reclaim.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "profile-reclaim-rs",
+  "exports": [
+    {
+      "name": "_references_profile",
+      "file": "sms_tool/browser/profile_reclaim.py",
+      "line": 80,
+      "params": [
+        {
+          "name": "command_line",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "reclaim_stale_profile",
+      "file": "sms_tool/browser/profile_reclaim.py",
+      "line": 190,
+      "reason": "OS process enumeration and optional termination stays in Python"
+    }
+  ]
+}

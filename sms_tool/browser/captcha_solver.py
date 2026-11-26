@@ -10,19 +10,46 @@ Adapted from the project's original payment-flow CAPTCHA helper.
 from __future__ import annotations
 
 import http.server
+import importlib
 import json
 import logging
 import os
 import re
 import socketserver
+import sys
 import tempfile
 import threading
 import time
 import uuid
+from pathlib import Path
 from typing import Any, Callable, Optional
 from urllib.parse import quote, urlparse
 
 logger = logging.getLogger(__name__)
+
+
+def _load_native_captcha_config() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_CAPTCHA_CONFIG") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "captcha-config-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("captcha_config_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_CAPTCHA_CONFIG = _load_native_captcha_config()
+_NATIVE_EXTRACT_CAPTCHA_CONFIG = getattr(_NATIVE_CAPTCHA_CONFIG, "extract_captcha_config", None)
+_NATIVE_PLAYWRIGHT_PROXY = getattr(_NATIVE_CAPTCHA_CONFIG, "_playwright_proxy", None)
+_NATIVE_BUILD_HCAPTCHA_BRIDGE_HTML = getattr(_NATIVE_CAPTCHA_CONFIG, "_build_hcaptcha_bridge_html", None)
 
 # ──────────────────────────── constants ────────────────────────────
 
@@ -45,6 +72,8 @@ def extract_captcha_config(html: str) -> dict[str, str]:
     Searches for hCaptcha and reCAPTCHA data attributes and script variables.
     Returns dict with keys: type (hcaptcha|recaptcha), site_key, rqdata.
     """
+    if _NATIVE_EXTRACT_CAPTCHA_CONFIG is not None and isinstance(html, str):
+        return _NATIVE_EXTRACT_CAPTCHA_CONFIG(html)
     # hCaptcha data-sitekey
     m = re.search(r'data-sitekey=["\']([^"\']+)["\']', html, re.I)
     if m:
@@ -155,6 +184,16 @@ def _build_hcaptcha_bridge_html(
     4. Sends EXECUTE_HCAPTCHA_INVISIBLE to trigger solving
     5. Captures the RESPONSE_HCAPTCHA_INVISIBLE token
     """
+    if (
+        _NATIVE_BUILD_HCAPTCHA_BRIDGE_HTML is not None
+        and isinstance(frame_id, str)
+        and isinstance(wrapper_url, str)
+        and isinstance(site_key, str)
+        and isinstance(rqdata, str)
+        and isinstance(merchant_id, str)
+        and isinstance(locale, str)
+    ):
+        return _NATIVE_BUILD_HCAPTCHA_BRIDGE_HTML(frame_id, wrapper_url, site_key, rqdata, merchant_id, locale)
     init_payload = {
         "tag": "INITIALIZE_HCAPTCHA_INVISIBLE",
         "message": {"sitekey": site_key},
@@ -269,6 +308,8 @@ def _build_hcaptcha_bridge_html(
 
 def _playwright_proxy(proxy_url: str | None) -> Optional[dict]:
     """Convert a proxy URL to Playwright proxy config."""
+    if _NATIVE_PLAYWRIGHT_PROXY is not None and (proxy_url is None or isinstance(proxy_url, str)):
+        return _NATIVE_PLAYWRIGHT_PROXY(proxy_url)
     proxy_url = (proxy_url or "").strip()
     if not proxy_url:
         return None

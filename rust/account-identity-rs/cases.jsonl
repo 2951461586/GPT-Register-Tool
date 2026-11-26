@@ -10,10 +10,242 @@
 {"fn": "proxy_egress_key", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "error": "ValueError: Port could not be cast to integer value as \" 1, 'apple': 2, '10': 3, '2': 4, 'é': 5, 'Apple': 6}\""}
 {"fn": "proxy_egress_key", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "error": "ValueError: Port could not be cast to integer value as \" 9007199254740993, 'f': 1e+21, 't': 0.1, 'neg': -7}\""}
 {"fn": "proxy_egress_key", "args": [[3, 1, 2]], "error": "ValueError: '3, 1, 2' does not appear to be an IPv4 or IPv6 address"}
+{"fn": "chatgpt_account_id_from_token", "args": ["a"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ünïcödé"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a..b"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["./x/**/*.jsona.b.c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["abc日本語のテキスト"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["İstanbul"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["./x/**/*.json"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [""], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["line1\nline2"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["src/a/b.ts"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["emoji 👍🏽 mix"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["﻿bom"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["HELLO"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["straße"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["  padded  a..b"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [":"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a😀b😀c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["{name} has {count} items"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a..bline1\nline2"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ab"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["Hello World"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["tab\tseparated"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["hello"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["aline1\nline2"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["abİstanbul"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["  padded  "], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a.b.c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["hello.leading"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ns:key.path"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["😀ab"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["./x/**/*.jsonabc"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["  padded  ab"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["abc"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["é"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["src/a/b.tsstraße"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["key_name-1"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["😀"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a:b:c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["İstanbulHELLO"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["tab\tseparatedstraße"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["hello world"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["trailing.straße"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["日本語のテキスト"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a..ba.b.c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["Hello Worlda"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [".leading"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [".leadinga.b.c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["aa..b"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["helloΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["😀line1\nline2"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["key_name-1src/a/b.ts"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["😀tab\tseparated"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [".leadingünïcödé"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["abctab\tseparated"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["éa😀b😀c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ΣΊΣΥΦΟΣ日本語のテキスト"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ns:key.pathsrc/a/b.ts"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a:"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a:b:ca..b"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["src/a/b.tsa"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["日本語のテキストHELLO"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["Hello Worldsrc/a/b.ts"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a😀b😀cab"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["straßeabc"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["éline1\nline2"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["aa😀b😀c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ΣΊΣΥΦΟΣab"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ΣΊΣΥΦΟΣtrailing."], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["é﻿bom"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["hello worldΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["trailing."], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a😀b😀csrc/a/b.ts"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [".leadinga:b:c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["key_name-1emoji 👍🏽 mix"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["hellostraße"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["straßestraße"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [".leadingΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ns:key.pathHello World"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ahello"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a😀b😀ca..b"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [":.leading"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["é.leading"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["Hello Worldünïcödé"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["hello world  padded  "], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["﻿bomtab\tseparated"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ünïcödéemoji 👍🏽 mix"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["helloé"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["İstanbul  padded  "], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a.b.cns:key.path"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["😀a😀b😀c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["abHello World"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["éab"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["  padded  abc"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["éİstanbul"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["src/a/b.tsline1\nline2"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["  padded  ﻿bom"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["Hello Worlda.b.c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["Hello World./x/**/*.json"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["key_name-1ünïcödé"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [":a..b"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ns:key.pathHELLO"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["key_name-1tab\tseparated"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a./x/**/*.json"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["./x/**/*.json.leading"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["İstanbul:"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a:b:ca"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ünïcödétrailing."], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["line1\nline2﻿bom"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a😀b😀c:"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["trailing.ab"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["helloemoji 👍🏽 mix"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ns:key.path😀"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a😀b😀c.leading"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["hello worldtrailing."], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["😀hello world"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a.b.cstraße"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["src/a/b.tsa:b:c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [":tab\tseparated"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["asrc/a/b.ts"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["HELLOa:b:c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["{name} has {count} itemsstraße"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["{name} has {count} itemssrc/a/b.ts"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ns:key.pathline1\nline2"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["aba😀b😀c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["tab\tseparated  padded  "], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["éns:key.path"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["  padded  a.b.c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["line1\nline2  padded  "], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["straßeé"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["atab\tseparated"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["Hello Worldé"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [":😀"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [":é"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["tab\tseparateda..b"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["src/a/b.ts日本語のテキスト"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [".leadingtab\tseparated"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["straßehello"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["abΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["hello worldhello world"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["trailing.abc"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["{name} has {count} itemsa"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["éa..b"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["日本語のテキストé"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [".leadinghello"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [":./x/**/*.json"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["{name} has {count} items日本語のテキスト"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["./x/**/*.jsonHello World"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a.b.cΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["hello worldİstanbul"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ns:key.pathhello"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["  padded  tab\tseparated"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["abns:key.path"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["straßeab"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["key_name-1ns:key.path"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["line1\nline2straße"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["{name} has {count} items.leading"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["abca..b"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["trailing.é"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["{name} has {count} items:"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["key_name-1abc"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["tab\tseparated😀"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["./x/**/*.json{name} has {count} items"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["Hello Worlda..b"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["tab\tseparatedemoji 👍🏽 mix"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["﻿bomsrc/a/b.ts"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["HELLOns:key.path"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["hello worldkey_name-1"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["straßeemoji 👍🏽 mix"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["./x/**/*.jsonünïcödé"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["HELLO:"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["日本語のテキストa:b:c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["straßeHello World"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ns:key.path﻿bom"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a..btrailing."], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a..b.leading"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["helloab"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["aemoji 👍🏽 mix"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["helloa.b.c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["﻿bom{name} has {count} items"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["hellosrc/a/b.ts"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a.b.ctab\tseparated"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [".leadingtrailing."], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["{name} has {count} itemsa.b.c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["straßesrc/a/b.ts"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["trailing.trailing."], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["  padded  HELLO"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["abca😀b😀c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["src/a/b.tsünïcödé"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ΣΊΣΥΦΟΣhello"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ünïcödé./x/**/*.json"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["tab\tseparatedline1\nline2"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a:b:c😀"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ns:key.path./x/**/*.json"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["😀a.b.c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["emoji 👍🏽 mixabc"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["{name} has {count} itemstrailing."], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["helloHELLO"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["straße﻿bom"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ünïcödéline1\nline2"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["héllo wörld"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["👍🏽 thumbs"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["日本語"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ılık ırmak"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["👨‍👩‍👧 family"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a b"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a😀b"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a²b x½ y①"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["aⅠb Ⅻ"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a𐐀b 𝐀bc"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["कि ٣٤"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["Iı İi"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["K K k"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ſ s S"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["x‍y 👨‍👩‍👧"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a b c　d"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["١٢٣ ٤٥"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["𝟘𝟙 ²³"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["snake_case foo-bar o'neil"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ǅungla Ǆ"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["one\r\ntwo threefour"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["café café"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["ΣΑΣ σας ς"], "ok": ""}
+{"fn": "proxy_egress_key", "args": ["http://user-region-US-sid-abc12345-t-5:pass@us.lajiaohttp.net:2000"], "ok": "http://us.lajiaohttp.net:2000|sid=abc12345"}
+{"fn": "proxy_egress_key", "args": ["socks5h://acct:base-US-sid9988-30m@gw.kookeey.net:1080"], "ok": "socks5h://gw.kookeey.net:1080|sid=sid9988"}
+{"fn": "proxy_egress_key", "args": ["http://plain:pw@127.0.0.1:7890"], "ok": "http://127.0.0.1:7890"}
+{"fn": "proxy_egress_key", "args": ["192.168.1.10:8080:u-sid-deadbeef:p"], "ok": "http://192.168.1.10:8080|sid=deadbeef"}
 {"fn": "proxy_egress_key", "args": [""], "ok": ""}
-{"fn": "proxy_egress_key", "args": [null], "ok": ""}
-{"fn": "proxy_egress_key", "args": ["http://user-region-US-sid-sess1001-t-5:pw1@gw.example:8080"], "ok": "http://gw.example:8080|sid=sess1001"}
-{"fn": "proxy_egress_key", "args": ["socks5h://u1:base-DE-sess2002-15m@kookeey.example:1080"], "ok": "socks5h://kookeey.example:1080|sid=sess2002"}
-{"fn": "proxy_egress_key", "args": ["proxy.example:9000:user-sid-sess3003:pw2"], "ok": "http://proxy.example:9000|sid=sess3003"}
-{"fn": "proxy_egress_key", "args": ["http://127.0.0.1:7890"], "ok": "http://127.0.0.1:7890"}
-{"fn": "proxy_egress_key", "args": ["http://[::1]:10808"], "ok": "http://::1:10808"}
+{"fn": "proxy_egress_key", "args": ["http://[::1]:8080"], "ok": "http://::1:8080"}
+{"fn": "chatgpt_account_id_from_token", "args": ["eyJhbGciOiAiUlMyNTYiLCAidHlwIjogIkpXVCJ9.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOiB7ImNoYXRncHRfYWNjb3VudF9pZCI6ICJhY2N0LXV1aWQtMTExMS0yMjIyIiwgImNoYXRncHRfcGxhbl90eXBlIjogInBsdXMifSwgInN1YiI6ICJ1c2VyLTEifQ.sig_placeholder"], "ok": "acct-uuid-1111-2222"}
+{"fn": "chatgpt_account_id_from_token", "args": ["eyJhbGciOiAiUlMyNTYiLCAidHlwIjogIkpXVCJ9.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOiB7ImNoYXRncHRBY2NvdW50SWQiOiAiICBhY2N0LWNhbWVsLTMzMzMgICJ9fQ.sig_placeholder"], "ok": "acct-camel-3333"}
+{"fn": "chatgpt_account_id_from_token", "args": ["eyJhbGciOiAiUlMyNTYiLCAidHlwIjogIkpXVCJ9.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOiB7ImNoYXRncHRfYWNjb3VudF9pZCI6ICIifSwgImNoYXRncHRfYWNjb3VudF9pZCI6ICJ0b3AtbGV2ZWwtNDQ0NCJ9.sig_placeholder"], "ok": "top-level-4444"}
+{"fn": "chatgpt_account_id_from_token", "args": ["eyJhbGciOiAiUlMyNTYiLCAidHlwIjogIkpXVCJ9.eyJjaGF0Z3B0QWNjb3VudElkIjogInRvcC1jYW1lbC01NTU1In0.sig_placeholder"], "ok": "top-camel-5555"}
+{"fn": "chatgpt_account_id_from_token", "args": ["eyJhbGciOiAiUlMyNTYiLCAidHlwIjogIkpXVCJ9.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOiB7ImNoYXRncHRfYWNjb3VudF9pZCI6ICIgICAiLCAiY2hhdGdwdEFjY291bnRJZCI6ICJpZ25vcmVkX3doZW5fc3BhY2VzIn0sICJjaGF0Z3B0X2FjY291bnRfaWQiOiAiZmFsbGJhY2stNjY2NiJ9.sig_placeholder"], "ok": "fallback-6666"}
+{"fn": "chatgpt_account_id_from_token", "args": ["  eyJhbGciOiAiUlMyNTYiLCAidHlwIjogIkpXVCJ9.eyJjaGF0Z3B0X2FjY291bnRfaWQiOiAidHJpbW1lZC03Nzc3In0.sig_placeholder  "], "ok": "trimmed-7777"}
+{"fn": "chatgpt_account_id_from_token", "args": ["not-a-jwt"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a.!!!notbase64!!!.c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": ["a.W10=.c"], "ok": ""}
+{"fn": "chatgpt_account_id_from_token", "args": [""], "ok": ""}

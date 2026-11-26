@@ -1,0 +1,43 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/accounts/account_lifecycle.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "account-lifecycle-rs",
+  "exports": [
+    {
+      "name": "_email_core",
+      "file": "sms_tool/accounts/account_lifecycle.py",
+      "line": 195,
+      "params": [
+        {
+          "name": "email",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_email_fuzzy_pattern",
+      "file": "sms_tool/accounts/account_lifecycle.py",
+      "line": 210,
+      "reason": "measured 0.93x due to PyO3 crossing cost on tiny string split/replace; kept in Python"
+    },
+    {
+      "name": "AccountLifecycle",
+      "file": "sms_tool/accounts/account_lifecycle.py",
+      "line": 40,
+      "reason": "SQLite and filesystem deletion orchestration stays in Python"
+    }
+  ]
+}

@@ -1,0 +1,208 @@
+{"fn": "_interleave_proxy_endpoints", "args": [["src/a/b.ts", "a:b:c", "İstanbul"]], "ok": ["src/a/b.ts", "a:b:c", "İstanbul"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ab"]], "ok": ["ab"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["./x/**/*.json", "日本語のテキスト./x/**/*.json"]], "ok": ["./x/**/*.json", "日本語のテキスト./x/**/*.json"]}
+{"fn": "_interleave_proxy_endpoints", "args": [[]], "ok": []}
+{"fn": "_interleave_proxy_endpoints", "args": [["ab", "a.b.cHello World"]], "ok": ["ab", "a.b.cHello World"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["", ":ab", ".leading"]], "ok": ["", ":ab", ".leading"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["{name} has {count} items", "﻿bom", "./x/**/*.json"]], "ok": ["{name} has {count} items", "﻿bom", "./x/**/*.json"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["﻿bom", "a:b:c", "😀"]], "ok": ["﻿bom", "a:b:c", "😀"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["é"]], "ok": ["é"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["src/a/b.ts", "a..b", "ΣΊΣΥΦΟΣ"]], "ok": ["src/a/b.ts", "a..b", "ΣΊΣΥΦΟΣ"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["line1\nline2ünïcödé", "日本語のテキストHello World"]], "ok": ["line1\nline2ünïcödé", "日本語のテキストHello World"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a😀b😀c"]], "ok": ["a😀b😀c"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["Hello Worlda..b", "straßeabc"]], "ok": ["Hello Worlda..b", "straßeabc"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a", "HELLO", "ab"]], "ok": ["a", "HELLO", "ab"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ünïcödé", "Hello Worldé", "hello"]], "ok": ["ünïcödé", "Hello Worldé", "hello"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ab", "{name} has {count} items"]], "ok": ["ab", "{name} has {count} items"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a..bab", "trailing.  padded  "]], "ok": ["a..bab", "trailing.  padded  "]}
+{"fn": "_interleave_proxy_endpoints", "args": [["  padded  ", "a..b"]], "ok": ["  padded  ", "a..b"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a..b"]], "ok": ["a..b"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["İstanbul"]], "ok": ["İstanbul"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a:b:cab", "ΣΊΣΥΦΟΣ", "src/a/b.ts"]], "ok": ["a:b:cab", "ΣΊΣΥΦΟΣ", "src/a/b.ts"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["tab\tseparated", "trailing."]], "ok": ["tab\tseparated", "trailing."]}
+{"fn": "_interleave_proxy_endpoints", "args": [["key_name-1"]], "ok": ["key_name-1"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ΣΊΣΥΦΟΣabc", "é"]], "ok": ["ΣΊΣΥΦΟΣabc", "é"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["İstanbul", "abc"]], "ok": ["İstanbul", "abc"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["{name} has {count} items", "ΣΊΣΥΦΟΣtab\tseparated"]], "ok": ["{name} has {count} items", "ΣΊΣΥΦΟΣtab\tseparated"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["﻿bom", "a"]], "ok": ["﻿bom", "a"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a:b:c"]], "ok": ["a:b:c"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["é", "a..b"]], "ok": ["é", "a..b"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ab", "line1\nline2"]], "ok": ["ab", "line1\nline2"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["日本語のテキスト", "line1\nline2"]], "ok": ["日本語のテキスト", "line1\nline2"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a.b.c", "a:b:c"]], "ok": ["a.b.c", "a:b:c"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["İstanbulHELLO", "  padded  "]], "ok": ["İstanbulHELLO", "  padded  "]}
+{"fn": "_interleave_proxy_endpoints", "args": [["abc"]], "ok": ["abc"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ns:key.pathns:key.path", "a.b.chello"]], "ok": ["ns:key.pathns:key.path", "a.b.chello"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["emoji 👍🏽 mix"]], "ok": ["emoji 👍🏽 mix"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["😀", "src/a/b.ts"]], "ok": ["😀", "src/a/b.ts"]}
+{"fn": "_interleave_proxy_endpoints", "args": [[":"]], "ok": [":"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["src/a/b.ts", "é"]], "ok": ["src/a/b.ts", "é"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ns:key.pathemoji 👍🏽 mix"]], "ok": ["ns:key.pathemoji 👍🏽 mix"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["Hello World"]], "ok": ["Hello World"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ΣΊΣΥΦΟΣ", "  padded  tab\tseparated", "tab\tseparated"]], "ok": ["ΣΊΣΥΦΟΣ", "  padded  tab\tseparated", "tab\tseparated"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["", "HELLO"]], "ok": ["", "HELLO"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["İstanbulΣΊΣΥΦΟΣ"]], "ok": ["İstanbulΣΊΣΥΦΟΣ"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["hello world", "é"]], "ok": ["hello world", "é"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ünïcödé"]], "ok": ["ünïcödé"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["Hello World", "tab\tseparated", "key_name-1"]], "ok": ["Hello World", "tab\tseparated", "key_name-1"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a:b:c", "a..ba", "İstanbul"]], "ok": ["a:b:c", "a..ba", "İstanbul"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["key_name-1日本語のテキスト", "HELLO"]], "ok": ["key_name-1日本語のテキスト", "HELLO"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["::", "", "a.b.c"]], "ok": ["::", "", "a.b.c"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["./x/**/*.json", "a😀b😀c", "abc"]], "ok": ["./x/**/*.json", "a😀b😀c", "abc"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a.b.c", "ΣΊΣΥΦΟΣ", "tab\tseparated"]], "ok": ["a.b.c", "ΣΊΣΥΦΟΣ", "tab\tseparated"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["  padded  ", "ΣΊΣΥΦΟΣ"]], "ok": ["  padded  ", "ΣΊΣΥΦΟΣ"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["", "abc"]], "ok": ["", "abc"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["hello", "é", "😀"]], "ok": ["hello", "é", "😀"]}
+{"fn": "_interleave_proxy_endpoints", "args": [[""]], "ok": [""]}
+{"fn": "_interleave_proxy_endpoints", "args": [["日本語のテキスト", "Hello World"]], "ok": ["日本語のテキスト", "Hello World"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["straße", ":"]], "ok": ["straße", ":"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["hello world"]], "ok": ["hello world"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a.b.ca.b.c", "key_name-1"]], "ok": ["a.b.ca.b.c", "key_name-1"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["hello", "a.b.c"]], "ok": ["hello", "a.b.c"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a😀b😀cline1\nline2"]], "ok": ["a😀b😀cline1\nline2"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["./x/**/*.json", ":", "﻿bom"]], "ok": ["./x/**/*.json", ":", "﻿bom"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["😀  padded  ", "a:b:c", "  padded  "]], "ok": ["😀  padded  ", "a:b:c", "  padded  "]}
+{"fn": "_interleave_proxy_endpoints", "args": [["tab\tseparated.leading", "İstanbul"]], "ok": ["tab\tseparated.leading", "İstanbul"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a..b", "trailing."]], "ok": ["a..b", "trailing."]}
+{"fn": "_interleave_proxy_endpoints", "args": [["😀"]], "ok": ["😀"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a:b:c😀", "hello"]], "ok": ["a:b:c😀", "hello"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["key_name-1a", "./x/**/*.json"]], "ok": ["key_name-1a", "./x/**/*.json"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a:b:c", "hello", "日本語のテキスト"]], "ok": ["a:b:c", "hello", "日本語のテキスト"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["é", "hello world"]], "ok": ["é", "hello world"]}
+{"fn": "_interleave_proxy_endpoints", "args": [[".leading", "emoji 👍🏽 mixemoji 👍🏽 mix", "Hello WorldΣΊΣΥΦΟΣ"]], "ok": [".leading", "emoji 👍🏽 mixemoji 👍🏽 mix", "Hello WorldΣΊΣΥΦΟΣ"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["straße"]], "ok": ["straße"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["  padded  ", ":"]], "ok": ["  padded  ", ":"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["trailing."]], "ok": ["trailing."]}
+{"fn": "_interleave_proxy_endpoints", "args": [["tab\tseparated", "  padded  ", "abemoji 👍🏽 mix"]], "ok": ["tab\tseparated", "  padded  ", "abemoji 👍🏽 mix"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["line1\nline2", "HELLO"]], "ok": ["line1\nline2", "HELLO"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["{name} has {count} items", "a", "hello world"]], "ok": ["{name} has {count} items", "a", "hello world"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["src/a/b.ts:", "./x/**/*.json", "line1\nline2"]], "ok": ["src/a/b.ts:", "./x/**/*.json", "line1\nline2"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["{name} has {count} items", "key_name-1"]], "ok": ["{name} has {count} items", "key_name-1"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["./x/**/*.json"]], "ok": ["./x/**/*.json"]}
+{"fn": "_interleave_proxy_endpoints", "args": [[".leading", "HELLO"]], "ok": [".leading", "HELLO"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["{name} has {count} items", "a..b", "  padded  "]], "ok": ["{name} has {count} items", "a..b", "  padded  "]}
+{"fn": "_interleave_proxy_endpoints", "args": [["{name} has {count} itemsabc", "{name} has {count} items"]], "ok": ["{name} has {count} itemsabc", "{name} has {count} items"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["straße", "ΣΊΣΥΦΟΣns:key.path", "./x/**/*.json"]], "ok": ["straße", "ΣΊΣΥΦΟΣns:key.path", "./x/**/*.json"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["  padded  ", "a", "{name} has {count} items"]], "ok": ["  padded  ", "a", "{name} has {count} items"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["é", "ΣΊΣΥΦΟΣ", "Hello Worldline1\nline2"]], "ok": ["é", "ΣΊΣΥΦΟΣ", "Hello Worldline1\nline2"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["{name} has {count} items", "{name} has {count} itemsa.b.c"]], "ok": ["{name} has {count} items", "{name} has {count} itemsa.b.c"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["./x/**/*.json", "hello"]], "ok": ["./x/**/*.json", "hello"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["key_name-1", "line1\nline2Hello World"]], "ok": ["key_name-1", "line1\nline2Hello World"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a:b:cünïcödé", "emoji 👍🏽 mix", "ΣΊΣΥΦΟΣ"]], "ok": ["a:b:cünïcödé", "emoji 👍🏽 mix", "ΣΊΣΥΦΟΣ"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ünïcödéns:key.path"]], "ok": ["ünïcödéns:key.path"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["trailing.", "😀", ".leading"]], "ok": ["trailing.", "😀", ".leading"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["HELLO", "a..b"]], "ok": ["HELLO", "a..b"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ΣΊΣΥΦΟΣ"]], "ok": ["ΣΊΣΥΦΟΣ"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["emoji 👍🏽 mix", "line1\nline2", "a😀b😀c"]], "ok": ["emoji 👍🏽 mix", "line1\nline2", "a😀b😀c"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["tab\tseparated"]], "ok": ["tab\tseparated"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["﻿bom"]], "ok": ["﻿bom"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ΣΊΣΥΦΟΣ", "ab", "hello"]], "ok": ["ΣΊΣΥΦΟΣ", "ab", "hello"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ünïcödé", "﻿bomline1\nline2", "straße"]], "ok": ["ünïcödé", "﻿bomline1\nline2", "straße"]}
+{"fn": "_interleave_proxy_endpoints", "args": [[":İstanbul", "tab\tseparated"]], "ok": [":İstanbul", "tab\tseparated"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["hello worldİstanbul", "straße", "a😀b😀cΣΊΣΥΦΟΣ"]], "ok": ["hello worldİstanbul", "straße", "a😀b😀cΣΊΣΥΦΟΣ"]}
+{"fn": "_interleave_proxy_endpoints", "args": [[":", "key_name-1"]], "ok": [":", "key_name-1"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["tab\tseparated", "emoji 👍🏽 mix", "  padded  :"]], "ok": ["tab\tseparated", "emoji 👍🏽 mix", "  padded  :"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["src/a/b.ts"]], "ok": ["src/a/b.ts"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ΣΊΣΥΦΟΣhello", "{name} has {count} items😀", "İstanbulns:key.path"]], "ok": ["ΣΊΣΥΦΟΣhello", "{name} has {count} items😀", "İstanbulns:key.path"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["key_name-1", "😀"]], "ok": ["key_name-1", "😀"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ab", "trailing."]], "ok": ["ab", "trailing."]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ΣΊΣΥΦΟΣa"]], "ok": ["ΣΊΣΥΦΟΣa"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["hello world", "{name} has {count} items", "a:"]], "ok": ["hello world", "{name} has {count} items", "a:"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["abab", "hello world", "a..b"]], "ok": ["abab", "hello world", "a..b"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["trailing..leading", "😀", "trailing."]], "ok": ["trailing..leading", "😀", "trailing."]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a"]], "ok": ["a"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["trailing.", "src/a/b.ts"]], "ok": ["trailing.", "src/a/b.ts"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["line1\nline2"]], "ok": ["line1\nline2"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ns:key.path😀", "  padded  "]], "ok": ["ns:key.path😀", "  padded  "]}
+{"fn": "_interleave_proxy_endpoints", "args": [["日本語のテキスト", "key_name-1", "a.b.c"]], "ok": ["日本語のテキスト", "key_name-1", "a.b.c"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["tab\tseparated", "ünïcödé"]], "ok": ["tab\tseparated", "ünïcödé"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ΣΊΣΥΦΟΣ  padded  ", "key_name-1"]], "ok": ["ΣΊΣΥΦΟΣ  padded  ", "key_name-1"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["İstanbula.b.c", "HELLOemoji 👍🏽 mix", "Hello World"]], "ok": ["İstanbula.b.c", "HELLOemoji 👍🏽 mix", "Hello World"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["line1\nline2", "a:b:cünïcödé", "😀"]], "ok": ["line1\nline2", "a:b:cünïcödé", "😀"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["hello"]], "ok": ["hello"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["tab\tseparated", "emoji 👍🏽 mix", "trailing."]], "ok": ["tab\tseparated", "emoji 👍🏽 mix", "trailing."]}
+{"fn": "_interleave_proxy_endpoints", "args": [[".leading", "hello"]], "ok": [".leading", "hello"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ünïcödé", "tab\tseparated"]], "ok": ["ünïcödé", "tab\tseparated"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a.b.c", "{name} has {count} items", "src/a/b.tsİstanbul"]], "ok": ["a.b.c", "{name} has {count} items", "src/a/b.tsİstanbul"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["src/a/b.tsHello World", "Hello World", "src/a/b.ts"]], "ok": ["src/a/b.tsHello World", "Hello World", "src/a/b.ts"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["{name} has {count} items"]], "ok": ["{name} has {count} items"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["hello world", "日本語のテキスト"]], "ok": ["hello world", "日本語のテキスト"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["hello", "straße", "emoji 👍🏽 mix"]], "ok": ["hello", "straße", "emoji 👍🏽 mix"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["hello", "  padded  "]], "ok": ["hello", "  padded  "]}
+{"fn": "_interleave_proxy_endpoints", "args": [["﻿bom", "a😀b😀cHello World", "  padded  "]], "ok": ["﻿bom", "a😀b😀cHello World", "  padded  "]}
+{"fn": "_interleave_proxy_endpoints", "args": [[".leading", "a..b", "a"]], "ok": [".leading", "a..b", "a"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["Hello World", "key_name-1", "emoji 👍🏽 mix"]], "ok": ["Hello World", "key_name-1", "emoji 👍🏽 mix"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ünïcödé", "a", "hello world"]], "ok": ["ünïcödé", "a", "hello world"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["é", "İstanbul"]], "ok": ["é", "İstanbul"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["{name} has {count} items", "HELLO", "😀"]], "ok": ["{name} has {count} items", "HELLO", "😀"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["line1\nline2", "line1\nline2"]], "ok": ["line1\nline2"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a..bstraße"]], "ok": ["a..bstraße"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["﻿bom", "tab\tseparated./x/**/*.json"]], "ok": ["﻿bom", "tab\tseparated./x/**/*.json"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["HELLOns:key.path", ":"]], "ok": ["HELLOns:key.path", ":"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["  padded  ", "ΣΊΣΥΦΟΣa😀b😀c"]], "ok": ["  padded  ", "ΣΊΣΥΦΟΣa😀b😀c"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["tab\tseparated", "日本語のテキストkey_name-1", ":"]], "ok": ["tab\tseparated", "日本語のテキストkey_name-1", ":"]}
+{"fn": "_interleave_proxy_endpoints", "args": [[".leading"]], "ok": [".leading"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["emoji 👍🏽 mix", ".leadingemoji 👍🏽 mix"]], "ok": ["emoji 👍🏽 mix", ".leadingemoji 👍🏽 mix"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a:b:ctrailing."]], "ok": ["a:b:ctrailing."]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ns:key.path"]], "ok": ["ns:key.path"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["İstanbul", "hello world"]], "ok": ["İstanbul", "hello world"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["HELLO", "hello"]], "ok": ["HELLO", "hello"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["{name} has {count} itemsstraße"]], "ok": ["{name} has {count} itemsstraße"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["trailing.", "﻿bom"]], "ok": ["trailing.", "﻿bom"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["straßestraße", "é", "abc"]], "ok": ["straßestraße", "é", "abc"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["emoji 👍🏽 mix", "straße日本語のテキスト"]], "ok": ["emoji 👍🏽 mix", "straße日本語のテキスト"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["key_name-1", "{name} has {count} items:", "ΣΊΣΥΦΟΣ"]], "ok": ["key_name-1", "{name} has {count} items:", "ΣΊΣΥΦΟΣ"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["  padded  straße", "tab\tseparated"]], "ok": ["  padded  straße", "tab\tseparated"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["abcstraße", "straße", "a😀b😀c"]], "ok": ["abcstraße", "straße", "a😀b😀c"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["HELLOtrailing.", "ab", "ns:key.path"]], "ok": ["HELLOtrailing.", "ab", "ns:key.path"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ns:key.path.leading", "key_name-1./x/**/*.json", "a  padded  "]], "ok": ["ns:key.path.leading", "key_name-1./x/**/*.json", "a  padded  "]}
+{"fn": "_interleave_proxy_endpoints", "args": [["hellokey_name-1", "trailing.", "ab"]], "ok": ["hellokey_name-1", "trailing.", "ab"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["src/a/b.tstrailing.", "ünïcödé"]], "ok": ["src/a/b.tstrailing.", "ünïcödé"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a", "a:b:c", "hello"]], "ok": ["a", "a:b:c", "hello"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["key_name-1", "abc", "ns:key.path:"]], "ok": ["key_name-1", "abc", "ns:key.path:"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["İstanbul", "é"]], "ok": ["İstanbul", "é"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["İstanbul😀"]], "ok": ["İstanbul😀"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["straßea..b", "trailing.a.b.c"]], "ok": ["straßea..b", "trailing.a.b.c"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["line1\nline2tab\tseparated"]], "ok": ["line1\nline2tab\tseparated"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["{name} has {count} items", "./x/**/*.json"]], "ok": ["{name} has {count} items", "./x/**/*.json"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["日本語のテキストΣΊΣΥΦΟΣ", "ΣΊΣΥΦΟΣ", "  padded  "]], "ok": ["日本語のテキストΣΊΣΥΦΟΣ", "ΣΊΣΥΦΟΣ", "  padded  "]}
+{"fn": "_interleave_proxy_endpoints", "args": [["日本語のテキスト", "a😀b😀c", "a"]], "ok": ["日本語のテキスト", "a😀b😀c", "a"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a..ba..b", "ab"]], "ok": ["a..ba..b", "ab"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ékey_name-1", "tab\tseparated", "{name} has {count} items:"]], "ok": ["ékey_name-1", "tab\tseparated", "{name} has {count} items:"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["src/a/b.ts", "ΣΊΣΥΦΟΣtab\tseparated", "a.b.c"]], "ok": ["src/a/b.ts", "ΣΊΣΥΦΟΣtab\tseparated", "a.b.c"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a:b:c", "ünïcödéabc"]], "ok": ["a:b:c", "ünïcödéabc"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["﻿bom", "a😀b😀c", "emoji 👍🏽 mixHELLO"]], "ok": ["﻿bom", "a😀b😀c", "emoji 👍🏽 mixHELLO"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["日本語のテキスト"]], "ok": ["日本語のテキスト"]}
+{"fn": "_interleave_proxy_endpoints", "args": [[".leading", "emoji 👍🏽 mix", "straße"]], "ok": [".leading", "emoji 👍🏽 mix", "straße"]}
+{"fn": "_interleave_proxy_endpoints", "args": [[":a.b.c"]], "ok": [":a.b.c"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["{name} has {count} itemshello world", "./x/**/*.json", "./x/**/*.json"]], "ok": ["{name} has {count} itemshello world", "./x/**/*.json"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["HELLO", "﻿bom"]], "ok": ["HELLO", "﻿bom"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a", "ab"]], "ok": ["a", "ab"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["straße", "emoji 👍🏽 mix"]], "ok": ["straße", "emoji 👍🏽 mix"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["", "﻿bom"]], "ok": ["", "﻿bom"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["ΣΊΣΥΦΟΣ", "straße"]], "ok": ["ΣΊΣΥΦΟΣ", "straße"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["  padded  {name} has {count} items", "trailing.", "hello world"]], "ok": ["  padded  {name} has {count} items", "trailing.", "hello world"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["emoji 👍🏽 mixa", "ns:key.path"]], "ok": ["emoji 👍🏽 mixa", "ns:key.path"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["trailing.", "  padded  ", ".leading"]], "ok": ["trailing.", "  padded  ", ".leading"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["tab\tseparated", "a.b.c", "straße"]], "ok": ["tab\tseparated", "a.b.c", "straße"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["hello world", "İstanbul", "ns:key.path"]], "ok": ["hello world", "İstanbul", "ns:key.path"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["key_name-1", "emoji 👍🏽 mix"]], "ok": ["key_name-1", "emoji 👍🏽 mix"]}
+{"fn": "_interleave_proxy_endpoints", "args": [[".leading", "trailing.", "Hello World"]], "ok": [".leading", "trailing.", "Hello World"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a", "line1\nline2"]], "ok": ["a", "line1\nline2"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["key_name-1", ".leading"]], "ok": ["key_name-1", ".leading"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["﻿bom", "日本語のテキスト", "emoji 👍🏽 mix"]], "ok": ["﻿bom", "日本語のテキスト", "emoji 👍🏽 mix"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["Hello World", "ns:key.path"]], "ok": ["Hello World", "ns:key.path"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["﻿bom", "日本語のテキスト"]], "ok": ["﻿bom", "日本語のテキスト"]}
+{"fn": "_interleave_proxy_endpoints", "args": [[":", "line1\nline2"]], "ok": [":", "line1\nline2"]}
+{"fn": "_interleave_proxy_endpoints", "args": [[":", "./x/**/*.json", "line1\nline2"]], "ok": [":", "./x/**/*.json", "line1\nline2"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["", "﻿bomΣΊΣΥΦΟΣ", "ünïcödé"]], "ok": ["", "﻿bomΣΊΣΥΦΟΣ", "ünïcödé"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["line1\nline2😀", "HELLO", ""]], "ok": ["line1\nline2😀", "HELLO", ""]}
+{"fn": "_interleave_proxy_endpoints", "args": [["a:b:ca.b.c", "ab"]], "ok": ["a:b:ca.b.c", "ab"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["b", "a", "B", "é", "10", "9", "a"]], "ok": ["b", "a", "B", "é", "10", "9"]}
+{"fn": "_interleave_proxy_endpoints", "args": [[]], "ok": []}
+{"fn": "_interleave_proxy_endpoints", "args": [["http://u1:p@a.example:8080"]], "ok": ["http://u1:p@a.example:8080"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["http://u1:p@a.example:8080", "http://u2:p@a.example:8080", "http://u1:p@a.example:8080"]], "ok": ["http://u1:p@a.example:8080", "http://u2:p@a.example:8080"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["http://u0:p@gw0.example:8000", "http://u1:p@gw1.example:8001", "http://u2:p@gw2.example:8002", "http://u3:p@gw3.example:8003", "http://u4:p@gw0.example:8000", "http://u5:p@gw1.example:8001", "http://u6:p@gw2.example:8002", "http://u7:p@gw3.example:8003", "http://u8:p@gw0.example:8000", "http://u9:p@gw1.example:8001", "http://u10:p@gw2.example:8002", "http://u11:p@gw3.example:8003", "http://u12:p@gw0.example:8000", "http://u13:p@gw1.example:8001", "http://u14:p@gw2.example:8002", "http://u15:p@gw3.example:8003", "http://u16:p@gw0.example:8000", "http://u17:p@gw1.example:8001", "http://u18:p@gw2.example:8002", "http://u19:p@gw3.example:8003", "http://u20:p@gw0.example:8000", "http://u21:p@gw1.example:8001", "http://u22:p@gw2.example:8002", "http://u23:p@gw3.example:8003", "http://u24:p@gw0.example:8000", "http://u25:p@gw1.example:8001", "http://u26:p@gw2.example:8002", "http://u27:p@gw3.example:8003", "http://u28:p@gw0.example:8000", "http://u29:p@gw1.example:8001", "http://u30:p@gw2.example:8002", "http://u31:p@gw3.example:8003", "http://u32:p@gw0.example:8000", "http://u33:p@gw1.example:8001", "http://u34:p@gw2.example:8002", "http://u35:p@gw3.example:8003", "http://u36:p@gw0.example:8000", "http://u37:p@gw1.example:8001", "http://u38:p@gw2.example:8002", "http://u39:p@gw3.example:8003"]], "ok": ["http://u0:p@gw0.example:8000", "http://u1:p@gw1.example:8001", "http://u2:p@gw2.example:8002", "http://u3:p@gw3.example:8003", "http://u4:p@gw0.example:8000", "http://u5:p@gw1.example:8001", "http://u6:p@gw2.example:8002", "http://u7:p@gw3.example:8003", "http://u8:p@gw0.example:8000", "http://u9:p@gw1.example:8001", "http://u10:p@gw2.example:8002", "http://u11:p@gw3.example:8003", "http://u12:p@gw0.example:8000", "http://u13:p@gw1.example:8001", "http://u14:p@gw2.example:8002", "http://u15:p@gw3.example:8003", "http://u16:p@gw0.example:8000", "http://u17:p@gw1.example:8001", "http://u18:p@gw2.example:8002", "http://u19:p@gw3.example:8003", "http://u20:p@gw0.example:8000", "http://u21:p@gw1.example:8001", "http://u22:p@gw2.example:8002", "http://u23:p@gw3.example:8003", "http://u24:p@gw0.example:8000", "http://u25:p@gw1.example:8001", "http://u26:p@gw2.example:8002", "http://u27:p@gw3.example:8003", "http://u28:p@gw0.example:8000", "http://u29:p@gw1.example:8001", "http://u30:p@gw2.example:8002", "http://u31:p@gw3.example:8003", "http://u32:p@gw0.example:8000", "http://u33:p@gw1.example:8001", "http://u34:p@gw2.example:8002", "http://u35:p@gw3.example:8003", "http://u36:p@gw0.example:8000", "http://u37:p@gw1.example:8001", "http://u38:p@gw2.example:8002", "http://u39:p@gw3.example:8003"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["socks5h://sid0:pw@gw0.isp.net:1080", "socks5h://sid1:pw@gw0.isp.net:1080", "socks5h://sid2:pw@gw0.isp.net:1080", "socks5h://sid3:pw@gw0.isp.net:1080", "socks5h://sid4:pw@gw0.isp.net:1080", "socks5h://sid5:pw@gw0.isp.net:1080", "socks5h://sid6:pw@gw0.isp.net:1080", "socks5h://sid7:pw@gw0.isp.net:1080", "socks5h://sid8:pw@gw1.isp.net:1080", "socks5h://sid9:pw@gw1.isp.net:1080", "socks5h://sid10:pw@gw1.isp.net:1080", "socks5h://sid11:pw@gw1.isp.net:1080", "socks5h://sid12:pw@gw1.isp.net:1080", "socks5h://sid13:pw@gw1.isp.net:1080", "socks5h://sid14:pw@gw1.isp.net:1080", "socks5h://sid15:pw@gw1.isp.net:1080", "socks5h://sid16:pw@gw2.isp.net:1080", "socks5h://sid17:pw@gw2.isp.net:1080", "socks5h://sid18:pw@gw2.isp.net:1080", "socks5h://sid19:pw@gw2.isp.net:1080", "socks5h://sid20:pw@gw2.isp.net:1080", "socks5h://sid21:pw@gw2.isp.net:1080", "socks5h://sid22:pw@gw2.isp.net:1080", "socks5h://sid23:pw@gw2.isp.net:1080", "socks5h://sid24:pw@gw3.isp.net:1080", "socks5h://sid25:pw@gw3.isp.net:1080", "socks5h://sid26:pw@gw3.isp.net:1080", "socks5h://sid27:pw@gw3.isp.net:1080", "socks5h://sid28:pw@gw3.isp.net:1080", "socks5h://sid29:pw@gw3.isp.net:1080", "socks5h://sid30:pw@gw3.isp.net:1080", "socks5h://sid31:pw@gw3.isp.net:1080"]], "ok": ["socks5h://sid0:pw@gw0.isp.net:1080", "socks5h://sid8:pw@gw1.isp.net:1080", "socks5h://sid16:pw@gw2.isp.net:1080", "socks5h://sid24:pw@gw3.isp.net:1080", "socks5h://sid1:pw@gw0.isp.net:1080", "socks5h://sid9:pw@gw1.isp.net:1080", "socks5h://sid17:pw@gw2.isp.net:1080", "socks5h://sid25:pw@gw3.isp.net:1080", "socks5h://sid2:pw@gw0.isp.net:1080", "socks5h://sid10:pw@gw1.isp.net:1080", "socks5h://sid18:pw@gw2.isp.net:1080", "socks5h://sid26:pw@gw3.isp.net:1080", "socks5h://sid3:pw@gw0.isp.net:1080", "socks5h://sid11:pw@gw1.isp.net:1080", "socks5h://sid19:pw@gw2.isp.net:1080", "socks5h://sid27:pw@gw3.isp.net:1080", "socks5h://sid4:pw@gw0.isp.net:1080", "socks5h://sid12:pw@gw1.isp.net:1080", "socks5h://sid20:pw@gw2.isp.net:1080", "socks5h://sid28:pw@gw3.isp.net:1080", "socks5h://sid5:pw@gw0.isp.net:1080", "socks5h://sid13:pw@gw1.isp.net:1080", "socks5h://sid21:pw@gw2.isp.net:1080", "socks5h://sid29:pw@gw3.isp.net:1080", "socks5h://sid6:pw@gw0.isp.net:1080", "socks5h://sid14:pw@gw1.isp.net:1080", "socks5h://sid22:pw@gw2.isp.net:1080", "socks5h://sid30:pw@gw3.isp.net:1080", "socks5h://sid7:pw@gw0.isp.net:1080", "socks5h://sid15:pw@gw1.isp.net:1080", "socks5h://sid23:pw@gw2.isp.net:1080", "socks5h://sid31:pw@gw3.isp.net:1080"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["http://a:1@h1:8080", "http://b:2@h1:8080", "http://c:3@h2:8080", "http://d:4@h3:9090", "http://e:5@h1:8080"]], "ok": ["http://a:1@h1:8080", "http://c:3@h2:8080", "http://d:4@h3:9090", "http://b:2@h1:8080", "http://e:5@h1:8080"]}
+{"fn": "_interleave_proxy_endpoints", "args": [["http://[::1]:8080", "http://[::1]:8081", "http://[::1]:8080"]], "ok": ["http://[::1]:8080", "http://[::1]:8081"]}

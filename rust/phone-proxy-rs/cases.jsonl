@@ -1,0 +1,267 @@
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "HELLO"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["İstanbulline1\nline2", "tab\tseparated"], "ok": "İstanbulline1\nline2"}
+{"fn": "_api_url_for_region", "args": [" ", "  padded  "], "ok": ""}
+{"fn": "_api_url_for_region", "args": ["é", ":"], "ok": "é"}
+{"fn": "_api_url_for_region", "args": ["emoji 👍🏽 mix", "é"], "ok": "emoji 👍🏽 mix"}
+{"fn": "_api_url_for_region", "args": ["Hello World﻿bom", "./x/**/*.json"], "ok": "Hello World﻿bom"}
+{"fn": "_api_url_for_region", "args": ["hello", "a.b.c"], "ok": "hello"}
+{"fn": "_api_url_for_region", "args": ["hello worldabc", "ABC"], "ok": "hello worldabc"}
+{"fn": "_api_url_for_region", "args": ["aa..b", "HELLO"], "ok": "aa..b"}
+{"fn": "_api_url_for_region", "args": ["a:b:c", "trailing."], "ok": "a:b:c"}
+{"fn": "_api_url_for_region", "args": ["emoji 👍🏽 mix", "hello world"], "ok": "emoji 👍🏽 mix"}
+{"fn": "_api_url_for_region", "args": ["日本語のテキスト", "emoji 👍🏽 mix"], "ok": "日本語のテキスト"}
+{"fn": "_api_url_for_region", "args": ["O ", "Hello World"], "ok": "O"}
+{"fn": "_api_url_for_region", "args": ["straße", "tab\tseparated"], "ok": "straße"}
+{"fn": "_api_url_for_region", "args": ["./x/**/*.json", "**/*.jso"], "ok": "./x/**/*.json"}
+{"fn": "_api_url_for_region", "args": ["", "ab"], "ok": ""}
+{"fn": "_api_url_for_region", "args": ["a..b", "./x/**/*.json"], "ok": "a..b"}
+{"fn": "_api_url_for_region", "args": ["é", "é"], "ok": "é"}
+{"fn": "_api_url_for_region", "args": ["straße", "﻿bom"], "ok": "straße"}
+{"fn": "_api_url_for_region", "args": ["ns:key.patha😀b😀c", ":"], "ok": "ns:key.patha😀b😀c"}
+{"fn": "_api_url_for_region", "args": ["Hello World", ":"], "ok": "Hello World"}
+{"fn": "_api_url_for_region", "args": ["a..b", "a😀b😀c"], "ok": "a..b"}
+{"fn": "_api_url_for_region", "args": ["{name} has {count} items", " has {co"], "ok": "{name} has {count} items"}
+{"fn": "_api_url_for_region", "args": ["h", "ns:key.path"], "ok": "h"}
+{"fn": "_api_url_for_region", "args": ["a.b.c", "﻿bom"], "ok": "a.b.c"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "ab"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["TRAIL", "trailing."], "ok": "TRAIL"}
+{"fn": "_api_url_for_region", "args": ["line1\nline2", "﻿bom"], "ok": "line1\nline2"}
+{"fn": "_api_url_for_region", "args": ["é", "a😀b😀c"], "ok": "é"}
+{"fn": "_api_url_for_region", "args": ["trailing.ΣΊΣΥΦΟΣ", "tab\tseparated"], "ok": "trailing.ΣΊΣΥΦΟΣ"}
+{"fn": "_api_url_for_region", "args": ["./x/**/*.json", "  padded  "], "ok": "./x/**/*.json"}
+{"fn": "_api_url_for_region", "args": [".leadingab", ""], "ok": ".leadingab"}
+{"fn": "_api_url_for_region", "args": ["NE", "line1\nline2"], "ok": "NE"}
+{"fn": "_api_url_for_region", "args": ["a😀b😀c", "a.b.c"], "ok": "a😀b😀c"}
+{"fn": "_api_url_for_region", "args": ["atab\tseparated", "tab\tseparated"], "ok": "atab\tseparated"}
+{"fn": "_api_url_for_region", "args": ["a.b.c", "b.c"], "ok": "a.b.c"}
+{"fn": "_api_url_for_region", "args": ["a:b:c", "hello world"], "ok": "a:b:c"}
+{"fn": "_api_url_for_region", "args": ["日本語のテキスト", ".leading"], "ok": "日本語のテキスト"}
+{"fn": "_api_url_for_region", "args": ["{name} has {count} itemstab\tseparated", "P"], "ok": "{name} has {count} itemstab\tseparated"}
+{"fn": "_api_url_for_region", "args": ["trailing.hello", "straße"], "ok": "trailing.hello"}
+{"fn": "_api_url_for_region", "args": ["straße", "日本語のテキスト"], "ok": "straße"}
+{"fn": "_api_url_for_region", "args": ["hello world", "l"], "ok": "hello world"}
+{"fn": "_api_url_for_region", "args": ["a😀b😀c", "😀"], "ok": "a😀b😀c"}
+{"fn": "_api_url_for_region", "args": ["a..b", "line1\nline2ΣΊΣΥΦΟΣ"], "ok": "a..b"}
+{"fn": "_api_url_for_region", "args": [".leading", "ünïcödé"], "ok": ".leading"}
+{"fn": "_api_url_for_region", "args": ["straße", "./x/**/*.json"], "ok": "straße"}
+{"fn": "_api_url_for_region", "args": ["./x/**/*.json", "straße"], "ok": "./x/**/*.json"}
+{"fn": "_api_url_for_region", "args": ["line1\nline2", "a..bİstanbul"], "ok": "line1\nline2"}
+{"fn": "_api_url_for_region", "args": ["İstanbul", "ns:key.path"], "ok": "İstanbul"}
+{"fn": "_api_url_for_region", "args": ["日本語のテキスト", "straße"], "ok": "日本語のテキスト"}
+{"fn": "_api_url_for_region", "args": ["  padded  ", "ünïcödé"], "ok": "padded"}
+{"fn": "_api_url_for_region", "args": ["tab\tseparated", "﻿bom"], "ok": "tab\tseparated"}
+{"fn": "_api_url_for_region", "args": ["a.b.c", "İstanbul"], "ok": "a.b.c"}
+{"fn": "_api_url_for_region", "args": ["İstan", "İstanbul"], "ok": "İstan"}
+{"fn": "_api_url_for_region", "args": ["HELLO", "Hello Worldtrailing."], "ok": "HELLO"}
+{"fn": "_api_url_for_region", "args": ["﻿bom", "src/a/b.ts"], "ok": "﻿bom"}
+{"fn": "_api_url_for_region", "args": ["", "./x/**/*.json"], "ok": ""}
+{"fn": "_api_url_for_region", "args": ["O", "HELLO"], "ok": "O"}
+{"fn": "_api_url_for_region", "args": ["./x/**/*.json", "a.b.c"], "ok": "./x/**/*.json"}
+{"fn": "_api_url_for_region", "args": ["HELLOsrc/a/b.ts", "é"], "ok": "HELLOsrc/a/b.ts"}
+{"fn": "_api_url_for_region", "args": ["ΣΊΣΥΦΟΣ", "a.b.c"], "ok": "ΣΊΣΥΦΟΣ"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "tab\tseparated"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["hello", "﻿bomtab\tseparated"], "ok": "hello"}
+{"fn": "_api_url_for_region", "args": ["日本語のテキスト", "abca😀b😀c"], "ok": "日本語のテキスト"}
+{"fn": "_api_url_for_region", "args": ["hello", "😀"], "ok": "hello"}
+{"fn": "_api_url_for_region", "args": ["Hello World", "a"], "ok": "Hello World"}
+{"fn": "_api_url_for_region", "args": ["a😀b😀c{name} has {count} items", "İstanbul"], "ok": "a😀b😀c{name} has {count} items"}
+{"fn": "_api_url_for_region", "args": ["Hello World日本語のテキスト", "  padded  "], "ok": "Hello World日本語のテキスト"}
+{"fn": "_api_url_for_region", "args": ["😀", "a"], "ok": "😀"}
+{"fn": "_api_url_for_region", "args": ["a.b.c", "."], "ok": "a.b.c"}
+{"fn": "_api_url_for_region", "args": ["hello world", "😀tab\tseparated"], "ok": "hello world"}
+{"fn": "_api_url_for_region", "args": ["😀", "tab\tseparatedΣΊΣΥΦΟΣ"], "ok": "😀"}
+{"fn": "_api_url_for_region", "args": ["hello world", ""], "ok": "hello world"}
+{"fn": "_api_url_for_region", "args": ["hello world", "straßekey_name-1"], "ok": "hello world"}
+{"fn": "_api_url_for_region", "args": ["HELLOstraße", "straße{name} has {count} items"], "ok": "HELLOstraße"}
+{"fn": "_api_url_for_region", "args": ["́", "é"], "ok": "́"}
+{"fn": "_api_url_for_region", "args": ["ns:key.path", "a:b:cstraße"], "ok": "ns:key.path"}
+{"fn": "_api_url_for_region", "args": ["İstanbul", "anb"], "ok": "İstanbul"}
+{"fn": "_api_url_for_region", "args": ["a", "ab"], "ok": "a"}
+{"fn": "_api_url_for_region", "args": ["﻿bomé", "﻿bom"], "ok": "﻿bomé"}
+{"fn": "_api_url_for_region", "args": ["a😀b😀c", "b😀c"], "ok": "a😀b😀c"}
+{"fn": "_api_url_for_region", "args": ["a.b.c", "key_name-1a"], "ok": "a.b.c"}
+{"fn": "_api_url_for_region", "args": ["́", "{name} has {count} itemsé"], "ok": "́"}
+{"fn": "_api_url_for_region", "args": ["ine2abc", "line1\nline2abc"], "ok": "ine2abc"}
+{"fn": "_api_url_for_region", "args": ["./x/**/*.json", "./x/**/*.json"], "ok": "./x/**/*.json"}
+{"fn": "_api_url_for_region", "args": ["HELLOé", "e"], "ok": "HELLOé"}
+{"fn": "_api_url_for_region", "args": ["./x/**/*.jsonHello World", "key_name-1"], "ok": "./x/**/*.jsonHello World"}
+{"fn": "_api_url_for_region", "args": ["hello", ":İstanbul"], "ok": "hello"}
+{"fn": "_api_url_for_region", "args": ["", "src/a/b.ts"], "ok": ""}
+{"fn": "_api_url_for_region", "args": ["hello world", "Hello World"], "ok": "hello world"}
+{"fn": "_api_url_for_region", "args": ["hello world", "line1\nline2"], "ok": "hello world"}
+{"fn": "_api_url_for_region", "args": ["﻿bom", "﻿bom"], "ok": "﻿bom"}
+{"fn": "_api_url_for_region", "args": ["rc/a/b.t", "src/a/b.ts😀"], "ok": "rc/a/b.t"}
+{"fn": "_api_url_for_region", "args": ["hello world", "a.b.c"], "ok": "hello world"}
+{"fn": "_api_url_for_region", "args": ["src/a/b.ts", "hello world"], "ok": "src/a/b.ts"}
+{"fn": "_api_url_for_region", "args": ["İstanbul", "key_name-1"], "ok": "İstanbul"}
+{"fn": "_api_url_for_region", "args": ["{name} has {count} items  padded  ", "trailing."], "ok": "{name} has {count} items  padded"}
+{"fn": "_api_url_for_region", "args": ["a😀b😀c", ""], "ok": "a😀b😀c"}
+{"fn": "_api_url_for_region", "args": ["HELLO", "ns:key.pathemoji 👍🏽 mix"], "ok": "HELLO"}
+{"fn": "_api_url_for_region", "args": ["😀", "ΣΊΣΥΦΟΣ:"], "ok": "😀"}
+{"fn": "_api_url_for_region", "args": ["a:b:c", ":b:c"], "ok": "a:b:c"}
+{"fn": "_api_url_for_region", "args": ["Hello World", "trailing."], "ok": "Hello World"}
+{"fn": "_api_url_for_region", "args": ["é", "src/a/b.ts"], "ok": "é"}
+{"fn": "_api_url_for_region", "args": ["a.b.c", "a😀b😀c"], "ok": "a.b.c"}
+{"fn": "_api_url_for_region", "args": ["abcİstanbul", "trailing."], "ok": "abcİstanbul"}
+{"fn": "_api_url_for_region", "args": ["a.b.c", "key_name-1"], "ok": "a.b.c"}
+{"fn": "_api_url_for_region", "args": ["emoji 👍🏽 mix", "ji"], "ok": "emoji 👍🏽 mix"}
+{"fn": "_api_url_for_region", "args": ["key_name-1a", "ab"], "ok": "key_name-1a"}
+{"fn": "_api_url_for_region", "args": ["﻿bom", "{name} has {count} items"], "ok": "﻿bom"}
+{"fn": "_api_url_for_region", "args": ["B😀", "a😀b😀c"], "ok": "B😀"}
+{"fn": "_api_url_for_region", "args": ["😀b", "a😀b😀c"], "ok": "😀b"}
+{"fn": "_api_url_for_region", "args": [".leading", "helloHello World"], "ok": ".leading"}
+{"fn": "_api_url_for_region", "args": ["日本語のテキスト", "İstanbul😀"], "ok": "日本語のテキスト"}
+{"fn": "_api_url_for_region", "args": ["Hello World", "a😀b😀c"], "ok": "Hello World"}
+{"fn": "_api_url_for_region", "args": ["﻿bom", "m"], "ok": "﻿bom"}
+{"fn": "_api_url_for_region", "args": ["tab\tseparated  padded  ", "İstanbul"], "ok": "tab\tseparated  padded"}
+{"fn": "_api_url_for_region", "args": ["trailing.", "a..b"], "ok": "trailing."}
+{"fn": "_api_url_for_region", "args": ["a:b:c", "abc"], "ok": "a:b:c"}
+{"fn": "_api_url_for_region", "args": ["", "abc"], "ok": ""}
+{"fn": "_api_url_for_region", "args": ["tab\tseparatedΣΊΣΥΦΟΣ", "straße"], "ok": "tab\tseparatedΣΊΣΥΦΟΣ"}
+{"fn": "_api_url_for_region", "args": ["a..b", "é"], "ok": "a..b"}
+{"fn": "_api_url_for_region", "args": [".leadingé", "GÉ"], "ok": ".leadingé"}
+{"fn": "_api_url_for_region", "args": ["{name} has {count} items", "HELLO"], "ok": "{name} has {count} items"}
+{"fn": "_api_url_for_region", "args": ["﻿bom", "om"], "ok": "﻿bom"}
+{"fn": "_api_url_for_region", "args": ["a:b:c", "B:"], "ok": "a:b:c"}
+{"fn": "_api_url_for_region", "args": ["é", "abc"], "ok": "é"}
+{"fn": "_api_url_for_region", "args": ["key_name-1", "HELLO"], "ok": "key_name-1"}
+{"fn": "_api_url_for_region", "args": ["./x/**/*.jsona..b", "src/a/b.ts"], "ok": "./x/**/*.jsona..b"}
+{"fn": "_api_url_for_region", "args": ["line1\nline2{name} has {count} items", "has {cou"], "ok": "line1\nline2{name} has {count} items"}
+{"fn": "_api_url_for_region", "args": ["hello world", "﻿bom"], "ok": "hello world"}
+{"fn": "_api_url_for_region", "args": ["Hello World{name} has {count} items", "Hello World"], "ok": "Hello World{name} has {count} items"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "straßestraße"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ab", "src/a/b.ts"], "ok": "ab"}
+{"fn": "_api_url_for_region", "args": ["", "hello worlda😀b😀c"], "ok": ""}
+{"fn": "_api_url_for_region", "args": ["./x/**/*.json", "hello"], "ok": "./x/**/*.json"}
+{"fn": "_api_url_for_region", "args": ["ésrc/a/b.t", "ésrc/a/b.ts"], "ok": "ésrc/a/b.t"}
+{"fn": "_api_url_for_region", "args": ["é", "ünïcödé"], "ok": "é"}
+{"fn": "_api_url_for_region", "args": ["emoji 👍🏽 mixns:key.path", "ns:key.path"], "ok": "emoji 👍🏽 mixns:key.path"}
+{"fn": "_api_url_for_region", "args": ["  padded  ", " padde"], "ok": "padded"}
+{"fn": "_api_url_for_region", "args": ["a:b:ckey_name-1", "a😀b😀c"], "ok": "a:b:ckey_name-1"}
+{"fn": "_api_url_for_region", "args": ["emoji 👍🏽 mixa😀b😀c", ":"], "ok": "emoji 👍🏽 mixa😀b😀c"}
+{"fn": "_api_url_for_region", "args": ["HELLOkey_name-1", ":.leading"], "ok": "HELLOkey_name-1"}
+{"fn": "_api_url_for_region", "args": ["trailing.", ".leading"], "ok": "trailing."}
+{"fn": "_api_url_for_region", "args": ["asrc/a/b.ts", "  padded  "], "ok": "asrc/a/b.ts"}
+{"fn": "_api_url_for_region", "args": ["A", "ab"], "ok": "A"}
+{"fn": "_api_url_for_region", "args": ["abc", "trailing."], "ok": "abc"}
+{"fn": "_api_url_for_region", "args": ["./x/**/*.json", "a..b"], "ok": "./x/**/*.json"}
+{"fn": "_api_url_for_region", "args": ["a", "hello worlda"], "ok": "a"}
+{"fn": "_api_url_for_region", "args": ["a.b.c", "ab"], "ok": "a.b.c"}
+{"fn": "_api_url_for_region", "args": ["src/a/b.ts", "ΣΊΣΥΦΟΣ"], "ok": "src/a/b.ts"}
+{"fn": "_api_url_for_region", "args": ["nb", "﻿bomİstanbul"], "ok": "nb"}
+{"fn": "_api_url_for_region", "args": ["é", "{name} has {count} items"], "ok": "é"}
+{"fn": "_api_url_for_region", "args": ["trailing.", "İstanbulabc"], "ok": "trailing."}
+{"fn": "_api_url_for_region", "args": ["ï", "ünïcödé"], "ok": "ï"}
+{"fn": "_api_url_for_region", "args": ["😀a", ":"], "ok": "😀a"}
+{"fn": "_api_url_for_region", "args": ["trailing.", "src/a/b.ts"], "ok": "trailing."}
+{"fn": "_api_url_for_region", "args": ["éİstanbul", "trailing."], "ok": "éİstanbul"}
+{"fn": "_api_url_for_region", "args": ["src/a/b.ts", "./x/**/*.jsona"], "ok": "src/a/b.ts"}
+{"fn": "_api_url_for_region", "args": ["ΣΊΣΥΦΟΣ", "ΣΥΦΟΣ"], "ok": "ΣΊΣΥΦΟΣ"}
+{"fn": "_api_url_for_region", "args": ["a😀b😀c", "日本語のテキスト"], "ok": "a😀b😀c"}
+{"fn": "_api_url_for_region", "args": ["./x/**/*.json", ""], "ok": "./x/**/*.json"}
+{"fn": "_api_url_for_region", "args": ["HELLO😀", "key_name-1"], "ok": "HELLO😀"}
+{"fn": "_api_url_for_region", "args": ["emoji 👍🏽 mixİstanbul", "trailing.Hello World"], "ok": "emoji 👍🏽 mixİstanbul"}
+{"fn": "_api_url_for_region", "args": ["{name} has {count} items", "hello"], "ok": "{name} has {count} items"}
+{"fn": "_api_url_for_region", "args": ["abc", "helloa"], "ok": "abc"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "a:b:cHello World"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["の", "😀日本語のテキスト"], "ok": "の"}
+{"fn": "_api_url_for_region", "args": ["a😀b😀c", "a"], "ok": "a😀b😀c"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "﻿bom"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": [".leadinghello world", "ld"], "ok": ".leadinghello world"}
+{"fn": "_api_url_for_region", "args": ["o", "hello"], "ok": "o"}
+{"fn": "_api_url_for_region", "args": ["日本語のテキスト", "key_name-1"], "ok": "日本語のテキスト"}
+{"fn": "_api_url_for_region", "args": ["src/a/b.ts", ":"], "ok": "src/a/b.ts"}
+{"fn": "_api_url_for_region", "args": ["ΣΊΣΥΦΟΣ", "ΥΦΟ"], "ok": "ΣΊΣΥΦΟΣ"}
+{"fn": "_api_url_for_region", "args": [":", "  padded  "], "ok": ":"}
+{"fn": "_api_url_for_region", "args": ["😀", "ns:key.pathline1\nline2"], "ok": "😀"}
+{"fn": "_api_url_for_region", "args": ["NG.", "trailing."], "ok": "NG."}
+{"fn": "_api_url_for_region", "args": ["hello", "hello world"], "ok": "hello"}
+{"fn": "_api_url_for_region", "args": ["straße", ":"], "ok": "straße"}
+{"fn": "_api_url_for_region", "args": ["hello world", "﻿bomİstanbul"], "ok": "hello world"}
+{"fn": "_api_url_for_region", "args": ["na", "key_name-1"], "ok": "na"}
+{"fn": "_api_url_for_region", "args": ["emoji 👍🏽 mix", " 👍"], "ok": "emoji 👍🏽 mix"}
+{"fn": "_api_url_for_region", "args": ["  padded    padded  ", "src/a/b.ts"], "ok": "padded    padded"}
+{"fn": "_api_url_for_region", "args": ["a", "trailing."], "ok": "a"}
+{"fn": "_api_url_for_region", "args": ["a:b:c", "﻿bom"], "ok": "a:b:c"}
+{"fn": "_api_url_for_region", "args": ["hello", "  padded  "], "ok": "hello"}
+{"fn": "_api_url_for_region", "args": ["", "trailing.tab\tseparated"], "ok": ""}
+{"fn": "_api_url_for_region", "args": ["abc", "hello"], "ok": "abc"}
+{"fn": "_api_url_for_region", "args": ["BO", "﻿bom"], "ok": "BO"}
+{"fn": "_api_url_for_region", "args": ["O", "./x/**/*.json"], "ok": "O"}
+{"fn": "_api_url_for_region", "args": [".leadinghello", ":tab\tseparated"], "ok": ".leadinghello"}
+{"fn": "_api_url_for_region", "args": ["Hello World", "日本語のテキスト"], "ok": "Hello World"}
+{"fn": "_api_url_for_region", "args": [".leading", "a.b.c"], "ok": ".leading"}
+{"fn": "_api_url_for_region", "args": ["a..b", "abc"], "ok": "a..b"}
+{"fn": "_api_url_for_region", "args": ["trailing.", "HELLO"], "ok": "trailing."}
+{"fn": "_api_url_for_region", "args": ["  padded  line1\nline2", "İstanbula"], "ok": "padded  line1\nline2"}
+{"fn": "_api_url_for_region", "args": ["a.b.c", "😀"], "ok": "a.b.c"}
+{"fn": "_api_url_for_region", "args": ["ji ", "emoji 👍🏽 mix"], "ok": "ji"}
+{"fn": "_api_url_for_region", "args": ["hello worldns:key.path", "a:b:c"], "ok": "hello worldns:key.path"}
+{"fn": "_api_url_for_region", "args": ["EL", "HELLO"], "ok": "EL"}
+{"fn": "_api_url_for_region", "args": ["héllo wörld", "HELLO"], "ok": "héllo wörld"}
+{"fn": "_api_url_for_region", "args": ["👍🏽 thumbs", "HELLO"], "ok": "👍🏽 thumbs"}
+{"fn": "_api_url_for_region", "args": ["日本語", "HELLO"], "ok": "日本語"}
+{"fn": "_api_url_for_region", "args": ["", "HELLO"], "ok": ""}
+{"fn": "_api_url_for_region", "args": ["é", "HELLO"], "ok": "é"}
+{"fn": "_api_url_for_region", "args": ["İstanbul", "HELLO"], "ok": "İstanbul"}
+{"fn": "_api_url_for_region", "args": ["straße", "HELLO"], "ok": "straße"}
+{"fn": "_api_url_for_region", "args": ["ılık ırmak", "HELLO"], "ok": "ılık ırmak"}
+{"fn": "_api_url_for_region", "args": ["👨‍👩‍👧 family", "HELLO"], "ok": "👨‍👩‍👧 family"}
+{"fn": "_api_url_for_region", "args": ["a b", "HELLO"], "ok": "a b"}
+{"fn": "_api_url_for_region", "args": ["ΣΊΣΥΦΟΣ", "HELLO"], "ok": "ΣΊΣΥΦΟΣ"}
+{"fn": "_api_url_for_region", "args": ["a😀b", "HELLO"], "ok": "a😀b"}
+{"fn": "_api_url_for_region", "args": ["﻿bom", "HELLO"], "ok": "﻿bom"}
+{"fn": "_api_url_for_region", "args": ["a²b x½ y①", "HELLO"], "ok": "a²b x½ y①"}
+{"fn": "_api_url_for_region", "args": ["aⅠb Ⅻ", "HELLO"], "ok": "aⅠb Ⅻ"}
+{"fn": "_api_url_for_region", "args": ["a𐐀b 𝐀bc", "HELLO"], "ok": "a𐐀b 𝐀bc"}
+{"fn": "_api_url_for_region", "args": ["कि ٣٤", "HELLO"], "ok": "कि ٣٤"}
+{"fn": "_api_url_for_region", "args": ["Iı İi", "HELLO"], "ok": "Iı İi"}
+{"fn": "_api_url_for_region", "args": ["K K k", "HELLO"], "ok": "K K k"}
+{"fn": "_api_url_for_region", "args": ["ſ s S", "HELLO"], "ok": "ſ s S"}
+{"fn": "_api_url_for_region", "args": ["x‍y 👨‍👩‍👧", "HELLO"], "ok": "x‍y 👨‍👩‍👧"}
+{"fn": "_api_url_for_region", "args": ["a b c　d", "HELLO"], "ok": "a b c　d"}
+{"fn": "_api_url_for_region", "args": ["١٢٣ ٤٥", "HELLO"], "ok": "١٢٣ ٤٥"}
+{"fn": "_api_url_for_region", "args": ["𝟘𝟙 ²³", "HELLO"], "ok": "𝟘𝟙 ²³"}
+{"fn": "_api_url_for_region", "args": ["snake_case foo-bar o'neil", "HELLO"], "ok": "snake_case foo-bar o'neil"}
+{"fn": "_api_url_for_region", "args": ["ǅungla Ǆ", "HELLO"], "ok": "ǅungla Ǆ"}
+{"fn": "_api_url_for_region", "args": ["one\r\ntwo threefour", "HELLO"], "ok": "one\r\ntwo threefour"}
+{"fn": "_api_url_for_region", "args": ["café café", "HELLO"], "ok": "café café"}
+{"fn": "_api_url_for_region", "args": ["ΣΑΣ σας ς", "HELLO"], "ok": "ΣΑΣ σας ς"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "héllo wörld"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "👍🏽 thumbs"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "日本語"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", ""], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "é"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "İstanbul"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "straße"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "ılık ırmak"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "👨‍👩‍👧 family"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "a b"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "ΣΊΣΥΦΟΣ"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "a😀b"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "a²b x½ y①"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "aⅠb Ⅻ"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "a𐐀b 𝐀bc"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "कि ٣٤"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "Iı İi"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "K K k"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "ſ s S"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "x‍y 👨‍👩‍👧"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "a b c　d"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "١٢٣ ٤٥"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "𝟘𝟙 ²³"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "snake_case foo-bar o'neil"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "ǅungla Ǆ"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "one\r\ntwo threefour"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "café café"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["ünïcödé", "ΣΑΣ σας ς"], "ok": "ünïcödé"}
+{"fn": "_api_url_for_region", "args": ["", "US"], "ok": ""}
+{"fn": "_api_url_for_region", "args": ["https://proxy.example/get?region=US", ""], "ok": "https://proxy.example/get?region=US"}
+{"fn": "_api_url_for_region", "args": ["https://proxy.example/get?key=abc&region=US&num=1", "jp"], "ok": "https://proxy.example/get?key=abc&region=JP&num=1"}
+{"fn": "_api_url_for_region", "args": ["https://proxy.example/get?region=de&format=txt#frag", "VN"], "ok": "https://proxy.example/get?region=VN&format=txt#frag"}
+{"fn": "_api_url_for_region", "args": ["https://proxy.example/{region}/pick?r={REGION}", "ph"], "ok": "https://proxy.example/PH/pick?r=PH"}
+{"fn": "_api_url_for_region", "args": ["https://proxy.example/static/list", "gb"], "ok": "https://proxy.example/static/list"}
+{"fn": "_api_url_for_region", "args": ["https://proxy.example/get?a=1&b=hello+world&region=", "sg"], "ok": "https://proxy.example/get?a=1&b=hello+world&region=SG"}
+{"fn": "_api_url_for_region", "args": ["http://[::1]:8080/get?region=US", "kr"], "ok": "http://[::1]:8080/get?region=KR"}
+{"fn": "_api_url_for_region", "args": ["http://[invalid/get?region=US", "kr"], "error": "ValueError: Invalid IPv6 URL"}
+{"fn": "_api_url_for_region", "args": ["  https://proxy.example/get?region=US  ", "  de  "], "ok": "https://proxy.example/get?region=DE"}

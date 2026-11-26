@@ -10,8 +10,13 @@ make the patch silently ineffective.
 
 from __future__ import annotations
 
+import importlib
 import json
 import logging
+import os
+import sys
+from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
 
 # Deliberate re-exports (ADR-0009 facade pattern): ``steps`` stays the public
@@ -47,9 +52,39 @@ _CC_CAPS = "login_methods"
 #: toggle's mechanism line and the request builder cannot drift.
 _TURB_CC_CAPS = "login_methods chatgpt_login_finalizer_v1"
 _TURB_AUTH_RETURN_TARGET = "chatgpt_home"
+_NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
+
+
+def _load_native_auth_flow_steps() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_AUTH_FLOW_STEPS") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "auth-flow-steps-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("auth_flow_steps_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_AUTH_FLOW_STEPS = _load_native_auth_flow_steps()
+_NATIVE_IS_CHATGPT_AUTH_LOGIN_LANDING = getattr(_NATIVE_AUTH_FLOW_STEPS, "_is_chatgpt_auth_login_landing", None)
+_NATIVE_IS_SIGNUP_PASSWORD_PAGE = getattr(_NATIVE_AUTH_FLOW_STEPS, "_is_signup_password_page", None)
+_NATIVE_IS_SIGNUP_PASSWORD_STEP = getattr(_NATIVE_AUTH_FLOW_STEPS, "_is_signup_password_step", None)
+_NATIVE_IS_EMAIL_VERIFICATION_STEP = getattr(_NATIVE_AUTH_FLOW_STEPS, "_is_email_verification_step", None)
+_NATIVE_SO_TOKEN_FLOW = getattr(_NATIVE_AUTH_FLOW_STEPS, "so_token_flow", None)
+_NATIVE_SAME_FLOW_SO_TOKEN = getattr(_NATIVE_AUTH_FLOW_STEPS, "same_flow_so_token", None)
 
 
 def _is_chatgpt_auth_login_landing(url):
+    if _NATIVE_IS_CHATGPT_AUTH_LOGIN_LANDING is not None and (url is None or isinstance(url, str)):
+        return bool(_NATIVE_IS_CHATGPT_AUTH_LOGIN_LANDING(url))
     parsed = urlparse(url or "")
     host = (parsed.netloc or "").lower()
     path = (parsed.path or "").rstrip("/").lower()
@@ -58,6 +93,8 @@ def _is_chatgpt_auth_login_landing(url):
 
 def _is_signup_password_page(url):
     """Return True only for the concrete signup password page."""
+    if _NATIVE_IS_SIGNUP_PASSWORD_PAGE is not None and (url is None or isinstance(url, str)):
+        return bool(_NATIVE_IS_SIGNUP_PASSWORD_PAGE(url))
     parsed = urlparse(url or "")
     host = (parsed.netloc or "").lower()
     path = (parsed.path or "").rstrip("/").lower()
@@ -65,6 +102,8 @@ def _is_signup_password_page(url):
 
 
 def _is_signup_password_step(url):
+    if _NATIVE_IS_SIGNUP_PASSWORD_STEP is not None and (url is None or isinstance(url, str)):
+        return bool(_NATIVE_IS_SIGNUP_PASSWORD_STEP(url))
     parsed = urlparse(url or "")
     host = (parsed.netloc or "").lower()
     path = (parsed.path or "").rstrip("/").lower()
@@ -74,6 +113,8 @@ def _is_signup_password_step(url):
 
 
 def _is_email_verification_step(url):
+    if _NATIVE_IS_EMAIL_VERIFICATION_STEP is not None and (url is None or isinstance(url, str)):
+        return bool(_NATIVE_IS_EMAIL_VERIFICATION_STEP(url))
     parsed = urlparse(url or "")
     host = (parsed.netloc or "").lower()
     path = (parsed.path or "").rstrip("/").lower()
@@ -690,6 +731,8 @@ def so_token_flow(token):
     because the only safe action on an unknown flow is to leave the token alone
     (see :func:`same_flow_so_token`).
     """
+    if _NATIVE_SO_TOKEN_FLOW is not None and isinstance(token, _NATIVE_SCALAR_TYPES):
+        return str(_NATIVE_SO_TOKEN_FLOW(token))
     try:
         payload = json.loads(str(token or ""))
     except (TypeError, ValueError):
@@ -716,6 +759,12 @@ def same_flow_so_token(token, expected_flow):
     behaviour on evidence we do not have (the same "no evidence, do not act"
     rule ``otp_dispatch_verdict`` follows).
     """
+    if (
+        _NATIVE_SAME_FLOW_SO_TOKEN is not None
+        and isinstance(token, _NATIVE_SCALAR_TYPES)
+        and isinstance(expected_flow, _NATIVE_SCALAR_TYPES)
+    ):
+        return _NATIVE_SAME_FLOW_SO_TOKEN(token, expected_flow)
     declared = so_token_flow(token)
     if declared and declared != str(expected_flow or "").strip():
         return ""

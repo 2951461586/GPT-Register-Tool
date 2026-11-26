@@ -1,0 +1,145 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/auth_flow/steps.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "auth-flow-steps-rs",
+  "exports": [
+    {
+      "name": "_is_chatgpt_auth_login_landing",
+      "file": "sms_tool/auth_flow/steps.py",
+      "line": 52,
+      "params": [
+        {
+          "name": "url",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_is_signup_password_page",
+      "file": "sms_tool/auth_flow/steps.py",
+      "line": 59,
+      "params": [
+        {
+          "name": "url",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_is_signup_password_step",
+      "file": "sms_tool/auth_flow/steps.py",
+      "line": 67,
+      "params": [
+        {
+          "name": "url",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_is_email_verification_step",
+      "file": "sms_tool/auth_flow/steps.py",
+      "line": 76,
+      "params": [
+        {
+          "name": "url",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "so_token_flow",
+      "file": "sms_tool/auth_flow/steps.py",
+      "line": 683,
+      "params": [
+        {
+          "name": "token",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "same_flow_so_token",
+      "file": "sms_tool/auth_flow/steps.py",
+      "line": 702,
+      "params": [
+        {
+          "name": "token",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "expected_flow",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_registration_flag",
+      "file": "sms_tool/auth_flow/steps.py",
+      "line": 103,
+      "reason": "reads live RuntimeConfig through auth_flow.deps"
+    },
+    {
+      "name": "_ensure_authorize_context",
+      "file": "sms_tool/auth_flow/steps.py",
+      "line": 521,
+      "reason": "branches on live registration toggles via deps.current_config_data"
+    },
+    {
+      "name": "_protocol_diagnostic",
+      "file": "sms_tool/auth_flow/steps.py",
+      "line": 592,
+      "reason": "reads HTTP response/session objects and delegates redaction"
+    }
+  ]
+}

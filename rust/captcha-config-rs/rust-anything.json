@@ -1,0 +1,121 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/browser/captcha_solver.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "captcha-config-rs",
+  "exports": [
+    {
+      "name": "extract_captcha_config",
+      "file": "sms_tool/browser/captcha_solver.py",
+      "line": 42,
+      "params": [
+        {
+          "name": "html",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_playwright_proxy",
+      "file": "sms_tool/browser/captcha_solver.py",
+      "line": 270,
+      "params": [
+        {
+          "name": "proxy_url",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_build_hcaptcha_bridge_html",
+      "file": "sms_tool/browser/captcha_solver.py",
+      "line": 169,
+      "params": [
+        {
+          "name": "frame_id",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "wrapper_url",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "site_key",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "rqdata",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "merchant_id",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "locale",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "solve_captcha",
+      "file": "sms_tool/browser/captcha_solver.py",
+      "line": 78,
+      "reason": "orchestrates Playwright browser automation and local HTTP bridge"
+    },
+    {
+      "name": "_solve_hcaptcha",
+      "file": "sms_tool/browser/captcha_solver.py",
+      "line": 303,
+      "reason": "launches local TCP server and Playwright Chromium instance"
+    },
+    {
+      "name": "_solve_recaptcha",
+      "file": "sms_tool/browser/captcha_solver.py",
+      "line": 469,
+      "reason": "launches Playwright Chromium instance and polls DOM"
+    },
+    {
+      "name": "solve_recaptcha_on_page",
+      "file": "sms_tool/browser/captcha_solver.py",
+      "line": 587,
+      "reason": "drives live Playwright browser page and saves screenshots"
+    }
+  ]
+}

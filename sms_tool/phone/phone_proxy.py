@@ -10,15 +10,39 @@ cache short-lived probe results.
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import os
 import re
+import sys
 import threading
 import time
 import uuid
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+
+def _load_native_phone_proxy() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_PHONE_PROXY") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "phone-proxy-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("phone_proxy_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_PHONE_PROXY = _load_native_phone_proxy()
+_NATIVE_API_URL_FOR_REGION = getattr(_NATIVE_PHONE_PROXY, "_api_url_for_region", None)
 
 import requests
 
@@ -191,6 +215,8 @@ def _configured_proxy_api_url() -> str:
 
 
 def _api_url_for_region(api_url: str, country_iso: str) -> str:
+    if _NATIVE_API_URL_FOR_REGION is not None and isinstance(api_url, str) and isinstance(country_iso, str):
+        return _NATIVE_API_URL_FOR_REGION(api_url, country_iso)
     api_url = str(api_url or "").strip()
     region = str(country_iso or "").strip().upper()
     if not api_url or not region:

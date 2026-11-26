@@ -5,7 +5,34 @@ Responsibility: take the raw registration result dict (as produced by
 shape consumed by the rest of the toolchain (CPA import, quota refresh, etc.).
 """
 
+import importlib
+import os
+import sys
 import time
+from pathlib import Path
+from typing import Any
+
+
+def _load_native_session_builder() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_SESSION_BUILDER") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "session-builder-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("session_builder_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_SESSION_BUILDER = _load_native_session_builder()
+_NATIVE_SESSION_TOKEN_FROM_COOKIE_HEADER = getattr(_NATIVE_SESSION_BUILDER, "_session_token_from_cookie_header", None)
 
 
 def _extract_nested(data, *keys):
@@ -30,6 +57,8 @@ def _session_token_from_cookie_header(cookie_header):
     without this the stored ``session_token`` column was empty for every
     chunked cookie.
     """
+    if _NATIVE_SESSION_TOKEN_FROM_COOKIE_HEADER is not None and isinstance(cookie_header, str):
+        return _NATIVE_SESSION_TOKEN_FROM_COOKIE_HEADER(cookie_header)
     chunks = {}
     for part in str(cookie_header or "").split(";"):
         name, sep, value = part.strip().partition("=")

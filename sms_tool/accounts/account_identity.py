@@ -43,6 +43,7 @@ def _load_native_account_identity() -> Any | None:
 
 _NATIVE_ACCOUNT_IDENTITY = _load_native_account_identity()
 _NATIVE_PROXY_EGRESS_KEY = getattr(_NATIVE_ACCOUNT_IDENTITY, "proxy_egress_key", None)
+_NATIVE_CHATGPT_ACCOUNT_ID_FROM_TOKEN = getattr(_NATIVE_ACCOUNT_IDENTITY, "chatgpt_account_id_from_token", None)
 _NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
 
 
@@ -323,6 +324,8 @@ def chatgpt_account_id_from_token(value: Any) -> str:
     copies in ``account_promotion`` and ``account_liveness`` are thin shims over
     this function so the claim path cannot drift between probes.
     """
+    if _NATIVE_CHATGPT_ACCOUNT_ID_FROM_TOKEN is not None and isinstance(value, str):
+        return _NATIVE_CHATGPT_ACCOUNT_ID_FROM_TOKEN(value)
     if isinstance(value, Mapping):
         return str(value.get("chatgpt_account_id") or value.get("chatgptAccountId") or "").strip()
     token = str(value or "").strip()

@@ -23,6 +23,24 @@
       "is_generator": false,
       "type_params": [],
       "uses_instanceof": false
+    },
+    {
+      "name": "_parse_proxy_url",
+      "file": "sms_tool/providers/mailbox_gmail.py",
+      "line": 355,
+      "params": [
+        {
+          "name": "proxy",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
     }
   ],
   "classes": [],

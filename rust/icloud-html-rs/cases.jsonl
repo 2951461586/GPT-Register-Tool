@@ -10,16 +10,1018 @@
 {"fn": "_strip_html_to_visible_text", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": "{'zebra': 1, 'apple': 2, '10': 3, '2': 4, 'é': 5, 'Apple': 6}"}
 {"fn": "_strip_html_to_visible_text", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": "{'n': 9007199254740993, 'f': 1e+21, 't': 0.1, 'neg': -7}"}
 {"fn": "_strip_html_to_visible_text", "args": [[3, 1, 2]], "ok": "[3, 1, 2]"}
-{"fn": "_strip_html_to_visible_text", "args": [null], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": [true], "error": "TypeError: expected string or bytes-like object, got 'bool'"}
+{"fn": "_latest_mail_received_at", "args": [{"a": {"b": "c"}}], "error": "TypeError: expected string or bytes-like object, got 'dict'"}
+{"fn": "_latest_mail_received_at", "args": [0], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": ["x"], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": [[]], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": [{"a": "b"}], "error": "TypeError: expected string or bytes-like object, got 'dict'"}
+{"fn": "_latest_mail_received_at", "args": [["a", 1]], "error": "TypeError: expected string or bytes-like object, got 'list'"}
+{"fn": "_latest_mail_received_at", "args": [{}], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": [null], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "error": "TypeError: expected string or bytes-like object, got 'dict'"}
+{"fn": "_latest_mail_received_at", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "error": "TypeError: expected string or bytes-like object, got 'dict'"}
+{"fn": "_latest_mail_received_at", "args": [[3, 1, 2]], "error": "TypeError: expected string or bytes-like object, got 'list'"}
+{"fn": "_decode_js_string", "args": ["{name} has {count} items"], "ok": "{name} has {count} items"}
+{"fn": "_decode_js_string", "args": ["a😀b😀c﻿bom"], "ok": "a😀b😀c﻿bom"}
+{"fn": "_decode_js_string", "args": ["hello world"], "ok": "hello world"}
+{"fn": "_decode_js_string", "args": ["a😀b😀c"], "ok": "a😀b😀c"}
+{"fn": "_decode_js_string", "args": ["tab\tseparated"], "ok": "tab\tseparated"}
+{"fn": "_decode_js_string", "args": ["a"], "ok": "a"}
+{"fn": "_decode_js_string", "args": [":"], "ok": ":"}
+{"fn": "_decode_js_string", "args": ["日本語のテキスト"], "ok": "日本語のテキスト"}
+{"fn": "_decode_js_string", "args": ["key_name-1"], "ok": "key_name-1"}
+{"fn": "_decode_js_string", "args": ["Hello World"], "ok": "Hello World"}
+{"fn": "_decode_js_string", "args": ["{name} has {count} itemsstraße"], "ok": "{name} has {count} itemsstraße"}
+{"fn": "_decode_js_string", "args": ["./x/**/*.json"], "ok": "./x/**/*.json"}
+{"fn": "_decode_js_string", "args": ["ns:key.path"], "ok": "ns:key.path"}
+{"fn": "_decode_js_string", "args": ["ab"], "ok": "ab"}
+{"fn": "_decode_js_string", "args": [""], "ok": ""}
+{"fn": "_decode_js_string", "args": ["line1\nline2"], "ok": "line1\nline2"}
+{"fn": "_decode_js_string", "args": ["  padded  "], "ok": "  padded  "}
+{"fn": "_decode_js_string", "args": ["Hello World﻿bom"], "ok": "Hello World﻿bom"}
+{"fn": "_decode_js_string", "args": ["ünïcödé"], "ok": "ünïcödé"}
+{"fn": "_decode_js_string", "args": ["﻿bom"], "ok": "﻿bom"}
+{"fn": "_decode_js_string", "args": ["trailing."], "ok": "trailing."}
+{"fn": "_decode_js_string", "args": ["a:b:c﻿bom"], "ok": "a:b:c﻿bom"}
+{"fn": "_decode_js_string", "args": ["abhello world"], "ok": "abhello world"}
+{"fn": "_decode_js_string", "args": ["Hello Worldtrailing."], "ok": "Hello Worldtrailing."}
+{"fn": "_decode_js_string", "args": ["straße"], "ok": "straße"}
+{"fn": "_decode_js_string", "args": ["emoji 👍🏽 mix"], "ok": "emoji 👍🏽 mix"}
+{"fn": "_decode_js_string", "args": ["a.b.c"], "ok": "a.b.c"}
+{"fn": "_decode_js_string", "args": ["😀abc"], "ok": "😀abc"}
+{"fn": "_decode_js_string", "args": ["a:b:cstraße"], "ok": "a:b:cstraße"}
+{"fn": "_decode_js_string", "args": ["İstanbul"], "ok": "İstanbul"}
+{"fn": "_decode_js_string", "args": ["HELLO"], "ok": "HELLO"}
+{"fn": "_decode_js_string", "args": ["src/a/b.ts"], "ok": "src/a/b.ts"}
+{"fn": "_decode_js_string", "args": ["Hello World{name} has {count} items"], "ok": "Hello World{name} has {count} items"}
+{"fn": "_decode_js_string", "args": ["日本語のテキストtab\tseparated"], "ok": "日本語のテキストtab\tseparated"}
+{"fn": "_decode_js_string", "args": ["é"], "ok": "é"}
+{"fn": "_decode_js_string", "args": ["﻿bomİstanbul"], "ok": "﻿bomİstanbul"}
+{"fn": "_decode_js_string", "args": [".leadingabc"], "ok": ".leadingabc"}
+{"fn": "_decode_js_string", "args": ["ΣΊΣΥΦΟΣ"], "ok": "ΣΊΣΥΦΟΣ"}
+{"fn": "_decode_js_string", "args": ["a:b:c"], "ok": "a:b:c"}
+{"fn": "_decode_js_string", "args": [".leading:"], "ok": ".leading:"}
+{"fn": "_decode_js_string", "args": ["éa😀b😀c"], "ok": "éa😀b😀c"}
+{"fn": "_decode_js_string", "args": [".leading"], "ok": ".leading"}
+{"fn": "_decode_js_string", "args": ["a..btrailing."], "ok": "a..btrailing."}
+{"fn": "_decode_js_string", "args": ["😀"], "ok": "😀"}
+{"fn": "_decode_js_string", "args": ["Hello WorldΣΊΣΥΦΟΣ"], "ok": "Hello WorldΣΊΣΥΦΟΣ"}
+{"fn": "_decode_js_string", "args": ["  padded  ünïcödé"], "ok": "  padded  ünïcödé"}
+{"fn": "_decode_js_string", "args": ["./x/**/*.jsonhello world"], "ok": "./x/**/*.jsonhello world"}
+{"fn": "_decode_js_string", "args": ["trailing.日本語のテキスト"], "ok": "trailing.日本語のテキスト"}
+{"fn": "_decode_js_string", "args": ["a:b:ca..b"], "ok": "a:b:ca..b"}
+{"fn": "_decode_js_string", "args": ["﻿bomünïcödé"], "ok": "﻿bomünïcödé"}
+{"fn": "_decode_js_string", "args": ["abca"], "ok": "abca"}
+{"fn": "_decode_js_string", "args": ["abc"], "ok": "abc"}
+{"fn": "_decode_js_string", "args": ["a..b"], "ok": "a..b"}
+{"fn": "_decode_js_string", "args": ["straßea..b"], "ok": "straßea..b"}
+{"fn": "_decode_js_string", "args": ["abcHello World"], "ok": "abcHello World"}
+{"fn": "_decode_js_string", "args": ["a.b.c.leading"], "ok": "a.b.c.leading"}
+{"fn": "_decode_js_string", "args": ["Hello Worlda😀b😀c"], "ok": "Hello Worlda😀b😀c"}
+{"fn": "_decode_js_string", "args": ["a..b😀"], "ok": "a..b😀"}
+{"fn": "_decode_js_string", "args": ["abchello"], "ok": "abchello"}
+{"fn": "_decode_js_string", "args": ["İstanbul﻿bom"], "ok": "İstanbul﻿bom"}
+{"fn": "_decode_js_string", "args": ["Hello World  padded  "], "ok": "Hello World  padded  "}
+{"fn": "_decode_js_string", "args": ["ünïcödéünïcödé"], "ok": "ünïcödéünïcödé"}
+{"fn": "_decode_js_string", "args": ["hello"], "ok": "hello"}
+{"fn": "_decode_js_string", "args": ["é.leading"], "ok": "é.leading"}
+{"fn": "_decode_js_string", "args": ["tab\tseparateda😀b😀c"], "ok": "tab\tseparateda😀b😀c"}
+{"fn": "_decode_js_string", "args": ["hello worldemoji 👍🏽 mix"], "ok": "hello worldemoji 👍🏽 mix"}
+{"fn": "_decode_js_string", "args": ["ünïcödétrailing."], "ok": "ünïcödétrailing."}
+{"fn": "_decode_js_string", "args": ["  padded  ./x/**/*.json"], "ok": "  padded  ./x/**/*.json"}
+{"fn": "_decode_js_string", "args": ["straßeİstanbul"], "ok": "straßeİstanbul"}
+{"fn": "_decode_js_string", "args": [":ab"], "ok": ":ab"}
+{"fn": "_decode_js_string", "args": ["abcé"], "ok": "abcé"}
+{"fn": "_decode_js_string", "args": ["line1\nline2a.b.c"], "ok": "line1\nline2a.b.c"}
+{"fn": "_decode_js_string", "args": ["ΣΊΣΥΦΟΣa"], "ok": "ΣΊΣΥΦΟΣa"}
+{"fn": "_decode_js_string", "args": ["emoji 👍🏽 mixline1\nline2"], "ok": "emoji 👍🏽 mixline1\nline2"}
+{"fn": "_decode_js_string", "args": ["hello worldabc"], "ok": "hello worldabc"}
+{"fn": "_decode_js_string", "args": ["a..ba:b:c"], "ok": "a..ba:b:c"}
+{"fn": "_decode_js_string", "args": ["﻿bomhello world"], "ok": "﻿bomhello world"}
+{"fn": "_decode_js_string", "args": ["emoji 👍🏽 mixünïcödé"], "ok": "emoji 👍🏽 mixünïcödé"}
+{"fn": "_decode_js_string", "args": ["aHello World"], "ok": "aHello World"}
+{"fn": "_decode_js_string", "args": ["ünïcödéa..b"], "ok": "ünïcödéa..b"}
+{"fn": "_decode_js_string", "args": ["HELLOline1\nline2"], "ok": "HELLOline1\nline2"}
+{"fn": "_decode_js_string", "args": ["line1\nline2İstanbul"], "ok": "line1\nline2İstanbul"}
+{"fn": "_decode_js_string", "args": ["  padded  😀"], "ok": "  padded  😀"}
+{"fn": "_decode_js_string", "args": ["hello world  padded  "], "ok": "hello world  padded  "}
+{"fn": "_decode_js_string", "args": ["  padded  Hello World"], "ok": "  padded  Hello World"}
+{"fn": "_decode_js_string", "args": [":a..b"], "ok": ":a..b"}
+{"fn": "_decode_js_string", "args": ["a:b:csrc/a/b.ts"], "ok": "a:b:csrc/a/b.ts"}
+{"fn": "_decode_js_string", "args": ["./x/**/*.jsona"], "ok": "./x/**/*.jsona"}
+{"fn": "_decode_js_string", "args": ["a.b.cabc"], "ok": "a.b.cabc"}
+{"fn": "_decode_js_string", "args": ["a.b.c:"], "ok": "a.b.c:"}
+{"fn": "_decode_js_string", "args": ["HELLOa.b.c"], "ok": "HELLOa.b.c"}
+{"fn": "_decode_js_string", "args": ["ab﻿bom"], "ok": "ab﻿bom"}
+{"fn": "_decode_js_string", "args": ["a:b:ca.b.c"], "ok": "a:b:ca.b.c"}
+{"fn": "_decode_js_string", "args": ["atrailing."], "ok": "atrailing."}
+{"fn": "_decode_js_string", "args": ["key_name-1a"], "ok": "key_name-1a"}
+{"fn": "_decode_js_string", "args": ["straßestraße"], "ok": "straßestraße"}
+{"fn": "_decode_js_string", "args": ["éabc"], "ok": "éabc"}
+{"fn": "_decode_js_string", "args": [":ns:key.path"], "ok": ":ns:key.path"}
+{"fn": "_decode_js_string", "args": ["{name} has {count} itemstrailing."], "ok": "{name} has {count} itemstrailing."}
+{"fn": "_decode_js_string", "args": ["emoji 👍🏽 mixkey_name-1"], "ok": "emoji 👍🏽 mixkey_name-1"}
+{"fn": "_decode_js_string", "args": ["abcstraße"], "ok": "abcstraße"}
+{"fn": "_decode_js_string", "args": ["ns:key.pathsrc/a/b.ts"], "ok": "ns:key.pathsrc/a/b.ts"}
+{"fn": "_decode_js_string", "args": ["hello world😀"], "ok": "hello world😀"}
+{"fn": "_decode_js_string", "args": [":  padded  "], "ok": ":  padded  "}
+{"fn": "_decode_js_string", "args": ["line1\nline2.leading"], "ok": "line1\nline2.leading"}
+{"fn": "_decode_js_string", "args": ["src/a/b.tsΣΊΣΥΦΟΣ"], "ok": "src/a/b.tsΣΊΣΥΦΟΣ"}
+{"fn": "_decode_js_string", "args": ["abHello World"], "ok": "abHello World"}
+{"fn": "_decode_js_string", "args": ["😀  padded  "], "ok": "😀  padded  "}
+{"fn": "_decode_js_string", "args": ["a😀b😀cİstanbul"], "ok": "a😀b😀cİstanbul"}
+{"fn": "_decode_js_string", "args": ["key_name-1trailing."], "ok": "key_name-1trailing."}
+{"fn": "_decode_js_string", "args": ["emoji 👍🏽 mixab"], "ok": "emoji 👍🏽 mixab"}
+{"fn": "_decode_js_string", "args": ["  padded    padded  "], "ok": "  padded    padded  "}
+{"fn": "_decode_js_string", "args": ["﻿boma.b.c"], "ok": "﻿boma.b.c"}
+{"fn": "_decode_js_string", "args": ["ΣΊΣΥΦΟΣ  padded  "], "ok": "ΣΊΣΥΦΟΣ  padded  "}
+{"fn": "_decode_js_string", "args": ["a..bé"], "ok": "a..bé"}
+{"fn": "_decode_js_string", "args": ["trailing.straße"], "ok": "trailing.straße"}
+{"fn": "_decode_js_string", "args": ["﻿bom:"], "ok": "﻿bom:"}
+{"fn": "_decode_js_string", "args": ["abcns:key.path"], "ok": "abcns:key.path"}
+{"fn": "_decode_js_string", "args": ["ΣΊΣΥΦΟΣ.leading"], "ok": "ΣΊΣΥΦΟΣ.leading"}
+{"fn": "_decode_js_string", "args": ["emoji 👍🏽 mixHello World"], "ok": "emoji 👍🏽 mixHello World"}
+{"fn": "_decode_js_string", "args": ["ΣΊΣΥΦΟΣline1\nline2"], "ok": "ΣΊΣΥΦΟΣline1\nline2"}
+{"fn": "_decode_js_string", "args": ["éab"], "ok": "éab"}
+{"fn": "_decode_js_string", "args": ["ünïcödéemoji 👍🏽 mix"], "ok": "ünïcödéemoji 👍🏽 mix"}
+{"fn": "_decode_js_string", "args": ["﻿bom﻿bom"], "ok": "﻿bom﻿bom"}
+{"fn": "_decode_js_string", "args": ["hello worldsrc/a/b.ts"], "ok": "hello worldsrc/a/b.ts"}
+{"fn": "_decode_js_string", "args": ["trailing.emoji 👍🏽 mix"], "ok": "trailing.emoji 👍🏽 mix"}
+{"fn": "_decode_js_string", "args": ["a..bstraße"], "ok": "a..bstraße"}
+{"fn": "_decode_js_string", "args": ["😀ΣΊΣΥΦΟΣ"], "ok": "😀ΣΊΣΥΦΟΣ"}
+{"fn": "_decode_js_string", "args": ["trailing.a:b:c"], "ok": "trailing.a:b:c"}
+{"fn": "_decode_js_string", "args": ["tab\tseparatedtrailing."], "ok": "tab\tseparatedtrailing."}
+{"fn": "_decode_js_string", "args": ["abcabc"], "ok": "abcabc"}
+{"fn": "_decode_js_string", "args": ["日本語のテキストİstanbul"], "ok": "日本語のテキストİstanbul"}
+{"fn": "_decode_js_string", "args": ["{name} has {count} items./x/**/*.json"], "ok": "{name} has {count} items./x/**/*.json"}
+{"fn": "_decode_js_string", "args": ["./x/**/*.jsona.b.c"], "ok": "./x/**/*.jsona.b.c"}
+{"fn": "_decode_js_string", "args": ["hello日本語のテキスト"], "ok": "hello日本語のテキスト"}
+{"fn": "_decode_js_string", "args": ["tab\tseparatedΣΊΣΥΦΟΣ"], "ok": "tab\tseparatedΣΊΣΥΦΟΣ"}
+{"fn": "_decode_js_string", "args": ["  padded  ﻿bom"], "ok": "  padded  ﻿bom"}
+{"fn": "_decode_js_string", "args": ["helloa:b:c"], "ok": "helloa:b:c"}
+{"fn": "_decode_js_string", "args": ["HELLOİstanbul"], "ok": "HELLOİstanbul"}
+{"fn": "_decode_js_string", "args": ["aba.b.c"], "ok": "aba.b.c"}
+{"fn": "_decode_js_string", "args": ["a:b:cİstanbul"], "ok": "a:b:cİstanbul"}
+{"fn": "_decode_js_string", "args": ["./x/**/*.jsonHELLO"], "ok": "./x/**/*.jsonHELLO"}
+{"fn": "_decode_js_string", "args": ["src/a/b.tsHELLO"], "ok": "src/a/b.tsHELLO"}
+{"fn": "_decode_js_string", "args": ["line1\nline2ns:key.path"], "ok": "line1\nline2ns:key.path"}
+{"fn": "_decode_js_string", "args": [".leadinghello"], "ok": ".leadinghello"}
+{"fn": "_decode_js_string", "args": ["İstanbulkey_name-1"], "ok": "İstanbulkey_name-1"}
+{"fn": "_decode_js_string", "args": ["aba..b"], "ok": "aba..b"}
+{"fn": "_decode_js_string", "args": ["tab\tseparated:"], "ok": "tab\tseparated:"}
+{"fn": "_decode_js_string", "args": ["key_name-1😀"], "ok": "key_name-1😀"}
+{"fn": "_decode_js_string", "args": ["emoji 👍🏽 mix😀"], "ok": "emoji 👍🏽 mix😀"}
+{"fn": "_decode_js_string", "args": ["key_name-1line1\nline2"], "ok": "key_name-1line1\nline2"}
+{"fn": "_decode_js_string", "args": ["emoji 👍🏽 mix{name} has {count} items"], "ok": "emoji 👍🏽 mix{name} has {count} items"}
+{"fn": "_decode_js_string", "args": ["éa:b:c"], "ok": "éa:b:c"}
+{"fn": "_decode_js_string", "args": [":é"], "ok": ":é"}
+{"fn": "_decode_js_string", "args": ["😀a😀b😀c"], "ok": "😀a😀b😀c"}
+{"fn": "_decode_js_string", "args": ["tab\tseparateda"], "ok": "tab\tseparateda"}
+{"fn": "_decode_js_string", "args": ["tab\tseparatedHello World"], "ok": "tab\tseparatedHello World"}
+{"fn": "_decode_js_string", "args": ["a😀b😀ckey_name-1"], "ok": "a😀b😀ckey_name-1"}
+{"fn": "_decode_js_string", "args": ["src/a/b.tsa.b.c"], "ok": "src/a/b.tsa.b.c"}
+{"fn": "_decode_js_string", "args": ["日本語のテキストΣΊΣΥΦΟΣ"], "ok": "日本語のテキストΣΊΣΥΦΟΣ"}
+{"fn": "_decode_js_string", "args": ["ns:key.pathkey_name-1"], "ok": "ns:key.pathkey_name-1"}
+{"fn": "_decode_js_string", "args": [":.leading"], "ok": ":.leading"}
+{"fn": "_decode_js_string", "args": ["a:b:chello world"], "ok": "a:b:chello world"}
+{"fn": "_decode_js_string", "args": ["emoji 👍🏽 mixtrailing."], "ok": "emoji 👍🏽 mixtrailing."}
+{"fn": "_decode_js_string", "args": ["abcHELLO"], "ok": "abcHELLO"}
+{"fn": "_decode_js_string", "args": ["Hello Worlda:b:c"], "ok": "Hello Worlda:b:c"}
+{"fn": "_decode_js_string", "args": ["aa:b:c"], "ok": "aa:b:c"}
+{"fn": "_decode_js_string", "args": ["a..btab\tseparated"], "ok": "a..btab\tseparated"}
+{"fn": "_decode_js_string", "args": ["HELLOtab\tseparated"], "ok": "HELLOtab\tseparated"}
+{"fn": "_decode_js_string", "args": ["abtrailing."], "ok": "abtrailing."}
+{"fn": "_decode_js_string", "args": ["helloline1\nline2"], "ok": "helloline1\nline2"}
+{"fn": "_decode_js_string", "args": ["straßea.b.c"], "ok": "straßea.b.c"}
+{"fn": "_decode_js_string", "args": ["trailing.{name} has {count} items"], "ok": "trailing.{name} has {count} items"}
+{"fn": "_decode_js_string", "args": ["Hello Worldhello world"], "ok": "Hello Worldhello world"}
+{"fn": "_decode_js_string", "args": ["a..b{name} has {count} items"], "ok": "a..b{name} has {count} items"}
+{"fn": "_decode_js_string", "args": ["İstanbula..b"], "ok": "İstanbula..b"}
+{"fn": "_decode_js_string", "args": ["é{name} has {count} items"], "ok": "é{name} has {count} items"}
+{"fn": "_decode_js_string", "args": ["key_name-1src/a/b.ts"], "ok": "key_name-1src/a/b.ts"}
+{"fn": "_decode_js_string", "args": ["ΣΊΣΥΦΟΣns:key.path"], "ok": "ΣΊΣΥΦΟΣns:key.path"}
+{"fn": "_decode_js_string", "args": ["a😀b😀ca..b"], "ok": "a😀b😀ca..b"}
+{"fn": "_decode_js_string", "args": ["trailing.a.b.c"], "ok": "trailing.a.b.c"}
+{"fn": "_decode_js_string", "args": ["a日本語のテキスト"], "ok": "a日本語のテキスト"}
+{"fn": "_decode_js_string", "args": ["abckey_name-1"], "ok": "abckey_name-1"}
+{"fn": "_decode_js_string", "args": ["hello worldstraße"], "ok": "hello worldstraße"}
+{"fn": "_decode_js_string", "args": ["Hello Worldtab\tseparated"], "ok": "Hello Worldtab\tseparated"}
+{"fn": "_decode_js_string", "args": ["tab\tseparated{name} has {count} items"], "ok": "tab\tseparated{name} has {count} items"}
+{"fn": "_decode_js_string", "args": ["helloΣΊΣΥΦΟΣ"], "ok": "helloΣΊΣΥΦΟΣ"}
+{"fn": "_decode_js_string", "args": ["ΣΊΣΥΦΟΣ./x/**/*.json"], "ok": "ΣΊΣΥΦΟΣ./x/**/*.json"}
+{"fn": "_decode_js_string", "args": [":a.b.c"], "ok": ":a.b.c"}
+{"fn": "_decode_js_string", "args": ["a.b.c  padded  "], "ok": "a.b.c  padded  "}
+{"fn": "_decode_js_string", "args": ["{name} has {count} itemsHELLO"], "ok": "{name} has {count} itemsHELLO"}
+{"fn": "_decode_js_string", "args": ["hello worldHELLO"], "ok": "hello worldHELLO"}
+{"fn": "_decode_js_string", "args": ["abünïcödé"], "ok": "abünïcödé"}
+{"fn": "_decode_js_string", "args": ["hello worlda😀b😀c"], "ok": "hello worlda😀b😀c"}
+{"fn": "_decode_js_string", "args": ["helloemoji 👍🏽 mix"], "ok": "helloemoji 👍🏽 mix"}
+{"fn": "_decode_js_string", "args": ["a😀b😀c  padded  "], "ok": "a😀b😀c  padded  "}
+{"fn": "_decode_js_string", "args": ["./x/**/*.jsontab\tseparated"], "ok": "./x/**/*.jsontab\tseparated"}
+{"fn": "_decode_js_string", "args": ["hello worldé"], "ok": "hello worldé"}
+{"fn": "_decode_js_string", "args": ["ns:key.pathemoji 👍🏽 mix"], "ok": "ns:key.pathemoji 👍🏽 mix"}
+{"fn": "_decode_js_string", "args": ["tab\tseparatedHELLO"], "ok": "tab\tseparatedHELLO"}
+{"fn": "_decode_js_string", "args": ["héllo wörld"], "ok": "héllo wörld"}
+{"fn": "_decode_js_string", "args": ["👍🏽 thumbs"], "ok": "👍🏽 thumbs"}
+{"fn": "_decode_js_string", "args": ["日本語"], "ok": "日本語"}
+{"fn": "_decode_js_string", "args": ["ılık ırmak"], "ok": "ılık ırmak"}
+{"fn": "_decode_js_string", "args": ["👨‍👩‍👧 family"], "ok": "👨‍👩‍👧 family"}
+{"fn": "_decode_js_string", "args": ["a b"], "ok": "a b"}
+{"fn": "_decode_js_string", "args": ["a😀b"], "ok": "a😀b"}
+{"fn": "_decode_js_string", "args": ["a²b x½ y①"], "ok": "a²b x½ y①"}
+{"fn": "_decode_js_string", "args": ["aⅠb Ⅻ"], "ok": "aⅠb Ⅻ"}
+{"fn": "_decode_js_string", "args": ["a𐐀b 𝐀bc"], "ok": "a𐐀b 𝐀bc"}
+{"fn": "_decode_js_string", "args": ["कि ٣٤"], "ok": "कि ٣٤"}
+{"fn": "_decode_js_string", "args": ["Iı İi"], "ok": "Iı İi"}
+{"fn": "_decode_js_string", "args": ["K K k"], "ok": "K K k"}
+{"fn": "_decode_js_string", "args": ["ſ s S"], "ok": "ſ s S"}
+{"fn": "_decode_js_string", "args": ["x‍y 👨‍👩‍👧"], "ok": "x‍y 👨‍👩‍👧"}
+{"fn": "_decode_js_string", "args": ["a b c　d"], "ok": "a b c　d"}
+{"fn": "_decode_js_string", "args": ["١٢٣ ٤٥"], "ok": "١٢٣ ٤٥"}
+{"fn": "_decode_js_string", "args": ["𝟘𝟙 ²³"], "ok": "𝟘𝟙 ²³"}
+{"fn": "_decode_js_string", "args": ["snake_case foo-bar o'neil"], "ok": "snake_case foo-bar o'neil"}
+{"fn": "_decode_js_string", "args": ["ǅungla Ǆ"], "ok": "ǅungla Ǆ"}
+{"fn": "_decode_js_string", "args": ["one\r\ntwo threefour"], "ok": "one\r\ntwo threefour"}
+{"fn": "_decode_js_string", "args": ["café café"], "ok": "café café"}
+{"fn": "_decode_js_string", "args": ["ΣΑΣ σας ς"], "ok": "ΣΑΣ σας ς"}
+{"fn": "_with_message_limit", "args": ["İstanbul", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a😀b😀c", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["a..b", {}], "ok": "a..b?n=25"}
+{"fn": "_with_message_limit", "args": [".leading", {}], "ok": ".leading?n=25"}
+{"fn": "_with_message_limit", "args": ["hello world", true], "ok": "hello world?n=1"}
+{"fn": "_with_message_limit", "args": ["ünïcödé", 0], "ok": "ünïcödé?n=25"}
+{"fn": "_with_message_limit", "args": ["a..b", null], "ok": "a..b?n=25"}
+{"fn": "_with_message_limit", "args": ["HELLO", 0], "ok": "HELLO?n=25"}
+{"fn": "_with_message_limit", "args": [".leadingtrailing.", []], "ok": ".leadingtrailing.?n=25"}
+{"fn": "_with_message_limit", "args": ["key_name-1", []], "ok": "key_name-1?n=25"}
+{"fn": "_with_message_limit", "args": ["😀key_name-1", 0], "ok": "😀key_name-1?n=25"}
+{"fn": "_with_message_limit", "args": ["﻿bom", null], "ok": "﻿bom?n=25"}
+{"fn": "_with_message_limit", "args": ["ΣΊΣΥΦΟΣ", {}], "ok": "ΣΊΣΥΦΟΣ?n=25"}
+{"fn": "_with_message_limit", "args": ["a:b:c", null], "ok": "a:b:c?n=25"}
+{"fn": "_with_message_limit", "args": ["Hello World", 0], "ok": "Hello World?n=25"}
+{"fn": "_with_message_limit", "args": ["﻿bom", 0], "ok": "﻿bom?n=25"}
+{"fn": "_with_message_limit", "args": ["İstanbulemoji 👍🏽 mix", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["a😀b😀c", []], "ok": "a😀b😀c?n=25"}
+{"fn": "_with_message_limit", "args": ["hello world", 0], "ok": "hello world?n=25"}
+{"fn": "_with_message_limit", "args": ["a.b.c", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": [":", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["line1\nline2", []], "ok": "line1line2?n=25"}
+{"fn": "_with_message_limit", "args": ["a:b:c", true], "ok": "a:b:c?n=1"}
+{"fn": "_with_message_limit", "args": [":", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["abc", []], "ok": "abc?n=25"}
+{"fn": "_with_message_limit", "args": ["😀", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["line1\nline2é", []], "ok": "line1line2é?n=25"}
+{"fn": "_with_message_limit", "args": ["straße", null], "ok": "straße?n=25"}
+{"fn": "_with_message_limit", "args": ["straße", true], "ok": "straße?n=1"}
+{"fn": "_with_message_limit", "args": ["emoji 👍🏽 mix", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["﻿bomİstanbul", 0], "ok": "﻿bomİstanbul?n=25"}
+{"fn": "_with_message_limit", "args": ["src/a/b.ts", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["src/a/b.ts", true], "ok": "src/a/b.ts?n=1"}
+{"fn": "_with_message_limit", "args": [".leading", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["straße", {}], "ok": "straße?n=25"}
+{"fn": "_with_message_limit", "args": [".leadinga:b:c", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["key_name-1", true], "ok": "key_name-1?n=1"}
+{"fn": "_with_message_limit", "args": ["a:b:cstraße", true], "ok": "a:b:cstraße?n=1"}
+{"fn": "_with_message_limit", "args": ["a.b.c", 0], "ok": "a.b.c?n=25"}
+{"fn": "_with_message_limit", "args": ["日本語のテキスト", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["src/a/b.tsns:key.path", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": [":emoji 👍🏽 mix", null], "ok": ":emoji 👍🏽 mix?n=25"}
+{"fn": "_with_message_limit", "args": ["İstanbul日本語のテキスト", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["😀", []], "ok": "😀?n=25"}
+{"fn": "_with_message_limit", "args": ["﻿bom", {}], "ok": "﻿bom?n=25"}
+{"fn": "_with_message_limit", "args": ["HELLO", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["a:b:c", {}], "ok": "a:b:c?n=25"}
+{"fn": "_with_message_limit", "args": ["ns:key.patha:b:c", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["{name} has {count} items", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["ΣΊΣΥΦΟΣ", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["tab\tseparated", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["key_name-1", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["ΣΊΣΥΦΟΣ", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["HELLO", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a:b:cns:key.path", []], "ok": "a:b:cns:key.path?n=25"}
+{"fn": "_with_message_limit", "args": ["ns:key.path", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["{name} has {count} items", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": [":", null], "ok": ":?n=25"}
+{"fn": "_with_message_limit", "args": ["emoji 👍🏽 mix", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["line1\nline2", null], "ok": "line1line2?n=25"}
+{"fn": "_with_message_limit", "args": ["  padded  ", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["Hello World", {}], "ok": "Hello World?n=25"}
+{"fn": "_with_message_limit", "args": [":", {}], "ok": ":?n=25"}
+{"fn": "_with_message_limit", "args": ["a..bemoji 👍🏽 mix", {}], "ok": "a..bemoji 👍🏽 mix?n=25"}
+{"fn": "_with_message_limit", "args": ["😀", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["ünïcödé", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["HELLO", "LLO"], "error": "ValueError: invalid literal for int() with base 10: 'LLO'"}
+{"fn": "_with_message_limit", "args": ["X", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["trailing.", []], "ok": "trailing.?n=25"}
+{"fn": "_with_message_limit", "args": ["emoji 👍🏽 mixtab\tseparated", {}], "ok": "emoji 👍🏽 mixtabseparated?n=25"}
+{"fn": "_with_message_limit", "args": ["{name} has {count} itemsé", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["key_name-1", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["src/a/b.tsünïcödé", 0], "ok": "src/a/b.tsünïcödé?n=25"}
+{"fn": "_with_message_limit", "args": ["﻿bom", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["ns:key.path", []], "ok": "ns:key.path?n=25"}
+{"fn": "_with_message_limit", "args": ["hello world", null], "ok": "hello world?n=25"}
+{"fn": "_with_message_limit", "args": ["İstanbul", true], "ok": "İstanbul?n=1"}
+{"fn": "_with_message_limit", "args": ["a..b", []], "ok": "a..b?n=25"}
+{"fn": "_with_message_limit", "args": ["Hello World", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["HELLO", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["Hello World", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["ünïcödé", []], "ok": "ünïcödé?n=25"}
+{"fn": "_with_message_limit", "args": ["a:b:c", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["key_name-1", null], "ok": "key_name-1?n=25"}
+{"fn": "_with_message_limit", "args": ["src/a/b.ts", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["tab\tseparated", []], "ok": "tabseparated?n=25"}
+{"fn": "_with_message_limit", "args": ["é", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["", []], "ok": "?n=25"}
+{"fn": "_with_message_limit", "args": [".leading日本語のテキスト", 0], "ok": ".leading日本語のテキスト?n=25"}
+{"fn": "_with_message_limit", "args": ["HELLOab", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["{name} has {count} items", []], "ok": "{name} has {count} items?n=25"}
+{"fn": "_with_message_limit", "args": ["HELLO", null], "ok": "HELLO?n=25"}
+{"fn": "_with_message_limit", "args": ["trailing.", null], "ok": "trailing.?n=25"}
+{"fn": "_with_message_limit", "args": ["Hello World", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["😀", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["./x/**/*.json", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["ΣΊΣΥΦΟΣ", 0], "ok": "ΣΊΣΥΦΟΣ?n=25"}
+{"fn": "_with_message_limit", "args": ["a😀b😀cünïcödé", null], "ok": "a😀b😀cünïcödé?n=25"}
+{"fn": "_with_message_limit", "args": ["src/a/b.ts", 0], "ok": "src/a/b.ts?n=25"}
+{"fn": "_with_message_limit", "args": ["﻿bom./x/**/*.json", 0], "ok": "﻿bom./x/**/*.json?n=25"}
+{"fn": "_with_message_limit", "args": ["İstanbula..b", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a.b.ckey_name-1", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["akey_name-1", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a:b:c", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["😀", null], "ok": "😀?n=25"}
+{"fn": "_with_message_limit", "args": ["abc", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["😀ΣΊΣΥΦΟΣ", 0], "ok": "😀ΣΊΣΥΦΟΣ?n=25"}
+{"fn": "_with_message_limit", "args": ["emoji 👍🏽 mix", null], "ok": "emoji 👍🏽 mix?n=25"}
+{"fn": "_with_message_limit", "args": ["src/a/b.ts", null], "ok": "src/a/b.ts?n=25"}
+{"fn": "_with_message_limit", "args": ["hello", 0], "ok": "hello?n=25"}
+{"fn": "_with_message_limit", "args": ["﻿bom", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["😀", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["hello", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a.b.c", {}], "ok": "a.b.c?n=25"}
+{"fn": "_with_message_limit", "args": ["  padded  ", {}], "ok": "padded  ?n=25"}
+{"fn": "_with_message_limit", "args": ["line1\nline2", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a..b:", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["Hello World", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a", true], "ok": "a?n=1"}
+{"fn": "_with_message_limit", "args": ["ab", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a..b", true], "ok": "a..b?n=1"}
+{"fn": "_with_message_limit", "args": ["line1\nline2é", 0], "ok": "line1line2é?n=25"}
+{"fn": "_with_message_limit", "args": ["line1\nline2a😀b😀c", []], "ok": "line1line2a😀b😀c?n=25"}
+{"fn": "_with_message_limit", "args": ["key_name-1:", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["straße", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["x", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["😀", true], "ok": "😀?n=1"}
+{"fn": "_with_message_limit", "args": ["  padded  ", 0], "ok": "padded  ?n=25"}
+{"fn": "_with_message_limit", "args": ["./x/**/*.json", 0], "ok": "./x/**/*.json?n=25"}
+{"fn": "_with_message_limit", "args": [".leading", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["a..b", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["ünïcödé", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["hello", "o"], "error": "ValueError: invalid literal for int() with base 10: 'o'"}
+{"fn": "_with_message_limit", "args": ["İstanbul", {}], "ok": "İstanbul?n=25"}
+{"fn": "_with_message_limit", "args": ["abc", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["hello", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["hello", true], "ok": "hello?n=1"}
+{"fn": "_with_message_limit", "args": [".leadingline1\nline2", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["  padded  ", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["./x/**/*.json", true], "ok": "./x/**/*.json?n=1"}
+{"fn": "_with_message_limit", "args": ["HELLO", "ELL"], "error": "ValueError: invalid literal for int() with base 10: 'ELL'"}
+{"fn": "_with_message_limit", "args": ["trailing.ΣΊΣΥΦΟΣ", true], "ok": "trailing.ΣΊΣΥΦΟΣ?n=1"}
+{"fn": "_with_message_limit", "args": ["./x/**/*.json", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["hello world", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a:b:c", 0], "ok": "a:b:c?n=25"}
+{"fn": "_with_message_limit", "args": ["abcns:key.path", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["ab", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["hello world", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["helloa😀b😀c", true], "ok": "helloa😀b😀c?n=1"}
+{"fn": "_with_message_limit", "args": ["İstanbul{name} has {count} items", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a.b.cİstanbul", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["line1\nline2", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["é", []], "ok": "é?n=25"}
+{"fn": "_with_message_limit", "args": ["tab\tseparated", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["HELLO", []], "ok": "HELLO?n=25"}
+{"fn": "_with_message_limit", "args": ["Hello World", null], "ok": "Hello World?n=25"}
+{"fn": "_with_message_limit", "args": ["{name} has {count} items", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["  padded  HELLO", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a😀b😀c", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["ab", {}], "ok": "ab?n=25"}
+{"fn": "_with_message_limit", "args": ["emoji 👍🏽 mixünïcödé", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["ns:key.path", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a:b:ctrailing.", true], "ok": "a:b:ctrailing.?n=1"}
+{"fn": "_with_message_limit", "args": ["Hello WorldHELLO", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["straße", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["straße", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": [".leading", 0], "ok": ".leading?n=25"}
+{"fn": "_with_message_limit", "args": ["line1\nline2", {"a": "b"}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["line1\nline2", true], "ok": "line1line2?n=1"}
+{"fn": "_with_message_limit", "args": ["日本語のテキスト", true], "ok": "日本語のテキスト?n=1"}
+{"fn": "_with_message_limit", "args": ["é", "́"], "error": "ValueError: invalid literal for int() with base 10: '́'"}
+{"fn": "_with_message_limit", "args": ["key_name-1ns:key.path", 0], "ok": "key_name-1ns:key.path?n=25"}
+{"fn": "_with_message_limit", "args": ["日本語のテキストa..b", null], "ok": "日本語のテキストa..b?n=25"}
+{"fn": "_with_message_limit", "args": ["Hello Worldns:key.path", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["é", null], "ok": "é?n=25"}
+{"fn": "_with_message_limit", "args": ["src/a/b.ts", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["é", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["a.b.c", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["src/a/b.ts", []], "ok": "src/a/b.ts?n=25"}
+{"fn": "_with_message_limit", "args": ["tab\tseparated", 0], "ok": "tabseparated?n=25"}
+{"fn": "_with_message_limit", "args": ["ns:key.path", null], "ok": "ns:key.path?n=25"}
+{"fn": "_with_message_limit", "args": ["  padded  ", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["tab\tseparated", null], "ok": "tabseparated?n=25"}
+{"fn": "_with_message_limit", "args": ["日本語のテキスト", {}], "ok": "日本語のテキスト?n=25"}
+{"fn": "_with_message_limit", "args": ["", true], "ok": "?n=1"}
+{"fn": "_with_message_limit", "args": ["./x/**/*.json", []], "ok": "./x/**/*.json?n=25"}
+{"fn": "_with_message_limit", "args": ["line1\nline2", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["ünïcödéa", "ö"], "error": "ValueError: invalid literal for int() with base 10: 'ö'"}
+{"fn": "_with_message_limit", "args": ["Hello Worlda😀b😀c", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["trailing.", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["日本語のテキスト", "x"], "error": "ValueError: invalid literal for int() with base 10: 'x'"}
+{"fn": "_with_message_limit", "args": ["  padded  ", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["﻿boma😀b😀c", null], "ok": "﻿boma😀b😀c?n=25"}
+{"fn": "_with_message_limit", "args": ["a:b:ctab\tseparated", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["a:b:c", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["emoji 👍🏽 mixa", {}], "ok": "emoji 👍🏽 mixa?n=25"}
+{"fn": "_with_message_limit", "args": ["a..b", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["héllo wörld", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["👍🏽 thumbs", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["日本語", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["ılık ırmak", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["👨‍👩‍👧 family", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a b", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["ΣΊΣΥΦΟΣ", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a😀b", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["﻿bom", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a²b x½ y①", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["aⅠb Ⅻ", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a𐐀b 𝐀bc", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["कि ٣٤", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["Iı İi", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["K K k", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["ſ s S", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["x‍y 👨‍👩‍👧", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a b c　d", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["١٢٣ ٤٥", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["𝟘𝟙 ²³", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["snake_case foo-bar o'neil", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["ǅungla Ǆ", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["one\r\ntwo threefour", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["café café", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["ΣΑΣ σας ς", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["İstanbul", {"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["İstanbul", {"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["İstanbul", [3, 1, 2]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_same_origin", "args": ["İstanbul", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["Hello World", ":a"], "ok": true}
+{"fn": "_same_origin", "args": ["c", "a.b.c"], "ok": true}
+{"fn": "_same_origin", "args": ["a😀b😀c", "hello"], "ok": true}
+{"fn": "_same_origin", "args": ["😀C", "a😀b😀c"], "ok": true}
+{"fn": "_same_origin", "args": ["./x/**/*.json", "HELLO"], "ok": true}
+{"fn": "_same_origin", "args": ["ab", "emoji 👍🏽 mix"], "ok": true}
+{"fn": "_same_origin", "args": ["emoji 👍🏽 mixé", "MO"], "ok": true}
+{"fn": "_same_origin", "args": [".leading", "./x/**/*.json"], "ok": true}
+{"fn": "_same_origin", "args": ["日本語のテキスト", "ス"], "ok": true}
+{"fn": "_same_origin", "args": ["ünïcödé", "ünïcödé"], "ok": true}
+{"fn": "_same_origin", "args": ["ab", "line1\nline2a:b:c"], "ok": false}
+{"fn": "_same_origin", "args": ["😀", "😀"], "ok": true}
+{"fn": "_same_origin", "args": ["./x/**/*.json", "abc"], "ok": true}
+{"fn": "_same_origin", "args": ["ΣΊΣΥΦΟΣ", "a:b:c"], "ok": false}
+{"fn": "_same_origin", "args": ["hello", "日本語のテキスト"], "ok": true}
+{"fn": "_same_origin", "args": ["./x/**/*.json", "é"], "ok": true}
+{"fn": "_same_origin", "args": ["src/a/b.ts", ""], "ok": true}
+{"fn": "_same_origin", "args": ["a..b", "a😀b😀c"], "ok": true}
+{"fn": "_same_origin", "args": ["key_name-1hello", "emoji 👍🏽 mix"], "ok": true}
+{"fn": "_same_origin", "args": ["ns:key.path", "straße"], "ok": false}
+{"fn": "_same_origin", "args": ["tab\tseparated", "a😀b😀c"], "ok": true}
+{"fn": "_same_origin", "args": ["日本語のテキスト", "a:b:c"], "ok": false}
+{"fn": "_same_origin", "args": ["ünïcödé", ".leading"], "ok": true}
+{"fn": "_same_origin", "args": ["a:b:c", "é"], "ok": false}
+{"fn": "_same_origin", "args": ["éünïcödé", "İstanbul"], "ok": true}
+{"fn": "_same_origin", "args": ["a😀b😀c", "ΣΊΣΥΦΟΣ"], "ok": true}
+{"fn": "_same_origin", "args": ["straße", "emoji 👍🏽 mix"], "ok": true}
+{"fn": "_same_origin", "args": ["hello world", "a.b.c"], "ok": true}
+{"fn": "_same_origin", "args": ["straße", "hello"], "ok": true}
+{"fn": "_same_origin", "args": ["line1\nline2", "ΣΊΣΥΦΟΣ"], "ok": true}
+{"fn": "_same_origin", "args": ["src/a/b.ts", "😀"], "ok": true}
+{"fn": "_same_origin", "args": ["é", "HELLO"], "ok": true}
+{"fn": "_same_origin", "args": ["a😀b😀c", "é"], "ok": true}
+{"fn": "_same_origin", "args": ["Hello World", "emoji 👍🏽 mix"], "ok": true}
+{"fn": "_same_origin", "args": ["straße", "hello world"], "ok": true}
+{"fn": "_same_origin", "args": ["src/a/b.ts", "Hello World"], "ok": true}
+{"fn": "_same_origin", "args": ["a:b:c", "abc"], "ok": false}
+{"fn": "_same_origin", "args": ["T", "ns:key.path"], "ok": false}
+{"fn": "_same_origin", "args": ["😀", "Hello World"], "ok": true}
+{"fn": "_same_origin", "args": ["ünïcödé", "a.b.chello world"], "ok": true}
+{"fn": "_same_origin", "args": ["HELLO{name} has {count} items", ".leadingΣΊΣΥΦΟΣ"], "ok": true}
+{"fn": "_same_origin", "args": ["HELLO", "tab\tseparated"], "ok": true}
+{"fn": "_same_origin", "args": ["a😀b😀c", "hello world"], "ok": true}
+{"fn": "_same_origin", "args": ["./x/**/*.json", "trailing."], "ok": true}
+{"fn": "_same_origin", "args": ["a..b", "  padded  "], "ok": true}
+{"fn": "_same_origin", "args": ["ΣΊΣΥΦΟΣ", "Σ"], "ok": true}
+{"fn": "_same_origin", "args": ["ΣΊΣΥΦΟΣ", "line1\nline2"], "ok": true}
+{"fn": "_same_origin", "args": ["hello world", "l"], "ok": true}
+{"fn": "_same_origin", "args": ["cöd", "ünïcödétab\tseparated"], "ok": true}
+{"fn": "_same_origin", "args": [":", "tab\tseparated"], "ok": true}
+{"fn": "_same_origin", "args": ["key_name-1", "EY_NAME-"], "ok": true}
+{"fn": "_same_origin", "args": ["", "a..b"], "ok": true}
+{"fn": "_same_origin", "args": ["a😀b😀ca.b.c", "hello worldline1\nline2"], "ok": true}
+{"fn": "_same_origin", "args": ["ünïcödé", "straße"], "ok": true}
+{"fn": "_same_origin", "args": ["﻿bom", "İstanbul"], "ok": true}
+{"fn": "_same_origin", "args": ["trailing.", "key_name-1"], "ok": true}
+{"fn": "_same_origin", "args": ["./x/**/*.json", "*.json"], "ok": true}
+{"fn": "_same_origin", "args": ["y", "ns:key.path"], "ok": false}
+{"fn": "_same_origin", "args": ["ΣΊΣΥΦΟΣa", "日本語のテキスト"], "ok": true}
+{"fn": "_same_origin", "args": ["Hello World", "tab\tseparated"], "ok": true}
+{"fn": "_same_origin", "args": ["abc", "src/a/b.ts"], "ok": true}
+{"fn": "_same_origin", "args": [":", "İstanbulns:key.path"], "ok": true}
+{"fn": "_same_origin", "args": ["src/a/b.ts", "emoji 👍🏽 mixns:key.path"], "ok": true}
+{"fn": "_same_origin", "args": ["line1\nline2ab", "trailing."], "ok": true}
+{"fn": "_same_origin", "args": ["trailing.", "traili"], "ok": true}
+{"fn": "_same_origin", "args": ["ns:key.path", "Hello World"], "ok": false}
+{"fn": "_same_origin", "args": ["﻿boma.b.c", "😀"], "ok": true}
+{"fn": "_same_origin", "args": ["I", ".leadingstraße"], "ok": true}
+{"fn": "_same_origin", "args": ["ΣΊΣΥΦΟΣ", "İstanbulemoji 👍🏽 mix"], "ok": true}
+{"fn": "_same_origin", "args": ["ns:key.path", "a😀b😀c"], "ok": false}
+{"fn": "_same_origin", "args": ["ns:key.pathstraße", "a.b.c"], "ok": false}
+{"fn": "_same_origin", "args": ["a:b:c", "key_name-1src/a/b.ts"], "ok": false}
+{"fn": "_same_origin", "args": ["i 👍🏽 mi", "emoji 👍🏽 mix"], "ok": true}
+{"fn": "_same_origin", "args": ["hello worldhello", "  padded  "], "ok": true}
+{"fn": "_same_origin", "args": ["straße", "ab"], "ok": true}
+{"fn": "_same_origin", "args": ["", "key_name-1"], "ok": true}
+{"fn": "_same_origin", "args": ["orl", "Hello World"], "ok": true}
+{"fn": "_same_origin", "args": ["line1\nline2", ":"], "ok": true}
+{"fn": "_same_origin", "args": ["Hello World", " W"], "ok": true}
+{"fn": "_same_origin", "args": ["hello world", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["ns:key.path", "hello world"], "ok": false}
+{"fn": "_same_origin", "args": ["{name} has {count} items", "a.b.c"], "ok": true}
+{"fn": "_same_origin", "args": ["﻿bom  padded  ", "a"], "ok": true}
+{"fn": "_same_origin", "args": ["aba:b:c", ":c"], "ok": false}
+{"fn": "_same_origin", "args": ["./x/**/*.json", "hellohello world"], "ok": true}
+{"fn": "_same_origin", "args": ["trailing.", "ng"], "ok": true}
+{"fn": "_same_origin", "args": ["{name} has {count} items", "a😀b😀c"], "ok": true}
+{"fn": "_same_origin", "args": ["﻿bom", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["{name} has {count} items", "HELLO"], "ok": true}
+{"fn": "_same_origin", "args": ["/", "src/a/b.ts"], "ok": true}
+{"fn": "_same_origin", "args": ["ΣΊΣΥΦΟΣ", "é"], "ok": true}
+{"fn": "_same_origin", "args": ["  padded  ", "hello worlda"], "ok": true}
+{"fn": "_same_origin", "args": ["😀", "éİstanbul"], "ok": true}
+{"fn": "_same_origin", "args": ["a😀b😀c{name} has {count} items", "abc"], "ok": true}
+{"fn": "_same_origin", "args": ["a.b.c", "emoji 👍🏽 mix"], "ok": true}
+{"fn": "_same_origin", "args": ["tab\tseparated.leading", "HELLOΣΊΣΥΦΟΣ"], "ok": true}
+{"fn": "_same_origin", "args": ["  padded  ", "  padd"], "ok": true}
+{"fn": "_same_origin", "args": ["straße", "  padded  "], "ok": true}
+{"fn": "_same_origin", "args": ["HELLO", "E"], "ok": true}
+{"fn": "_same_origin", "args": ["c", "abc"], "ok": true}
+{"fn": "_same_origin", "args": ["HELLO", "straße"], "ok": true}
+{"fn": "_same_origin", "args": ["as", "{name} has {count} items"], "ok": true}
+{"fn": "_same_origin", "args": ["HELLO", ":"], "ok": true}
+{"fn": "_same_origin", "args": ["﻿bom", "a..b"], "ok": true}
+{"fn": "_same_origin", "args": ["日本語のテキスト", ":a.b.c"], "ok": true}
+{"fn": "_same_origin", "args": ["./x/**/*.json", "😀"], "ok": true}
+{"fn": "_same_origin", "args": ["😀", "ΣΊΣΥΦΟΣ"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul😀", "ünïcödé"], "ok": true}
+{"fn": "_same_origin", "args": ["abcİstanbul", "日本語のテキスト"], "ok": true}
+{"fn": "_same_origin", "args": ["日本語のテキスト", "本"], "ok": true}
+{"fn": "_same_origin", "args": [".leading", "İstanbula.b.c"], "ok": true}
+{"fn": "_same_origin", "args": ["abc", "ns:key.path.leading"], "ok": false}
+{"fn": "_same_origin", "args": ["HELLO", "a.b.c"], "ok": true}
+{"fn": "_same_origin", "args": ["abc", "ΣΊΣΥΦΟΣ"], "ok": true}
+{"fn": "_same_origin", "args": ["helloünïcödé", "a"], "ok": true}
+{"fn": "_same_origin", "args": ["abc", "./x/**/*.json"], "ok": true}
+{"fn": "_same_origin", "args": ["{name} has {count} items日本語のテキスト", "  padded  ./x/**/*.json"], "ok": true}
+{"fn": "_same_origin", "args": ["ab", "trailing."], "ok": true}
+{"fn": "_same_origin", "args": ["HELLO", "src/a/b.ts"], "ok": true}
+{"fn": "_same_origin", "args": ["emoji 👍🏽 mix", "Hello World"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbulabc", "hello world"], "ok": true}
+{"fn": "_same_origin", "args": ["src/a/b.tsns:key.path", "c/"], "ok": true}
+{"fn": "_same_origin", "args": ["-", "key_name-1"], "ok": true}
+{"fn": "_same_origin", "args": [":", "a.b.c"], "ok": true}
+{"fn": "_same_origin", "args": ["emoji 👍🏽 mix", "a"], "ok": true}
+{"fn": "_same_origin", "args": ["ünïcödé", "a.b.c"], "ok": true}
+{"fn": "_same_origin", "args": ["{name} has {count} items", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["日本語のテキストa:b:c", "日本語のテキスト"], "ok": true}
+{"fn": "_same_origin", "args": ["﻿bom", "line1\nline2"], "ok": true}
+{"fn": "_same_origin", "args": ["a", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["日本語のテキスト", ""], "ok": true}
+{"fn": "_same_origin", "args": ["line1\nline2", "Hello World"], "ok": true}
+{"fn": "_same_origin", "args": ["😀", ":"], "ok": true}
+{"fn": "_same_origin", "args": ["日本語のテキスト", "﻿bomtab\tseparated"], "ok": true}
+{"fn": "_same_origin", "args": ["straße", "T"], "ok": true}
+{"fn": "_same_origin", "args": ["😀", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["ab", ".leading"], "ok": true}
+{"fn": "_same_origin", "args": ["trailing.", "emoji 👍🏽 mix"], "ok": true}
+{"fn": "_same_origin", "args": [":line1\nline2", "日本語のテキスト"], "ok": true}
+{"fn": "_same_origin", "args": ["emoji 👍🏽 mix", "🏽"], "ok": true}
+{"fn": "_same_origin", "args": ["", "emoji 👍🏽 mix"], "ok": true}
+{"fn": "_same_origin", "args": ["Hello World", "HELLO"], "ok": true}
+{"fn": "_same_origin", "args": ["emoji 👍🏽 mix", "HELLO"], "ok": true}
+{"fn": "_same_origin", "args": ["ns:key.patha", "emoji 👍🏽 mix"], "ok": false}
+{"fn": "_same_origin", "args": ["İstanbul", "a😀b😀c"], "ok": true}
+{"fn": "_same_origin", "args": ["日本語のテキスト", "a:b:ckey_name-1"], "ok": false}
+{"fn": "_same_origin", "args": ["ns:key.path", "PAT"], "ok": false}
+{"fn": "_same_origin", "args": ["日本語のテキスト", "é"], "ok": true}
+{"fn": "_same_origin", "args": ["Hello World", "a.b.c"], "ok": true}
+{"fn": "_same_origin", "args": ["  padded  ", "  padded  src/a/b.ts"], "ok": true}
+{"fn": "_same_origin", "args": ["a.b.c", ""], "ok": true}
+{"fn": "_same_origin", "args": ["t} ite", "{name} has {count} items"], "ok": true}
+{"fn": "_same_origin", "args": ["ΣΊΣΥΦΟΣ", "straße"], "ok": true}
+{"fn": "_same_origin", "args": ["ab", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["straße", "日本語のテキスト"], "ok": true}
+{"fn": "_same_origin", "args": ["./x/**/*.json", "*/*."], "ok": true}
+{"fn": "_same_origin", "args": ["日本語のテキスト", "語のテキス"], "ok": true}
+{"fn": "_same_origin", "args": ["line1\nline2", "ne"], "ok": true}
+{"fn": "_same_origin", "args": ["a.b.c", "﻿bomtab\tseparated"], "ok": true}
+{"fn": "_same_origin", "args": ["hello", "ll"], "ok": true}
+{"fn": "_same_origin", "args": ["a😀b😀c", "ünïcödéa"], "ok": true}
+{"fn": "_same_origin", "args": ["straße", "ns:key.path./x/**/*.json"], "ok": false}
+{"fn": "_same_origin", "args": ["a", "a..b"], "ok": true}
+{"fn": "_same_origin", "args": ["日本語のテキスト", "İstanbulabc"], "ok": true}
+{"fn": "_same_origin", "args": ["hello", ""], "ok": true}
+{"fn": "_same_origin", "args": ["tab\tseparated", "HELLO"], "ok": true}
+{"fn": "_same_origin", "args": ["", "abc"], "ok": true}
+{"fn": "_same_origin", "args": ["E2", "line1\nline2"], "ok": true}
+{"fn": "_same_origin", "args": ["ΣΊΣΥΦΟΣline1\nline2", "./x/**/*.json"], "ok": true}
+{"fn": "_same_origin", "args": ["ab", "a😀b😀c"], "ok": true}
+{"fn": "_same_origin", "args": ["ns:key.patha", "abc"], "ok": false}
+{"fn": "_same_origin", "args": ["straße", "a:b:c"], "ok": false}
+{"fn": "_same_origin", "args": ["a:b:c", ""], "ok": false}
+{"fn": "_same_origin", "args": ["src/a/b.ts", "ns:key.path"], "ok": false}
+{"fn": "_same_origin", "args": ["a.b.c", "a"], "ok": true}
+{"fn": "_same_origin", "args": ["ey", "key_name-1{name} has {count} items"], "ok": true}
+{"fn": "_same_origin", "args": ["ab", "abc"], "ok": true}
+{"fn": "_same_origin", "args": ["﻿bomsrc/a/b.ts", "/a/b."], "ok": true}
+{"fn": "_same_origin", "args": ["ünïcödéns:key.path", "İstanbul"], "ok": true}
+{"fn": "_same_origin", "args": ["tab\tseparated", "b\tsepara"], "ok": true}
+{"fn": "_same_origin", "args": [".leadingabc", "ünïcödékey_name-1"], "ok": true}
+{"fn": "_same_origin", "args": ["😀", "﻿bom﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbulΣΊΣΥΦΟΣ", "Hello Worldİstanbul"], "ok": true}
+{"fn": "_same_origin", "args": ["﻿bom", "abcns:key.path"], "ok": false}
+{"fn": "_same_origin", "args": ["hello", "ΣΊΣΥΦΟΣ"], "ok": true}
+{"fn": "_same_origin", "args": ["﻿boma", "a"], "ok": true}
+{"fn": "_same_origin", "args": ["ünïcödé{name} has {count} items", "a"], "ok": true}
+{"fn": "_same_origin", "args": ["key_name-1", "src/a/b.ts"], "ok": true}
+{"fn": "_same_origin", "args": ["tab\tseparated", "ns:key.patha.b.c"], "ok": false}
+{"fn": "_same_origin", "args": ["ns:key.path", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_same_origin", "args": ["İstanbul", "ANBU"], "ok": true}
+{"fn": "_same_origin", "args": ["trailing.", "a😀b😀c"], "ok": true}
+{"fn": "_same_origin", "args": ["{name} has {count} items", "ems"], "ok": true}
+{"fn": "_same_origin", "args": ["", ".leading"], "ok": true}
+{"fn": "_same_origin", "args": ["a.leading", ".leading"], "ok": true}
+{"fn": "_same_origin", "args": ["日本語のテキスト", "本語のテ"], "ok": true}
+{"fn": "_same_origin", "args": ["a..b:", "B"], "ok": false}
+{"fn": "_same_origin", "args": ["a😀b😀c", ""], "ok": true}
+{"fn": "_same_origin", "args": ["é", "ab"], "ok": true}
+{"fn": "_same_origin", "args": ["héllo wörld", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["👍🏽 thumbs", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["日本語", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["é", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["straße", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["ılık ırmak", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["👨‍👩‍👧 family", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["a b", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["ΣΊΣΥΦΟΣ", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["a😀b", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["a²b x½ y①", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["aⅠb Ⅻ", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["a𐐀b 𝐀bc", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["कि ٣٤", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["Iı İi", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["K K k", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["ſ s S", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["x‍y 👨‍👩‍👧", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["a b c　d", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["١٢٣ ٤٥", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["𝟘𝟙 ²³", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["snake_case foo-bar o'neil", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["ǅungla Ǆ", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["one\r\ntwo threefour", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["café café", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["ΣΑΣ σας ς", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "héllo wörld"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "👍🏽 thumbs"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "日本語"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", ""], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "é"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "İstanbul"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "straße"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "ılık ırmak"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "👨‍👩‍👧 family"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "a b"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "ΣΊΣΥΦΟΣ"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "a😀b"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "a²b x½ y①"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "aⅠb Ⅻ"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "a𐐀b 𝐀bc"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "कि ٣٤"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "Iı İi"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "K K k"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "ſ s S"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "x‍y 👨‍👩‍👧"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "a b c　d"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "١٢٣ ٤٥"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "𝟘𝟙 ²³"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "snake_case foo-bar o'neil"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "ǅungla Ǆ"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "one\r\ntwo threefour"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "café café"], "ok": true}
+{"fn": "_same_origin", "args": ["İstanbul", "ΣΑΣ σας ς"], "ok": true}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a", ":"], "ok": {"$tuple": [":", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["key_name-1", "ünïcödé"], "ok": {"$tuple": ["ünïcödé", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["tab\tseparated", "tab\tsepa"], "ok": {"$tuple": ["tab\tsepa", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a", "a:b:c"], "ok": {"$tuple": ["a:b:c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["line1\nline2", "src/a/b.ts"], "ok": {"$tuple": ["src/a/b.ts", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["e", "straße"], "ok": {"$tuple": ["straße", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["trailing.日本語のテキスト", "a..b"], "ok": {"$tuple": ["a..b", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["  padded  ", "line1\nline2emoji 👍🏽 mix"], "ok": {"$tuple": ["line1\nline2emoji 👍🏽 mix", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["NA", "key_name-1"], "ok": {"$tuple": ["key_name-1", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a..b", "a.b.c"], "ok": {"$tuple": ["a.b.c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["CÖD", "ünïcödé"], "ok": {"$tuple": ["ünïcödé", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["b.", "a.b.c"], "ok": {"$tuple": ["a.b.c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["İstanbul", "İstanbul"], "ok": {"$tuple": ["i̇stanbul", "", false]}}
+{"fn": "_extract_url_credentials", "args": [":", "a"], "ok": {"$tuple": ["a", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["Hello Worldtab\tseparated", "abc"], "ok": {"$tuple": ["abc", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a:b:ca", "key_name-1"], "ok": {"$tuple": ["key_name-1", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["Hello World", "line1\nline2"], "ok": {"$tuple": ["line1\nline2", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["hello world", "hello"], "ok": {"$tuple": ["hello", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["﻿bom", "src/a/b.ts"], "ok": {"$tuple": ["src/a/b.ts", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a😀b😀c", "Hello Worldhello"], "ok": {"$tuple": ["hello worldhello", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["src/a/b.ts", "ns:key.path"], "ok": {"$tuple": ["ns:key.path", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["line1\nline2", "a..b"], "ok": {"$tuple": ["a..b", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["é", "﻿bom😀"], "ok": {"$tuple": ["﻿bom😀", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["{name} has {count} itemsHello World", "key_name-1"], "ok": {"$tuple": ["key_name-1", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["😀", "😀"], "ok": {"$tuple": ["😀", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["日本語のテキスト日本語のテキスト", "ΣΊΣΥΦΟΣkey_name-1"], "ok": {"$tuple": ["σίσυφοσkey_name-1", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ab", "a:b:c"], "ok": {"$tuple": ["a:b:c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["mix", "﻿bomemoji 👍🏽 mix"], "ok": {"$tuple": ["﻿bomemoji 👍🏽 mix", "", false]}}
+{"fn": "_extract_url_credentials", "args": [".leading", "ns:key.path"], "ok": {"$tuple": ["ns:key.path", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["src/a/b.ts", "😀"], "ok": {"$tuple": ["😀", "", false]}}
+{"fn": "_extract_url_credentials", "args": [":", "straße"], "ok": {"$tuple": ["straße", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["./x/**/*.json", "日本語のテキストline1\nline2"], "ok": {"$tuple": ["日本語のテキストline1\nline2", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["tab\tseparated日本語のテキスト", "Hello World"], "ok": {"$tuple": ["hello world", "", false]}}
+{"fn": "_extract_url_credentials", "args": [":  padded  ", "  padded  ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["padded  σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["src/a/b.ts", "a😀b😀csrc/a/b.ts"], "ok": {"$tuple": ["a😀b😀csrc/a/b.ts", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["😀", "İstanbul﻿bom"], "ok": {"$tuple": ["i̇stanbul﻿bom", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["abc", "abc"], "ok": {"$tuple": ["abc", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["", "İstanbulé"], "ok": {"$tuple": ["i̇stanbulé", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["straße", "trailing."], "ok": {"$tuple": ["trailing.", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["hello world", "tab\tseparated"], "ok": {"$tuple": ["tab\tseparated", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a.b.c", "key_name-1"], "ok": {"$tuple": ["key_name-1", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["tab\tseparated", "emoji 👍🏽 mixemoji 👍🏽 mix"], "ok": {"$tuple": ["emoji 👍🏽 mixemoji 👍🏽 mix", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["İstanbul", "a.b.c"], "ok": {"$tuple": ["a.b.c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a.b.c", "a"], "ok": {"$tuple": ["a", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["line1\nline2", "😀"], "ok": {"$tuple": ["😀", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ns:key.path", "日本語のテキスト"], "ok": {"$tuple": ["日本語のテキスト", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a😀b😀c", "a:b:c"], "ok": {"$tuple": ["a:b:c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["line1\nline2", "a"], "ok": {"$tuple": ["a", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["line1\nline2", "İstanbul"], "ok": {"$tuple": ["i̇stanbul", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["hello", "﻿bom"], "ok": {"$tuple": ["﻿bom", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["tab\tseparated", "a😀b😀c"], "ok": {"$tuple": ["a😀b😀c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["é", "line1\nline2"], "ok": {"$tuple": ["line1\nline2", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ns:key.path", "HELLOHELLO"], "ok": {"$tuple": ["hellohello", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["İstanbul", ".leading"], "ok": {"$tuple": [".leading", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["B", "İstanbul"], "ok": {"$tuple": ["i̇stanbul", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["日本語のテキスト", "emoji 👍🏽 mix"], "ok": {"$tuple": ["emoji 👍🏽 mix", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["hello", "é"], "ok": {"$tuple": ["é", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ab", "a..b"], "ok": {"$tuple": ["a..b", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["😀b", "a😀b😀c"], "ok": {"$tuple": ["a😀b😀c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["straßea😀b😀c", "emoji 👍🏽 mix"], "ok": {"$tuple": ["emoji 👍🏽 mix", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ns:key.path", "H"], "ok": {"$tuple": ["h", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["{name} has {count} items", "CO"], "ok": {"$tuple": ["co", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ab", "İstanbul"], "ok": {"$tuple": ["i̇stanbul", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["Worl", "Hello World"], "ok": {"$tuple": ["hello world", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["  padded  straße", ".leadinga😀b😀c"], "ok": {"$tuple": [".leadinga😀b😀c", "", false]}}
+{"fn": "_extract_url_credentials", "args": [".leadinga😀b😀c", "a"], "ok": {"$tuple": ["a", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["emoji 👍🏽 mixns:key.path", "abc"], "ok": {"$tuple": ["abc", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a.b.cé", "İstanbul"], "ok": {"$tuple": ["i̇stanbul", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["😀", "a😀b😀c"], "ok": {"$tuple": ["a😀b😀c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["  padded  ", "é"], "ok": {"$tuple": ["é", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["  padded  ", "  "], "ok": {"$tuple": ["", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["c", "a😀b😀c"], "ok": {"$tuple": ["a😀b😀c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ns:key.path", "a..b"], "ok": {"$tuple": ["a..b", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["src/a/b.ts", "abc"], "ok": {"$tuple": ["abc", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["é﻿bom", "M"], "ok": {"$tuple": ["m", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ab", "ab"], "ok": {"$tuple": ["ab", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["﻿bom", "ns:key.path"], "ok": {"$tuple": ["ns:key.path", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["EY.P", "ns:key.path"], "ok": {"$tuple": ["ns:key.path", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["😀a😀b😀c", "b😀"], "ok": {"$tuple": ["b😀", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ünïcödé", ":"], "ok": {"$tuple": [":", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["", "ab"], "ok": {"$tuple": ["ab", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["hello", "straße"], "ok": {"$tuple": ["straße", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["abc", "src/a/b.ts"], "ok": {"$tuple": ["src/a/b.ts", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a😀b😀c", "trailing."], "ok": {"$tuple": ["trailing.", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["hello", "hello"], "ok": {"$tuple": ["hello", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["b", "a..b"], "ok": {"$tuple": ["a..b", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["", "Hello World"], "ok": {"$tuple": ["hello world", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["é", "́"], "ok": {"$tuple": ["́", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["hello", "İstanbul"], "ok": {"$tuple": ["i̇stanbul", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["{name} has {count} items", "ünïcödé"], "ok": {"$tuple": ["ünïcödé", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣΥΦΟΣ", "日本語のテキスト"], "ok": {"$tuple": ["日本語のテキスト", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["hello", "el"], "ok": {"$tuple": ["el", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["  padded  ", "a.b.cé"], "ok": {"$tuple": ["a.b.cé", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["tab\tseparateda😀b😀c", "AR"], "ok": {"$tuple": ["ar", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["HEL", "hello"], "ok": {"$tuple": ["hello", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["./x/**/*.json", "/x/**"], "ok": {"$tuple": ["/x/**", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a..b", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["😀", "ns:key.path"], "ok": {"$tuple": ["ns:key.path", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["HELLO", "a😀b😀c"], "ok": {"$tuple": ["a😀b😀c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣΥΦΟΣ", "ns:key.path"], "ok": {"$tuple": ["ns:key.path", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a😀b😀c", "ΣΊΣΥΦΟΣ﻿bom"], "ok": {"$tuple": ["σίσυφοσ﻿bom", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ab", "ahello world"], "ok": {"$tuple": ["ahello world", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["", "😀"], "ok": {"$tuple": ["😀", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["", "a:b:c"], "ok": {"$tuple": ["a:b:c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["emoji 👍🏽 mixHello World", "src/a/b.ts"], "ok": {"$tuple": ["src/a/b.ts", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["hello worldline1\nline2", "Hello World😀"], "ok": {"$tuple": ["hello world😀", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["trailing.", "a..b"], "ok": {"$tuple": ["a..b", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["tab\tseparateda..b", "RA"], "ok": {"$tuple": ["ra", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["hello", "a.b.c"], "ok": {"$tuple": ["a.b.c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["key_name-1", "a.b.c"], "ok": {"$tuple": ["a.b.c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣΥΦΟΣ", "ΟΣ"], "ok": {"$tuple": ["ος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["src/a/b.ts", "é"], "ok": {"$tuple": ["é", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a😀b😀c", ""], "ok": {"$tuple": ["", "", false]}}
+{"fn": "_extract_url_credentials", "args": [".leading", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["line1\nline2", "ine1\nl"], "ok": {"$tuple": ["ine1\nl", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["b", "abc"], "ok": {"$tuple": ["abc", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["helloünïcödé", "HELLOhello world"], "ok": {"$tuple": ["hellohello world", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["src/a/b.tsİstanbul", "a😀b😀c"], "ok": {"$tuple": ["a😀b😀c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ab", ".leading"], "ok": {"$tuple": [".leading", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["  padded  ", "hello world"], "ok": {"$tuple": ["hello world", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["HELLO", "abstraße"], "ok": {"$tuple": ["abstraße", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["src/a/b.ts", "  padded  "], "ok": {"$tuple": ["padded", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["日本語のテキスト", "テキス"], "ok": {"$tuple": ["テキス", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["abc", "BC"], "ok": {"$tuple": ["bc", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a:b:c", "a..b"], "ok": {"$tuple": ["a..b", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["é", "Hello World"], "ok": {"$tuple": ["hello world", "", false]}}
+{"fn": "_extract_url_credentials", "args": [":", "tab\tseparated"], "ok": {"$tuple": ["tab\tseparated", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ab", "  padded  emoji 👍🏽 mix"], "ok": {"$tuple": ["padded  emoji 👍🏽 mix", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["emoji 👍🏽 mix", "日本語のテキスト  padded  "], "ok": {"$tuple": ["日本語のテキスト  padded", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["key_name-1Hello World", "hellostraße"], "ok": {"$tuple": ["hellostraße", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ns:key.patha", "İstanbul"], "ok": {"$tuple": ["i̇stanbul", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["HELLO", "a.b.c"], "ok": {"$tuple": ["a.b.c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣΥΦΟΣ", "tab\tseparated"], "ok": {"$tuple": ["tab\tseparated", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["é", "e"], "ok": {"$tuple": ["e", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["日本語のテキスト日本語のテキスト", "ab"], "ok": {"$tuple": ["ab", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["  padded  ", "abc"], "ok": {"$tuple": ["abc", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["trailing.", "ünïcödé"], "ok": {"$tuple": ["ünïcödé", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a", "abİstanbul"], "ok": {"$tuple": ["abi̇stanbul", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["tab\tseparated", "straße"], "ok": {"$tuple": ["straße", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["src/a/b.ts日本語のテキスト", "﻿bom"], "ok": {"$tuple": ["﻿bom", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["key_name-1ab", "é"], "ok": {"$tuple": ["é", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["./x/**/*.json", "a"], "ok": {"$tuple": ["a", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["abc", "a"], "ok": {"$tuple": ["a", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["*/*.json", "./x/**/*.json"], "ok": {"$tuple": ["./x/**/*.json", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["b", "ab"], "ok": {"$tuple": ["ab", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["c", "a.b.c"], "ok": {"$tuple": ["a.b.c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["  padded  ", "a..b"], "ok": {"$tuple": ["a..b", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["İstanbula", "A"], "ok": {"$tuple": ["a", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["Hello WorldΣΊΣΥΦΟΣ", "é"], "ok": {"$tuple": ["é", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["é日本語のテキスト", "ト"], "ok": {"$tuple": ["ト", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["src/a/b.ts", "a😀b😀c"], "ok": {"$tuple": ["a😀b😀c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["trailing.", "trailing"], "ok": {"$tuple": ["trailing", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["straße", "ünïcödé"], "ok": {"$tuple": ["ünïcödé", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a:b:ca:b:c", ".leadingİstanbul"], "ok": {"$tuple": [".leadingi̇stanbul", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["th", "ns:key.path"], "ok": {"$tuple": ["ns:key.path", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["HELLOabc", "日本語のテキスト"], "ok": {"$tuple": ["日本語のテキスト", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["  padded  ", "abİstanbul"], "ok": {"$tuple": ["abi̇stanbul", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ö", "ünïcödé"], "ok": {"$tuple": ["ünïcödé", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["  ", "  padded  "], "ok": {"$tuple": ["padded", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ab", "  padded  "], "ok": {"$tuple": ["padded", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["B", "a:b:c"], "ok": {"$tuple": ["a:b:c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["key_name-1", "a..b"], "ok": {"$tuple": ["a..b", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ns:key.path", "{name} has {count} items"], "ok": {"$tuple": ["{name} has {count} items", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["TANBU", "İstanbul"], "ok": {"$tuple": ["i̇stanbul", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a..b", ""], "ok": {"$tuple": ["", "", false]}}
+{"fn": "_extract_url_credentials", "args": [":", ":"], "ok": {"$tuple": [":", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["key_name-1", "hello world"], "ok": {"$tuple": ["hello world", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["{name} has {count} items", "me} has {count} i"], "ok": {"$tuple": ["me} has {count} i", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["i 👍", "emoji 👍🏽 mix"], "ok": {"$tuple": ["emoji 👍🏽 mix", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["./x/**/*.json", "😀"], "ok": {"$tuple": ["😀", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣΥΦΟΣ", "line1\nline2"], "ok": {"$tuple": ["line1\nline2", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ünïcödé", "hello world"], "ok": {"$tuple": ["hello world", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["A", "a"], "ok": {"$tuple": ["a", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a😀b😀c日本語のテキスト", ":"], "ok": {"$tuple": [":", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ünïcödé", "Hello World"], "ok": {"$tuple": ["hello world", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a.b.c", "a..bab"], "ok": {"$tuple": ["a..bab", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["tab\tseparated", "İstanbul"], "ok": {"$tuple": ["i̇stanbul", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["abc", "abc.leading"], "ok": {"$tuple": ["abc.leading", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ünïcödé", "Hello Worldtab\tseparated"], "ok": {"$tuple": ["hello worldtab\tseparated", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["aΣΊΣΥΦΟΣ", "İstanbul"], "ok": {"$tuple": ["i̇stanbul", "", false]}}
+{"fn": "_extract_url_credentials", "args": [".leadingΣΊΣΥΦΟΣ", ".leading"], "ok": {"$tuple": [".leading", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["日本語のテキスト", "😀"], "ok": {"$tuple": ["😀", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["  padded  ", "İstanbul"], "ok": {"$tuple": ["i̇stanbul", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ünïcödé", "a:b:c"], "ok": {"$tuple": ["a:b:c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["", "a"], "ok": {"$tuple": ["a", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["rc/a/b", "src/a/b.ts"], "ok": {"$tuple": ["src/a/b.ts", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["A.B.", "a.b.c"], "ok": {"$tuple": ["a.b.c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["trailing.", "hello world"], "ok": {"$tuple": ["hello world", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["straße", "a:b:c"], "ok": {"$tuple": ["a:b:c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["İstanbul", "emoji 👍🏽 mix"], "ok": {"$tuple": ["emoji 👍🏽 mix", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a:b:c", "HELLO"], "ok": {"$tuple": ["hello", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["emoji 👍🏽 mix", "src/a/b.ts"], "ok": {"$tuple": ["src/a/b.ts", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a:b:c", "src/a/b.ts"], "ok": {"$tuple": ["src/a/b.ts", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["l", "hello"], "ok": {"$tuple": ["hello", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a:b:c", "tab\tseparatedHello World"], "ok": {"$tuple": ["tab\tseparatedhello world", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a😀b😀c", "emoji 👍🏽 mix"], "ok": {"$tuple": ["emoji 👍🏽 mix", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["key_name-1", "helloemoji 👍🏽 mix"], "ok": {"$tuple": ["helloemoji 👍🏽 mix", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["hello world", "straße"], "ok": {"$tuple": ["straße", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["src/a/b.ts", "a:b:c"], "ok": {"$tuple": ["a:b:c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["héllo wörld", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["👍🏽 thumbs", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["日本語", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["é", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["İstanbul", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["straße", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ılık ırmak", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["👨‍👩‍👧 family", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a b", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣΥΦΟΣ", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a😀b", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["﻿bom", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a²b x½ y①", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["aⅠb Ⅻ", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a𐐀b 𝐀bc", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["कि ٣٤", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["Iı İi", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["K K k", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ſ s S", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["x‍y 👨‍👩‍👧", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a b c　d", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["١٢٣ ٤٥", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["𝟘𝟙 ²³", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["snake_case foo-bar o'neil", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ǅungla Ǆ", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["one\r\ntwo threefour", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["café café", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΑΣ σας ς", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "héllo wörld"], "ok": {"$tuple": ["héllo wörld", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "👍🏽 thumbs"], "ok": {"$tuple": ["👍🏽 thumbs", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "日本語"], "ok": {"$tuple": ["日本語", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", ""], "ok": {"$tuple": ["", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "é"], "ok": {"$tuple": ["é", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "İstanbul"], "ok": {"$tuple": ["i̇stanbul", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "straße"], "ok": {"$tuple": ["straße", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "ılık ırmak"], "ok": {"$tuple": ["ılık ırmak", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "👨‍👩‍👧 family"], "ok": {"$tuple": ["👨‍👩‍👧 family", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "a b"], "ok": {"$tuple": ["a b", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "a😀b"], "ok": {"$tuple": ["a😀b", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "﻿bom"], "ok": {"$tuple": ["﻿bom", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "a²b x½ y①"], "ok": {"$tuple": ["a²b x½ y①", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "aⅠb Ⅻ"], "ok": {"$tuple": ["aⅰb ⅻ", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "a𐐀b 𝐀bc"], "ok": {"$tuple": ["a𐐨b 𝐀bc", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "कि ٣٤"], "ok": {"$tuple": ["कि ٣٤", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "Iı İi"], "ok": {"$tuple": ["iı i̇i", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "K K k"], "ok": {"$tuple": ["k k k", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "ſ s S"], "ok": {"$tuple": ["ſ s s", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "x‍y 👨‍👩‍👧"], "ok": {"$tuple": ["x‍y 👨‍👩‍👧", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "a b c　d"], "ok": {"$tuple": ["a b c　d", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "١٢٣ ٤٥"], "ok": {"$tuple": ["١٢٣ ٤٥", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "𝟘𝟙 ²³"], "ok": {"$tuple": ["𝟘𝟙 ²³", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "snake_case foo-bar o'neil"], "ok": {"$tuple": ["snake_case foo-bar o'neil", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "ǅungla Ǆ"], "ok": {"$tuple": ["ǆungla ǆ", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "one\r\ntwo threefour"], "ok": {"$tuple": ["one\r\ntwo threefour", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "café café"], "ok": {"$tuple": ["café café", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "ΣΑΣ σας ς"], "ok": {"$tuple": ["σας σας ς", "", false]}}
+{"fn": "_strip_html_to_visible_text", "args": ["<html><head><style>.a{color:red}</style><script>var x=1;</script></head><body><!-- c --><div><p>Your ChatGPT code is <b>482910</b></p><br/><p>Valid for 10 min &amp; &nbsp; thanks</p></div></body></html>"], "ok": "Your ChatGPT code is 482910\nValid for 10 min & thanks"}
+{"fn": "_strip_html_to_visible_text", "args": ["<article><noscript>hidden</noscript><svg><path d=\"M0\"/></svg><h1>OpenAI</h1><tr><td>Code</td><td>991122</td></tr></article>"], "ok": "OpenAI\nCode\n991122"}
+{"fn": "_strip_html_to_visible_text", "args": ["Plain text without tags &lt;123456&gt;"], "ok": "Plain text without tags <123456>"}
 {"fn": "_strip_html_to_visible_text", "args": [""], "ok": ""}
-{"fn": "_strip_html_to_visible_text", "args": ["   "], "ok": ""}
-{"fn": "_strip_html_to_visible_text", "args": ["Plain text\r\nSecond line\n\nThird"], "ok": "Plain text\nSecond line\nThird"}
-{"fn": "_strip_html_to_visible_text", "args": ["<html><!-- skip me --><head><title>T</title><style>a{b:c}</style></head><body><p>Hello &amp; <b>world</b></p><br/><hr/><div>Code: 654321</div></body></html>"], "ok": "Hello & world\nCode: 654321"}
-{"fn": "_strip_html_to_visible_text", "args": ["<div>Line 1<br>Line 2<br />Line 3<hr>Line 4</div><section><article><li>Item A</li><li>Item B</li></article></section>"], "ok": "Line 1\nLine 2\nLine 3\nLine 4\nItem A\nItem B"}
-{"fn": "_strip_html_to_visible_text", "args": ["<table><tr><th>Col 1</th><td>Val 1 &nbsp; &rsquo; &#x20AC; &#0; &#128;</td></tr></table>"], "ok": "Col 1\nVal 1 ’ € � €"}
-{"fn": "_strip_html_to_visible_text", "args": ["<div><svg><title>Icon</title></svg><noscript>No JS</noscript><script>alert(1)</script>Visible 987654</div>"], "ok": "Visible 987654"}
-{"fn": "_strip_html_to_visible_text", "args": ["Line A Line B Line C\u000bLine D\fLine E"], "ok": "Line A\nLine B\nLine C\nLine D\nLine E"}
-{"fn": "_strip_html_to_visible_text", "args": ["<!DOCTYPE html><html><head><style>.card{padding:8px;}</style><script>window.__DATA__ = \"<div>123456</div>\";</script><svg viewBox=\"0 0 24 24\"><path d=\"M0 0\"/></svg></head><body><!-- header comment --><h1>Inbox</h1><div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #0</div><div class=\"dt\">2026-11-24 10:00:00</div><div class=\"bd\"><p>Use code <strong>100000</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #1</div><div class=\"dt\">2026-11-24 10:01:00</div><div class=\"bd\"><p>Use code <strong>100001</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #2</div><div class=\"dt\">2026-11-24 10:02:00</div><div class=\"bd\"><p>Use code <strong>100002</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #3</div><div class=\"dt\">2026-11-24 10:03:00</div><div class=\"bd\"><p>Use code <strong>100003</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #4</div><div class=\"dt\">2026-11-24 10:04:00</div><div class=\"bd\"><p>Use code <strong>100004</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #5</div><div class=\"dt\">2026-11-24 10:05:00</div><div class=\"bd\"><p>Use code <strong>100005</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #6</div><div class=\"dt\">2026-11-24 10:06:00</div><div class=\"bd\"><p>Use code <strong>100006</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #7</div><div class=\"dt\">2026-11-24 10:07:00</div><div class=\"bd\"><p>Use code <strong>100007</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #8</div><div class=\"dt\">2026-11-24 10:08:00</div><div class=\"bd\"><p>Use code <strong>100008</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #9</div><div class=\"dt\">2026-11-24 10:09:00</div><div class=\"bd\"><p>Use code <strong>100009</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #10</div><div class=\"dt\">2026-11-24 10:10:00</div><div class=\"bd\"><p>Use code <strong>100010</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #11</div><div class=\"dt\">2026-11-24 10:11:00</div><div class=\"bd\"><p>Use code <strong>100011</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #12</div><div class=\"dt\">2026-11-24 10:12:00</div><div class=\"bd\"><p>Use code <strong>100012</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #13</div><div class=\"dt\">2026-11-24 10:13:00</div><div class=\"bd\"><p>Use code <strong>100013</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #14</div><div class=\"dt\">2026-11-24 10:14:00</div><div class=\"bd\"><p>Use code <strong>100014</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #15</div><div class=\"dt\">2026-11-24 10:15:00</div><div class=\"bd\"><p>Use code <strong>100015</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #16</div><div class=\"dt\">2026-11-24 10:16:00</div><div class=\"bd\"><p>Use code <strong>100016</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #17</div><div class=\"dt\">2026-11-24 10:17:00</div><div class=\"bd\"><p>Use code <strong>100017</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #18</div><div class=\"dt\">2026-11-24 10:18:00</div><div class=\"bd\"><p>Use code <strong>100018</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #19</div><div class=\"dt\">2026-11-24 10:19:00</div><div class=\"bd\"><p>Use code <strong>100019</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #20</div><div class=\"dt\">2026-11-24 10:20:00</div><div class=\"bd\"><p>Use code <strong>100020</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #21</div><div class=\"dt\">2026-11-24 10:21:00</div><div class=\"bd\"><p>Use code <strong>100021</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #22</div><div class=\"dt\">2026-11-24 10:22:00</div><div class=\"bd\"><p>Use code <strong>100022</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #23</div><div class=\"dt\">2026-11-24 10:23:00</div><div class=\"bd\"><p>Use code <strong>100023</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #24</div><div class=\"dt\">2026-11-24 10:24:00</div><div class=\"bd\"><p>Use code <strong>100024</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<noscript>Enable JS</noscript></body></html>"], "ok": "Inbox\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #0\n2026-11-24 10:00:00\nUse code 100000 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #1\n2026-11-24 10:01:00\nUse code 100001 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #2\n2026-11-24 10:02:00\nUse code 100002 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #3\n2026-11-24 10:03:00\nUse code 100003 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #4\n2026-11-24 10:04:00\nUse code 100004 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #5\n2026-11-24 10:05:00\nUse code 100005 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #6\n2026-11-24 10:06:00\nUse code 100006 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #7\n2026-11-24 10:07:00\nUse code 100007 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #8\n2026-11-24 10:08:00\nUse code 100008 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #9\n2026-11-24 10:09:00\nUse code 100009 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #10\n2026-11-24 10:10:00\nUse code 100010 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #11\n2026-11-24 10:11:00\nUse code 100011 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #12\n2026-11-24 10:12:00\nUse code 100012 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #13\n2026-11-24 10:13:00\nUse code 100013 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #14\n2026-11-24 10:14:00\nUse code 100014 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #15\n2026-11-24 10:15:00\nUse code 100015 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #16\n2026-11-24 10:16:00\nUse code 100016 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #17\n2026-11-24 10:17:00\nUse code 100017 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #18\n2026-11-24 10:18:00\nUse code 100018 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #19\n2026-11-24 10:19:00\nUse code 100019 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #20\n2026-11-24 10:20:00\nUse code 100020 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #21\n2026-11-24 10:21:00\nUse code 100021 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #22\n2026-11-24 10:22:00\nUse code 100022 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #23\n2026-11-24 10:23:00\nUse code 100023 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #24\n2026-11-24 10:24:00\nUse code 100024 to sign in.\nThanks — OpenAI © 2026"}
-{"fn": "_strip_html_to_visible_text", "args": ["<!DOCTYPE html><html><head><style>.card{padding:8px;}</style><script>window.__DATA__ = \"<div>123456</div>\";</script><svg viewBox=\"0 0 24 24\"><path d=\"M0 0\"/></svg></head><body><!-- header comment --><h1>Inbox</h1><div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #0</div><div class=\"dt\">2026-11-24 10:00:00</div><div class=\"bd\"><p>Use code <strong>100000</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #1</div><div class=\"dt\">2026-11-24 10:01:00</div><div class=\"bd\"><p>Use code <strong>100001</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #2</div><div class=\"dt\">2026-11-24 10:02:00</div><div class=\"bd\"><p>Use code <strong>100002</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #3</div><div class=\"dt\">2026-11-24 10:03:00</div><div class=\"bd\"><p>Use code <strong>100003</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #4</div><div class=\"dt\">2026-11-24 10:04:00</div><div class=\"bd\"><p>Use code <strong>100004</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #5</div><div class=\"dt\">2026-11-24 10:05:00</div><div class=\"bd\"><p>Use code <strong>100005</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #6</div><div class=\"dt\">2026-11-24 10:06:00</div><div class=\"bd\"><p>Use code <strong>100006</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #7</div><div class=\"dt\">2026-11-24 10:07:00</div><div class=\"bd\"><p>Use code <strong>100007</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #8</div><div class=\"dt\">2026-11-24 10:08:00</div><div class=\"bd\"><p>Use code <strong>100008</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #9</div><div class=\"dt\">2026-11-24 10:09:00</div><div class=\"bd\"><p>Use code <strong>100009</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #10</div><div class=\"dt\">2026-11-24 10:10:00</div><div class=\"bd\"><p>Use code <strong>100010</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #11</div><div class=\"dt\">2026-11-24 10:11:00</div><div class=\"bd\"><p>Use code <strong>100011</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #12</div><div class=\"dt\">2026-11-24 10:12:00</div><div class=\"bd\"><p>Use code <strong>100012</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #13</div><div class=\"dt\">2026-11-24 10:13:00</div><div class=\"bd\"><p>Use code <strong>100013</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #14</div><div class=\"dt\">2026-11-24 10:14:00</div><div class=\"bd\"><p>Use code <strong>100014</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #15</div><div class=\"dt\">2026-11-24 10:15:00</div><div class=\"bd\"><p>Use code <strong>100015</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #16</div><div class=\"dt\">2026-11-24 10:16:00</div><div class=\"bd\"><p>Use code <strong>100016</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #17</div><div class=\"dt\">2026-11-24 10:17:00</div><div class=\"bd\"><p>Use code <strong>100017</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #18</div><div class=\"dt\">2026-11-24 10:18:00</div><div class=\"bd\"><p>Use code <strong>100018</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #19</div><div class=\"dt\">2026-11-24 10:19:00</div><div class=\"bd\"><p>Use code <strong>100019</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #20</div><div class=\"dt\">2026-11-24 10:20:00</div><div class=\"bd\"><p>Use code <strong>100020</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #21</div><div class=\"dt\">2026-11-24 10:21:00</div><div class=\"bd\"><p>Use code <strong>100021</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #22</div><div class=\"dt\">2026-11-24 10:22:00</div><div class=\"bd\"><p>Use code <strong>100022</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #23</div><div class=\"dt\">2026-11-24 10:23:00</div><div class=\"bd\"><p>Use code <strong>100023</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #24</div><div class=\"dt\">2026-11-24 10:24:00</div><div class=\"bd\"><p>Use code <strong>100024</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<noscript>Enable JS</noscript></body></html><!DOCTYPE html><html><head><style>.card{padding:8px;}</style><script>window.__DATA__ = \"<div>123456</div>\";</script><svg viewBox=\"0 0 24 24\"><path d=\"M0 0\"/></svg></head><body><!-- header comment --><h1>Inbox</h1><div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #0</div><div class=\"dt\">2026-11-24 10:00:00</div><div class=\"bd\"><p>Use code <strong>100000</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #1</div><div class=\"dt\">2026-11-24 10:01:00</div><div class=\"bd\"><p>Use code <strong>100001</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #2</div><div class=\"dt\">2026-11-24 10:02:00</div><div class=\"bd\"><p>Use code <strong>100002</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #3</div><div class=\"dt\">2026-11-24 10:03:00</div><div class=\"bd\"><p>Use code <strong>100003</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #4</div><div class=\"dt\">2026-11-24 10:04:00</div><div class=\"bd\"><p>Use code <strong>100004</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #5</div><div class=\"dt\">2026-11-24 10:05:00</div><div class=\"bd\"><p>Use code <strong>100005</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #6</div><div class=\"dt\">2026-11-24 10:06:00</div><div class=\"bd\"><p>Use code <strong>100006</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #7</div><div class=\"dt\">2026-11-24 10:07:00</div><div class=\"bd\"><p>Use code <strong>100007</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #8</div><div class=\"dt\">2026-11-24 10:08:00</div><div class=\"bd\"><p>Use code <strong>100008</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #9</div><div class=\"dt\">2026-11-24 10:09:00</div><div class=\"bd\"><p>Use code <strong>100009</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #10</div><div class=\"dt\">2026-11-24 10:10:00</div><div class=\"bd\"><p>Use code <strong>100010</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #11</div><div class=\"dt\">2026-11-24 10:11:00</div><div class=\"bd\"><p>Use code <strong>100011</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #12</div><div class=\"dt\">2026-11-24 10:12:00</div><div class=\"bd\"><p>Use code <strong>100012</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #13</div><div class=\"dt\">2026-11-24 10:13:00</div><div class=\"bd\"><p>Use code <strong>100013</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #14</div><div class=\"dt\">2026-11-24 10:14:00</div><div class=\"bd\"><p>Use code <strong>100014</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #15</div><div class=\"dt\">2026-11-24 10:15:00</div><div class=\"bd\"><p>Use code <strong>100015</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #16</div><div class=\"dt\">2026-11-24 10:16:00</div><div class=\"bd\"><p>Use code <strong>100016</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #17</div><div class=\"dt\">2026-11-24 10:17:00</div><div class=\"bd\"><p>Use code <strong>100017</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #18</div><div class=\"dt\">2026-11-24 10:18:00</div><div class=\"bd\"><p>Use code <strong>100018</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #19</div><div class=\"dt\">2026-11-24 10:19:00</div><div class=\"bd\"><p>Use code <strong>100019</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #20</div><div class=\"dt\">2026-11-24 10:20:00</div><div class=\"bd\"><p>Use code <strong>100020</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #21</div><div class=\"dt\">2026-11-24 10:21:00</div><div class=\"bd\"><p>Use code <strong>100021</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #22</div><div class=\"dt\">2026-11-24 10:22:00</div><div class=\"bd\"><p>Use code <strong>100022</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #23</div><div class=\"dt\">2026-11-24 10:23:00</div><div class=\"bd\"><p>Use code <strong>100023</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div><div class=\"su\">Your temporary ChatGPT verification code #24</div><div class=\"dt\">2026-11-24 10:24:00</div><div class=\"bd\"><p>Use code <strong>100024</strong> to sign in.</p><br/><span>Thanks &mdash; OpenAI &copy; 2026</span></div></div>\n<noscript>Enable JS</noscript></body></html>"], "ok": "Inbox\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #0\n2026-11-24 10:00:00\nUse code 100000 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #1\n2026-11-24 10:01:00\nUse code 100001 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #2\n2026-11-24 10:02:00\nUse code 100002 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #3\n2026-11-24 10:03:00\nUse code 100003 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #4\n2026-11-24 10:04:00\nUse code 100004 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #5\n2026-11-24 10:05:00\nUse code 100005 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #6\n2026-11-24 10:06:00\nUse code 100006 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #7\n2026-11-24 10:07:00\nUse code 100007 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #8\n2026-11-24 10:08:00\nUse code 100008 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #9\n2026-11-24 10:09:00\nUse code 100009 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #10\n2026-11-24 10:10:00\nUse code 100010 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #11\n2026-11-24 10:11:00\nUse code 100011 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #12\n2026-11-24 10:12:00\nUse code 100012 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #13\n2026-11-24 10:13:00\nUse code 100013 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #14\n2026-11-24 10:14:00\nUse code 100014 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #15\n2026-11-24 10:15:00\nUse code 100015 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #16\n2026-11-24 10:16:00\nUse code 100016 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #17\n2026-11-24 10:17:00\nUse code 100017 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #18\n2026-11-24 10:18:00\nUse code 100018 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #19\n2026-11-24 10:19:00\nUse code 100019 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #20\n2026-11-24 10:20:00\nUse code 100020 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #21\n2026-11-24 10:21:00\nUse code 100021 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #22\n2026-11-24 10:22:00\nUse code 100022 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #23\n2026-11-24 10:23:00\nUse code 100023 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #24\n2026-11-24 10:24:00\nUse code 100024 to sign in.\nThanks — OpenAI © 2026\nInbox\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #0\n2026-11-24 10:00:00\nUse code 100000 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #1\n2026-11-24 10:01:00\nUse code 100001 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #2\n2026-11-24 10:02:00\nUse code 100002 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #3\n2026-11-24 10:03:00\nUse code 100003 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #4\n2026-11-24 10:04:00\nUse code 100004 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #5\n2026-11-24 10:05:00\nUse code 100005 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #6\n2026-11-24 10:06:00\nUse code 100006 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #7\n2026-11-24 10:07:00\nUse code 100007 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #8\n2026-11-24 10:08:00\nUse code 100008 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #9\n2026-11-24 10:09:00\nUse code 100009 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #10\n2026-11-24 10:10:00\nUse code 100010 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #11\n2026-11-24 10:11:00\nUse code 100011 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #12\n2026-11-24 10:12:00\nUse code 100012 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #13\n2026-11-24 10:13:00\nUse code 100013 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #14\n2026-11-24 10:14:00\nUse code 100014 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #15\n2026-11-24 10:15:00\nUse code 100015 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #16\n2026-11-24 10:16:00\nUse code 100016 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #17\n2026-11-24 10:17:00\nUse code 100017 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #18\n2026-11-24 10:18:00\nUse code 100018 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #19\n2026-11-24 10:19:00\nUse code 100019 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #20\n2026-11-24 10:20:00\nUse code 100020 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #21\n2026-11-24 10:21:00\nUse code 100021 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #22\n2026-11-24 10:22:00\nUse code 100022 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #23\n2026-11-24 10:23:00\nUse code 100023 to sign in.\nThanks — OpenAI © 2026\nOpenAI <noreply@openai.com>\nYour temporary ChatGPT verification code #24\n2026-11-24 10:24:00\nUse code 100024 to sign in.\nThanks — OpenAI © 2026"}
-{"fn": "_strip_html_to_visible_text", "args": ["\n        <!doctype html>\n        <html>\n          <head>\n            <title>ChatGPT verification code 000001</title>\n            <style>.banner { z-index: 999999; color: #123456; }</style>\n            <script>const buildCode = \"222222\"; const label = \"OpenAI verification code\";</script>\n          </head>\n          <body>\n            <!-- OpenAI login code 333333 -->\n            <section class=\"msg-item\">\n              <h2>Your temporary ChatGPT verification code</h2>\n              <p>From: noreply@openai.com</p>\n              <time>2026-08-04 14:12:35</time>\n              <p>Enter this code to continue: 739204</p>\n            </section>\n          </body>\n        </html>\n        "], "ok": "Your temporary ChatGPT verification code\nFrom: noreply@openai.com\n2026-08-04 14:12:35\nEnter this code to continue: 739204"}
-{"fn": "_strip_html_to_visible_text", "args": ["<html><body><div>Inbox empty. Build 456789. Refreshing...</div></body></html>"], "ok": "Inbox empty. Build 456789. Refreshing..."}
+{"fn": "_strip_html_to_visible_text", "args": [null], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": [""], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": [null], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": ["no date here"], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": ["2026年09月16日 23:48:03 (北京时间)"], "ok": "2026-09-16T23:48:03+08:00"}
+{"fn": "_latest_mail_received_at", "args": ["接收时间：2026年11月25日 08:05:09"], "ok": "2026-11-25T08:05:09+08:00"}
+{"fn": "_latest_mail_received_at", "args": ["2024年02月29日 00:00:00"], "ok": "2024-02-29T00:00:00+08:00"}
+{"fn": "_latest_mail_received_at", "args": ["2025年02月29日 12:00:00"], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": ["2026年13月01日 12:00:00"], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": ["2026 年 1 月 5 日 9 : 02 : 07"], "ok": "2026-01-05T09:02:07+08:00"}
+{"fn": "_decode_js_string", "args": [""], "ok": ""}
+{"fn": "_decode_js_string", "args": ["plain text"], "ok": "plain text"}
+{"fn": "_decode_js_string", "args": ["<p>Hello \\\"World\\\"</p>\\r\\n\\u4f60\\u597d"], "ok": "<p>Hello \"World\"</p>\r\n你好"}
+{"fn": "_decode_js_string", "args": ["broken \\x escape \\\"quoted\\\" \\r\\n https:\\/\\/openai.com\\/a"], "ok": "broken \\x escape \"quoted\" \n https://openai.com/a"}
+{"fn": "_decode_js_string", "args": ["<div class=\\\"card\\\">Your code is <b>494652<\\/b><\\/div>\\r\\n"], "ok": "<div class=\"card\">Your code is <b>494652</b></div>\r\n"}
+{"fn": "_with_message_limit", "args": ["https://icloud-api.top/inbox/abc", 25], "ok": "https://icloud-api.top/inbox/abc?n=25"}
+{"fn": "_with_message_limit", "args": ["https://icloud-api.top/inbox/abc?token=xyz&n=5", 25], "ok": "https://icloud-api.top/inbox/abc?token=xyz&n=25"}
+{"fn": "_with_message_limit", "args": ["https://icloud-api.top/inbox/abc?a=1&b=hello+world#sec", 100], "ok": "https://icloud-api.top/inbox/abc?a=1&b=hello+world&n=50#sec"}
+{"fn": "_with_message_limit", "args": ["https://icloud-api.top/inbox/abc?k=v", 0], "ok": "https://icloud-api.top/inbox/abc?k=v&n=25"}
+{"fn": "_with_message_limit", "args": ["  padded  ", 0], "ok": "padded  ?n=25"}
+{"fn": "_same_origin", "args": ["https://icloud-api.top/inbox", "https://icloud-api.top/api/pickup/messages"], "ok": true}
+{"fn": "_same_origin", "args": ["https://icloud-api.top:443/inbox", "https://icloud-api.top/api/pickup/messages"], "ok": true}
+{"fn": "_same_origin", "args": ["http://icloud-api.top:80/inbox", "http://icloud-api.top/api/pickup/messages"], "ok": true}
+{"fn": "_same_origin", "args": ["https://icloud-api.top/inbox", "http://icloud-api.top/api/pickup/messages"], "ok": false}
+{"fn": "_same_origin", "args": ["https://icloud-api.top/inbox", "https://evil.example/api/pickup/messages"], "ok": false}
+{"fn": "_same_origin", "args": ["https://icloud-api.top:8443/inbox", "https://icloud-api.top/api/pickup/messages"], "ok": false}
+{"fn": "_same_origin", "args": ["", ""], "ok": true}
+{"fn": "_same_origin", "args": ["http://[::1]:8080/a", "http://[::1]:8080/b"], "ok": true}
+{"fn": "_extract_url_credentials", "args": ["https://mail.example/inbox#email=Alice@iCloud.com&key=secret123", "fallback@icloud.com"], "ok": {"$tuple": ["alice@icloud.com", "secret123", true]}}
+{"fn": "_extract_url_credentials", "args": ["https://mail.example/inbox#/view?token=tok456&email=bob@icloud.com", "fallback@icloud.com"], "ok": {"$tuple": ["bob@icloud.com", "tok456", true]}}
+{"fn": "_extract_url_credentials", "args": ["https://mail.example/inbox?auth_code=ac789&email=carol@icloud.com", "fallback@icloud.com"], "ok": {"$tuple": ["carol@icloud.com", "ac789", false]}}
+{"fn": "_extract_url_credentials", "args": ["https://mail.example/inbox?secret=s1#password=p2", "FALLBACK@ICLOUD.COM"], "ok": {"$tuple": ["fallback@icloud.com", "p2", true]}}
+{"fn": "_extract_url_credentials", "args": ["https://mail.example/inbox#/route-only", "fallback@icloud.com"], "ok": {"$tuple": ["fallback@icloud.com", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["https://mail.example/inbox", "fallback@icloud.com"], "ok": {"$tuple": ["fallback@icloud.com", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["", ""], "ok": {"$tuple": ["", "", false]}}

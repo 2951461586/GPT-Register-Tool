@@ -1,6 +1,4 @@
-# 仓库根的本地配置（用户态，不入库）。**必须带前导 `/`**：不加锚点时
-# `payment.json` 会把 `scripts/move_specs/payment.json`（P2-7 的迁移 spec）一起吞掉，
-# `proxy.json` 同理吞掉 P2-4 的 spec。
+# 仓库根的本地配置（用户态，不入库）。带前导 `/` 锚定到仓库根。
 /config.json
 /proxy.json
 /runtime.json
@@ -41,7 +39,6 @@ _*.py
 !__init__.py
 # 已跟踪的合法模块，不能被上面的规则吃掉（否则对它的修改会静默停止入库）
 !/sms_tool/__main__.py
-!/sms_tool/registration_drivers/_platform_patches.py
 # The config split (2026-10-21) put module-level state in ``config/_state.py``;
 # the rule above silently dropped it from that commit, so the committed tree
 # could not import ``sms_tool.config`` at all. Caught 2026-10-22 by diffing the
@@ -78,15 +75,8 @@ runtime/**/*.log
 # （100 条代理账密 + smsbower api_key）以未跟踪状态躺在公开仓库根目录，
 # `git check-ignore` 判定为"未忽略"——于是 release payload gate 那条
 # "被 .gitignore 拒绝的文件绝不能出货"的规则对它完全失效（闸门是问 git 的，
-# git 说没忽略，闸门就放行）。这里按**家族**忽略，而不是枚举后缀：
+# git 说没忽略，闸门就放行）。这里按**家族**按仓库根锚定忽略，而不是枚举后缀：
 # 枚举是补不完的，`proxy.json.old` / `proxy.json.save` 还会漏。
-#
-# 2026-10-21 第二次踩坑：这几条原来没有前导 `/`，于是 `proxy.json*` 连
-# `scripts/move_specs/proxy.json`（`module_move.py` 的迁移输入 spec，是**仓库产物**
-# 而不是用户配置）一起吞了 —— P2-4 的 spec 因此从未入库，`git ls-files
-# scripts/move_specs/` 只剩 `mailbox.json`，而 `module_move.py` 自己的 docstring
-# 示例就是 `--spec scripts/move_specs/proxy.json`。要挡的是仓库根的用户配置，
-# 所以事故的载体是**位置**而不是后缀：家族规则按根锚定。
 /proxy.json*
 /config.json*
 /runtime.json*
@@ -97,11 +87,6 @@ runtime/**/*.log
 # 既不入库、也不进发布载荷，且不报错。
 !/proxy.json.example
 !/config.json.example
-# `scripts/move_specs/*.json` 是 `module_move.py` 的迁移输入 spec（仓库产物，按目标包
-# 命名：proxy / mailbox / paypal / payment …），不是用户配置。上面两处家族规则
-# 挡的是仓库根的用户态文件，它们唯一合法的例外就是这组 spec；少了这行，
-# `payment.json` 与 `proxy.json` 会把 P2-7 / P2-4 的 spec 静默吞掉。
-!scripts/move_specs/*.json
 
 SmsWorkbench/bin/
 SmsWorkbench/obj/

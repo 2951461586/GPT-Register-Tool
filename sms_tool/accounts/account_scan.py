@@ -7,12 +7,37 @@ OAuth add-phone challenge but never sends an SMS or consumes a phone number.
 from __future__ import annotations
 
 import base64
+import importlib
 import json
+import os
+import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Iterable
+
+
+def _load_native_account_scan_jwt() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_ACCOUNT_SCAN_JWT") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "account-scan-jwt-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("account_scan_jwt_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_ACCOUNT_SCAN_JWT = _load_native_account_scan_jwt()
+_NATIVE_JWT_PLAN_TYPE = getattr(_NATIVE_ACCOUNT_SCAN_JWT, "_jwt_plan_type", None)
 
 from ..codex.export import _openai_refresh_token, _refresh_with_openai_oauth
 from ..codex.oauth import collect_codex_oauth_tokens
@@ -666,6 +691,8 @@ def _nested_value(data, *keys):
 
 
 def _jwt_plan_type(token):
+    if _NATIVE_JWT_PLAN_TYPE is not None and isinstance(token, str):
+        return _NATIVE_JWT_PLAN_TYPE(token)
     try:
         parts = token.split(".")
         if len(parts) < 2 or not parts[1]:

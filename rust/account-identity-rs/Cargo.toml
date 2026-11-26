@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.97"
 publish = false
-description = "Rust port of `proxy_egress_key` and `_restore_session` in `sms_tool/accounts/account_identity.py`, managed by rust-anything"
+description = "Rust port of `proxy_egress_key` and `chatgpt_account_id_from_token` in `sms_tool/accounts/account_identity.py`, managed by rust-anything"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

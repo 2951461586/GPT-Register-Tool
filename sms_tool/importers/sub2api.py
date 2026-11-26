@@ -1,14 +1,40 @@
 from __future__ import annotations
 
+import importlib
 import json
+import os
 import random
 import re
+import sys
 import time
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
+
+
+def _load_native_sub2api_parse() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_SUB2API_PARSE") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "sub2api-parse-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("sub2api_parse_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_SUB2API_PARSE = _load_native_sub2api_parse()
+_NATIVE_NORMALIZE_SUB2API_ORIGIN = getattr(_NATIVE_SUB2API_PARSE, "_normalize_sub2api_origin", None)
+_NATIVE_PARSE_INT_LIST = getattr(_NATIVE_SUB2API_PARSE, "_parse_int_list", None)
 
 from curl_cffi import requests as curl_requests
 
@@ -680,6 +706,8 @@ def _resolve_sub2api_config(
 
 
 def _normalize_sub2api_origin(api_url: str) -> str:
+    if _NATIVE_NORMALIZE_SUB2API_ORIGIN is not None and isinstance(api_url, str):
+        return _NATIVE_NORMALIZE_SUB2API_ORIGIN(api_url)
     raw = str(api_url or "").strip().rstrip("/")
     if not raw:
         return ""
@@ -963,6 +991,12 @@ def _parse_name_list(value: Any) -> list[str]:
 
 
 def _parse_int_list(value: Any) -> list[int]:
+    if _NATIVE_PARSE_INT_LIST is not None and (
+        value is None
+        or isinstance(value, str)
+        or (isinstance(value, list) and all(isinstance(x, (str, int, float, bool, type(None))) for x in value))
+    ):
+        return _NATIVE_PARSE_INT_LIST(value)
     if value is None:
         return []
     if isinstance(value, (list, tuple)):

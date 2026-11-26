@@ -1,0 +1,241 @@
+{"fn": "permute_extension_order", "args": ["﻿bom", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ab", "😀"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["b", "﻿bom"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ab", "abc"], "ok": ""}
+{"fn": "permute_extension_order", "args": [":abc", "atrailing."], "ok": ""}
+{"fn": "permute_extension_order", "args": ["hello", "key_name-1"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["line1\nline2", "e2"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a.b.c", "日本語のテキスト"], "ok": ""}
+{"fn": "permute_extension_order", "args": [":", ":"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a😀b😀csrc/a/b.ts", "A😀B😀"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a:b:cstraße", "abc"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["./x/**/*.json", "n"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ΣΊΣΥΦΟΣ", ""], "ok": ""}
+{"fn": "permute_extension_order", "args": ["İstanbula..b", "src/a/b.ts"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["li", "line1\nline2"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["{name} has {count} items  padded  ", "a"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["hello world", "ünïcödé"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a😀b😀c", "trailing."], "ok": ""}
+{"fn": "permute_extension_order", "args": ["  padded  ", "ed  "], "ok": ""}
+{"fn": "permute_extension_order", "args": ["abc", "trailing."], "ok": ""}
+{"fn": "permute_extension_order", "args": ["😀", ":"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["  padded  ", " "], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a😀", "a"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["c", "abc"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["Hello Worldé", "İstanbul"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["key_name-1", "emoji 👍🏽 mix"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["straße", "key_name-1ab"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ΟΣ", "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "permute_extension_order", "args": [" ", "  padded  "], "ok": ""}
+{"fn": "permute_extension_order", "args": ["llo ", "Hello World"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["A.B", "éa.b.c"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["日本語のテキスト.leading", "{name} has {count} items"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["straße", "a:b:c"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["tab\tseparated", "./x/**/*.json日本語のテキスト"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["abc", "a..b"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ΣΊΣΥΦΟΣ", "a.b.c"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["{name} has {count} items", "tab\tseparated"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a", "ab"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["İstanbulhello", "étab\tseparated"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["😀", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a", "日本語のテキスト"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["trailing.", "hello"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["HELLO", "tab\tseparated"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["emoji 👍🏽 mix", "src/a/b.ts"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["\tSEPA", "tab\tseparated"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["Hello World", "orl"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["日本語のテキスト", "hello worldstraße"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["abc", "﻿bom"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["hello", "emoji 👍🏽 mix"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "日本語のテキスト"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["abc", "ab"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["C", "a:b:c"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a:b:c", "İstanbul"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["abc", "tab\tseparated"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["emoji 👍🏽 mix", "trailing.é"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["/A/", "src/a/b.ts"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["HELLO", "  padded  "], "ok": ""}
+{"fn": "permute_extension_order", "args": ["e2😀", "line1\nline2😀"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["tab\tseparated", "d"], "ok": ""}
+{"fn": "permute_extension_order", "args": [" pa", "  padded  "], "ok": ""}
+{"fn": "permute_extension_order", "args": ["lo", "hello"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["key_name-1", "key_name-1"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["src/a/b.ts", "rc/a/b"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ab", "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a:b:c./x/**/*.json", ""], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ns:key.path", ""], "ok": ""}
+{"fn": "permute_extension_order", "args": ["HELLO", "a:b:c"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ns:key.path", "ath"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a..b", "a"], "ok": ""}
+{"fn": "permute_extension_order", "args": [":", "ns:key.path"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["emoji 👍🏽 mix", "﻿bomHELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["tab\tseparated", "emoji 👍🏽 mix"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ab", "﻿bom"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a..ba:b:c", "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a..bstraße", "日本語のテキストabc"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["emoji 👍🏽 mix:", "é"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["o World", "Hello World"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["abhello world", ".leading"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["HELLO", ""], "ok": ""}
+{"fn": "permute_extension_order", "args": ["😀", "😀"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["emoji 👍🏽 mix", "﻿bom"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["{name} has {count} items", "a..b"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["line1\nline2", "straße"], "ok": ""}
+{"fn": "permute_extension_order", "args": [":", "日本語のテキスト"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["hello world", "İstanbul"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["İstanbul", "helloa.b.c"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["日本語のテキスト", "Hello Worlda😀b😀c"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["Hello World", "abc"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["key_name-1", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ΣΊΣΥΦΟΣé", ":"], "ok": ""}
+{"fn": "permute_extension_order", "args": [".leading", "src/a/b.ts"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["日本語のテキスト", "line1\nline2"], "ok": ""}
+{"fn": "permute_extension_order", "args": [".leading", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["lin", "{name} has {count} itemstrailing."], "ok": ""}
+{"fn": "permute_extension_order", "args": ["HELLO", "hello world"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a😀b😀c", "src/a/b.tstab\tseparated"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["日本語のテキスト", "trailing."], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a:b:c", ":b:"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["tab\tseparated", ":line1\nline2"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["{name} has {count} items", "emoji 👍🏽 mix"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ns:key.pathhello world", "hello world日本語のテキスト"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["HELLO", "LO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ab", "emoji 👍🏽 mix"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["{name} has {count} itemsé", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["日本語のテキスト", "😀"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["{name} has {count} items", "S"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["src/a/b.ts", "src/a/b.ts"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["./x/**/*.json", "./X/**/*.JSON"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["hello world", "ns:key.path"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["  padded  ", "﻿bom"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["Ο", "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["のテ", "日本語のテキスト"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["  padded  ", "  "], "ok": ""}
+{"fn": "permute_extension_order", "args": ["", "hello world"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["./x/**/*.json", "*"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a", "key_name-1"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["hello world", ":"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ns:key.pathİstanbul", "İst"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ns:key.path", "﻿bom"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["} ITEM", "{name} has {count} items"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a😀b😀cé", ":"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["straße", "hello worldhello world"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "é"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ab", "src/a/b.ts"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["abc", "straße"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a", "a日本語のテキスト"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["./x/**/*.json", "日本語のテキストline1\nline2"], "ok": ""}
+{"fn": "permute_extension_order", "args": [":", "a"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["{name} has {count} items", "hello world"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["HELLO", "O"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["hello﻿bom", "é"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "a..b"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["NE", "line1\nline2"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ünïcödé", "a:b:c"], "ok": ""}
+{"fn": "permute_extension_order", "args": [" W", "Hello World"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["straße", "line1\nline2"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["src/a/b.ts", "é"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["スト", "日本語のテキスト"], "ok": ""}
+{"fn": "permute_extension_order", "args": [":", "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "  padded  "], "ok": ""}
+{"fn": "permute_extension_order", "args": ["tab\tseparatedab", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a😀b😀c", "  padded  "], "ok": ""}
+{"fn": "permute_extension_order", "args": ["abcHello World", "😀"], "ok": ""}
+{"fn": "permute_extension_order", "args": [".leadin", ".leading"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a😀b😀c{name} has {count} items", "src/a/b.ts"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a:b:c", "hello world"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["Hello World", "{name} has {count} items"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ab", "hello"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["İstanbul", "straße"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["A:B", "a:b:c"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["line1\nline2", "İstanbul"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["HELLO WORLD", "Hello World"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["tab\tseparated", "hello worldtrailing."], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a..ba:b:c", "..BA:B"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["tab\tseparated", "Hello World"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a😀b😀c", "a  padded  "], "ok": ""}
+{"fn": "permute_extension_order", "args": ["straße", "{name} has {count} items"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a..b", "a..b"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["straße", "a😀b😀c"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["Hello World", "src/a/b.ts"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["eadi", ".leading"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["😀ünïcödé", "{name} has {count} items日本語のテキスト"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a", "a😀b😀c"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["😀./x/**/*.json", "hello world"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a", "a"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["HELLO", "a..b"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["Hello Worldsrc/a/b.ts", "./x/**/*.jsona.b.c"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["helloemoji 👍🏽 mix", "İstanbul{name} has {count} items"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["hello world", "or"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["abc", "emoji 👍🏽 mix"], "ok": ""}
+{"fn": "permute_extension_order", "args": [":", "😀"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a:b:c", "emoji 👍🏽 mixns:key.path"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["日本語のテキスト", "ns:key.path"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a", "﻿bom"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["tab\tseparated", "{name} has {count} items"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a😀b😀c", "a.b.c"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["abc", "a:b:c"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["straßekey_name-1", "ns:key.path"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ΣΊΣΥΦΟΣkey_name-1", "tab\tseparated"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["  padded  ", "ΣΊΣΥΦΟΣemoji 👍🏽 mix"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ünïcödé", "ns:key.path﻿bom"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["日本語のテキスト", "Hello World"], "ok": ""}
+{"fn": "permute_extension_order", "args": [" mixhell", "emoji 👍🏽 mixhello world"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["😀", ".leading"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["W", "Hello World"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["src/a/b.ts", "  padded  "], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ünïcödé", "hello world"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["tab\tseparated", "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["hello", "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["", "{name} has {count} items"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a:b:c:", "a.b.c"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["日本語のテキスト", "éa.b.c"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ΣΊΣΥΦΟΣab", "ΟΣ"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a.b.c", "trailing."], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ΊΣΥ", "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "permute_extension_order", "args": [":", "Hello World"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a.b.c", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ng", "trailing."], "ok": ""}
+{"fn": "permute_extension_order", "args": [" W", "hello world"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["héllo wörld", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["👍🏽 thumbs", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["日本語", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["é", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["İstanbul", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["straße", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ılık ırmak", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["👨‍👩‍👧 family", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a b", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["ΣΊΣΥΦΟΣ", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a😀b", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a²b x½ y①", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["aⅠb Ⅻ", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["a𐐀b 𝐀bc", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["कि ٣٤", "HELLO"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "héllo wörld"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "👍🏽 thumbs"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "日本語"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", ""], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "İstanbul"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "straße"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "ılık ırmak"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "👨‍👩‍👧 family"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "a b"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "a😀b"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "﻿bom"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "a²b x½ y①"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "aⅠb Ⅻ"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "a𐐀b 𝐀bc"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["﻿bom", "कि ٣٤"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["0-23-65281-10-11-35-16-5-34-18-51-43-13-45-28-27-65037", "did-0001|"], "ok": "0-16-43-34-27-18-35-45-23-51-28-11-5-65037-10-65281-13"}
+{"fn": "permute_extension_order", "args": ["0-23-65281-10-11-35-16-5-34-18-51-43-13-45-28-27-65037", "did-0002|salt-v1"], "ok": "0-16-43-51-34-27-28-18-13-65037-65281-5-45-10-11-23-35"}
+{"fn": "permute_extension_order", "args": ["0-23-65281-10-11-35-16-5-34-18-51-43-13-45-28-27-65037-21", "did-0003|salt-v2"], "ok": "0-16-34-27-43-10-45-11-5-28-35-23-18-51-13-65037-65281-21"}
+{"fn": "permute_extension_order", "args": ["23-65281-10-11-35-16-21-21", "seed-dup-pad"], "ok": "65281-10-23-11-16-35-21"}
+{"fn": "permute_extension_order", "args": ["0-10-21", "seed-short-mid"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["0-23", "seed-too-short"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["0-23-65281-10-11-35-16-5-34-18-51-43-13-45-28-27-65037", ""], "ok": ""}
+{"fn": "permute_extension_order", "args": ["", "seed-empty-base"], "ok": ""}
+{"fn": "permute_extension_order", "args": ["23-10-11-35-16-5", "unicode-种子-🚀"], "ok": "5-10-35-23-16-11"}
+{"fn": "permute_extension_order", "args": ["0--23---10--11--21", "double-dash"], "ok": "0-23-11-10-21"}

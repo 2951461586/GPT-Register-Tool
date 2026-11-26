@@ -9,7 +9,7 @@
     {
       "name": "_strip_html_to_visible_text",
       "file": "sms_tool/providers/mailbox_icloud_url.py",
-      "line": 894,
+      "line": 920,
       "params": [
         {
           "name": "raw_html",
@@ -23,44 +23,164 @@
       "is_generator": false,
       "type_params": [],
       "uses_instanceof": false
+    },
+    {
+      "name": "_latest_mail_received_at",
+      "file": "sms_tool/providers/mailbox_icloud_url.py",
+      "line": 363,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_decode_js_string",
+      "file": "sms_tool/providers/mailbox_icloud_url.py",
+      "line": 351,
+      "params": [
+        {
+          "name": "raw",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_with_message_limit",
+      "file": "sms_tool/providers/mailbox_icloud_url.py",
+      "line": 320,
+      "params": [
+        {
+          "name": "url",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "limit",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_same_origin",
+      "file": "sms_tool/providers/mailbox_icloud_url.py",
+      "line": 736,
+      "params": [
+        {
+          "name": "base_url",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "candidate_url",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_extract_url_credentials",
+      "file": "sms_tool/providers/mailbox_icloud_url.py",
+      "line": 756,
+      "params": [
+        {
+          "name": "url",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "fallback_email",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
     }
   ],
   "classes": [],
   "js_only": [
     {
+      "name": "_discover_spa_pickup_urls",
+      "file": "sms_tool/providers/mailbox_icloud_url.py",
+      "line": 770,
+      "reason": "keyword-only parameters not represented by rust-anything positional harness; kept in Python"
+    },
+    {
       "name": "fetch_icloud_url_messages",
       "file": "sms_tool/providers/mailbox_icloud_url.py",
-      "line": 154,
+      "line": 180,
       "reason": "network HTTP orchestration via curl_cffi"
     },
     {
       "name": "snapshot_icloud_url_messages",
       "file": "sms_tool/providers/mailbox_icloud_url.py",
-      "line": 185,
+      "line": 211,
       "reason": "network HTTP orchestration via curl_cffi"
     },
     {
       "name": "_api_payload_text",
       "file": "sms_tool/providers/mailbox_icloud_url.py",
-      "line": 427,
+      "line": 453,
       "reason": "measured 0.91x on small API dicts due to PyO3 FFI crossing; kept in Python"
     },
     {
       "name": "_walk_api_code",
       "file": "sms_tool/providers/mailbox_icloud_url.py",
-      "line": 447,
+      "line": 473,
       "reason": "measured 0.96x on small API dicts due to PyO3 FFI crossing; kept in Python"
     },
     {
       "name": "_parse_card_messages",
       "file": "sms_tool/providers/mailbox_icloud_url.py",
-      "line": 640,
+      "line": 666,
       "reason": "depends on datetime parsing and mail_otp timestamp sorting"
+    },
+    {
+      "name": "_decode_mail_body",
+      "file": "sms_tool/providers/mailbox_icloud_url.py",
+      "line": 1003,
+      "reason": "measured 1.10x tie on mixed plain/data-URI inputs; kept in Python"
     },
     {
       "name": "_parse_generic_html_messages",
       "file": "sms_tool/providers/mailbox_icloud_url.py",
-      "line": 920,
+      "line": 951,
       "reason": "orchestrates OTP extraction and delegates HTML stripping to Rust"
     }
   ]

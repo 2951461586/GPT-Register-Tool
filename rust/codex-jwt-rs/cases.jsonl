@@ -1,0 +1,233 @@
+{"fn": "_jwt_claims", "args": [":HELLO"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["straßea..b"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["hellokey_name-1"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a😀b😀c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["HELLO"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["abc"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a.b.c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a:b:c.leading"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["hello world"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ΣΊΣΥΦΟΣünïcödé"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["Hello World"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ünïcödé"], "ok": {}}
+{"fn": "_jwt_claims", "args": [""], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a:b:c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["{name} has {count} items"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["src/a/b.ts"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["😀"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "_jwt_claims", "args": [".leading"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["straße"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["hello"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["key_name-1  padded  "], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a..b"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["﻿bom"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["İstanbulünïcödé"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["emoji 👍🏽 mix"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["Hello WorldHELLO"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["﻿bomhello world"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["é"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["trailing."], "ok": {}}
+{"fn": "_jwt_claims", "args": ["tab\tseparated"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ns:key.path😀"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["日本語のテキスト"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["  padded  "], "ok": {}}
+{"fn": "_jwt_claims", "args": ["./x/**/*.json"], "ok": {}}
+{"fn": "_jwt_claims", "args": [":"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["line1\nline2"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["atrailing."], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ünïcödéé"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["key_name-1"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ab"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ns:key.path"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["İstanbul"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a..bHello World"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["src/a/b.tsİstanbul"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["tab\tseparatedİstanbul"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a..bé"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["﻿bom  padded  "], "ok": {}}
+{"fn": "_jwt_claims", "args": ["{name} has {count} itemsünïcödé"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a😀b😀c./x/**/*.json"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["key_name-1ΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["src/a/b.tsab"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["{name} has {count} itemsstraße"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a..bünïcödé"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["tab\tseparatedHELLO"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["line1\nline2:"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["hello world./x/**/*.json"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["hello worldhello world"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["éa.b.c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["line1\nline2abc"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["line1\nline2straße"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["{name} has {count} items😀"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["﻿bomé"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["HELLO.leading"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a:b:ckey_name-1"], "ok": {}}
+{"fn": "_jwt_claims", "args": [":key_name-1"], "ok": {}}
+{"fn": "_jwt_claims", "args": [".leadingHELLO"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["﻿boma😀b😀c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["Hello Worlda..b"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["  padded  straße"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a.b.chello"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["HELLOa😀b😀c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["emoji 👍🏽 mixtrailing."], "ok": {}}
+{"fn": "_jwt_claims", "args": ["hellotab\tseparated"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["line1\nline2.leading"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["hello./x/**/*.json"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["line1\nline2é"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a😀b😀cHELLO"], "ok": {}}
+{"fn": "_jwt_claims", "args": [".leadingΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["HELLOtab\tseparated"], "ok": {}}
+{"fn": "_jwt_claims", "args": [":﻿bom"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["./x/**/*.json😀"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["  padded  ns:key.path"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["  padded  ab"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["asrc/a/b.ts"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ΣΊΣΥΦΟΣ日本語のテキスト"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["trailing.HELLO"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a:b:cİstanbul"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["abcline1\nline2"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["hello worlda😀b😀c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a..ba😀b😀c"], "ok": {}}
+{"fn": "_jwt_claims", "args": [":日本語のテキスト"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["abca"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["hello worldabc"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["éa"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ab😀"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["  padded  emoji 👍🏽 mix"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ns:key.patha😀b😀c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ns:key.patha.b.c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["abca..b"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["éé"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ab{name} has {count} items"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["日本語のテキストns:key.path"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["straßetrailing."], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a:b:cabc"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["abİstanbul"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["Hello World日本語のテキスト"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ab./x/**/*.json"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["😀  padded  "], "ok": {}}
+{"fn": "_jwt_claims", "args": ["line1\nline2emoji 👍🏽 mix"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["Hello Worldsrc/a/b.ts"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["abc  padded  "], "ok": {}}
+{"fn": "_jwt_claims", "args": ["{name} has {count} itemsabc"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["﻿bomİstanbul"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["﻿bomHello World"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["hello worldkey_name-1"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a😀b😀cé"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["  padded  a..b"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["İstanbulHello World"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["😀﻿bom"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["abé"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["tab\tseparatedemoji 👍🏽 mix"], "ok": {}}
+{"fn": "_jwt_claims", "args": [".leading﻿bom"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["src/a/b.ts.leading"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["aba.b.c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["hello world:"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["日本語のテキストkey_name-1"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["src/a/b.tsa:b:c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a:b:c./x/**/*.json"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["abΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["😀emoji 👍🏽 mix"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["tab\tseparatedab"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["abctab\tseparated"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a..bns:key.path"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["日本語のテキスト  padded  "], "ok": {}}
+{"fn": "_jwt_claims", "args": [".leadingİstanbul"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["./x/**/*.jsontrailing."], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ünïcödéhello world"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["aab"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["{name} has {count} itemsa..b"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["İstanbula:b:c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["trailing.ns:key.path"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a.b.ca"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["hello worlda:b:c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["Hello Worldabc"], "ok": {}}
+{"fn": "_jwt_claims", "args": [".leadingünïcödé"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a:b:cΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a:b:c日本語のテキスト"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a:b:c  padded  "], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ünïcödésrc/a/b.ts"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["İstanbulé"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["İstanbulhello"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["abcHELLO"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["Hello Worldemoji 👍🏽 mix"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["emoji 👍🏽 mix:"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["line1\nline2a:b:c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a.b.c{name} has {count} items"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["HELLO😀"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a.b.csrc/a/b.ts"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["hello worldstraße"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["src/a/b.tsemoji 👍🏽 mix"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ΣΊΣΥΦΟΣ😀"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ns:key.pathΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["emoji 👍🏽 mix😀"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ns:key.pathsrc/a/b.ts"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a😀b😀ctab\tseparated"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["日本語のテキストHELLO"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["helloİstanbul"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ΣΊΣΥΦΟΣ{name} has {count} items"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ns:key.path./x/**/*.json"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["{name} has {count} itemsab"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ns:key.pathtrailing."], "ok": {}}
+{"fn": "_jwt_claims", "args": ["İstanbul😀"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ünïcödéİstanbul"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["src/a/b.tsHello World"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["﻿bomtrailing."], "ok": {}}
+{"fn": "_jwt_claims", "args": ["😀.leading"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["straßehello world"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ΣΊΣΥΦΟΣHELLO"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["HELLO./x/**/*.json"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["straßeΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["line1\nline2ns:key.path"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ünïcödé.leading"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a.b.c﻿bom"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["HELLOns:key.path"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ns:key.path日本語のテキスト"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a.b.cünïcödé"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["tab\tseparatedsrc/a/b.ts"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["./x/**/*.jsonünïcödé"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["日本語のテキストa😀b😀c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a日本語のテキスト"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["日本語のテキストtab\tseparated"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["{name} has {count} itemsa:b:c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a😀b😀c  padded  "], "ok": {}}
+{"fn": "_jwt_claims", "args": ["﻿bomünïcödé"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["trailing.abc"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["HELLOa..b"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["éHELLO"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ab日本語のテキスト"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["héllo wörld"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["👍🏽 thumbs"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["日本語"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ılık ırmak"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["👨‍👩‍👧 family"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a b"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a😀b"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a²b x½ y①"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["aⅠb Ⅻ"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a𐐀b 𝐀bc"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["कि ٣٤"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["Iı İi"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["K K k"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ſ s S"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["x‍y 👨‍👩‍👧"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a b c　d"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["١٢٣ ٤٥"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["𝟘𝟙 ²³"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["snake_case foo-bar o'neil"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ǅungla Ǆ"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["one\r\ntwo threefour"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["café café"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["ΣΑΣ σας ς"], "ok": {}}
+{"fn": "_jwt_claims", "args": [""], "ok": {}}
+{"fn": "_jwt_claims", "args": ["not-a-jwt"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a..c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a.!!!.c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["a.中文.c"], "ok": {}}
+{"fn": "_jwt_claims", "args": ["h.eyJzdWIiOiJhdXRoMHwxMjMiLCJleHAiOjE5MDAwMDAwMDAsImVtYWlsIjoiYUBleGFtcGxlLmNvbSJ9.s"], "ok": {"sub": "auth0|123", "exp": 1900000000, "email": "a@example.com"}}
+{"fn": "_jwt_claims", "args": ["h.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC0xIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJwbHVzIn19.s"], "ok": {"https://api.openai.com/auth": {"chatgpt_account_id": "acct-1", "chatgpt_plan_type": "plus"}}}
+{"fn": "_jwt_claims", "args": ["h.WzEsMiwzXQ.s"], "ok": [1, 2, 3]}
+{"fn": "_jwt_claims", "args": ["h.Imp1c3QtYS1zdHJpbmci.s"], "ok": "just-a-string"}
+{"fn": "_jwt_claims", "args": ["h.eyJuZXN0ZWQiOnsiYSI6WzEsdHJ1ZSxudWxsLDIuNV0sIm1zZyI6Ilx1NGY2MFx1NTk3ZCJ9fQ.s"], "ok": {"nested": {"a": [1, true, null, 2.5], "msg": "你好"}}}

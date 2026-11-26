@@ -88,5 +88,10 @@ def _method(name, positions, names, json_result):
     return call
 
 _strip_html_to_visible_text = _native._strip_html_to_visible_text
+_latest_mail_received_at = _native._latest_mail_received_at
+_decode_js_string = _native._decode_js_string
+_with_message_limit = _native._with_message_limit
+_same_origin = _native._same_origin
+_extract_url_credentials = _native._extract_url_credentials
 
-__all__ = ['_strip_html_to_visible_text']
+__all__ = ['_strip_html_to_visible_text', '_latest_mail_received_at', '_decode_js_string', '_with_message_limit', '_same_origin', '_extract_url_credentials']

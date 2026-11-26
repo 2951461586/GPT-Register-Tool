@@ -78,9 +78,25 @@ fn _html_to_text(value: Bound<'_, PyAny>) -> PyResult<String> {
     _html_to_text_inner(value).map_err(error)
 }
 
+fn _parse_proxy_url_inner(proxy: Bound<'_, PyAny>) -> Result<serde_json::Value, String> {
+    let proxy: serde_json::Value = crate::pyconv::FromPy::from_py(&proxy)?;
+    let out = port::_parse_proxy_url(proxy)?;
+    Ok(out)
+}
+
+/// `_parse_proxy_url`.
+#[pyfunction]
+#[pyo3(name = "_parse_proxy_url", signature = (proxy))]
+fn _parse_proxy_url(py: Python<'_>, proxy: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+    _parse_proxy_url_inner(proxy)
+        .map_err(error)
+        .and_then(|v| crate::pyconv::ToPy::to_py(&v, py))
+}
+
 #[pymodule]
 #[pyo3(name = "_native")]
 fn native_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(_html_to_text, m)?)?;
+    m.add_function(wrap_pyfunction!(_parse_proxy_url, m)?)?;
     Ok(())
 }

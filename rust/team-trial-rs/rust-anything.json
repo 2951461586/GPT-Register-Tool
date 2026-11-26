@@ -1,0 +1,43 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/pay_link/team_trial.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "team-trial-rs",
+  "exports": [
+    {
+      "name": "_jwt_chatgpt_account_id",
+      "file": "sms_tool/pay_link/team_trial.py",
+      "line": 108,
+      "params": [
+        {
+          "name": "access_token",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "probe_team_trial_eligibility",
+      "file": "sms_tool/pay_link/team_trial.py",
+      "line": 286,
+      "reason": "HTTP eligibility probe orchestration stays in Python"
+    },
+    {
+      "name": "extract_team_trial_link",
+      "file": "sms_tool/pay_link/team_trial.py",
+      "line": 515,
+      "reason": "HTTP checkout extraction orchestration stays in Python"
+    }
+  ]
+}

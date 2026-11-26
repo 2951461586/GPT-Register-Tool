@@ -78,9 +78,85 @@ fn _strip_html_to_visible_text(raw_html: Bound<'_, PyAny>) -> PyResult<String> {
     _strip_html_to_visible_text_inner(raw_html).map_err(error)
 }
 
+fn _latest_mail_received_at_inner(value: Bound<'_, PyAny>) -> Result<String, String> {
+    let value: serde_json::Value = crate::pyconv::FromPy::from_py(&value)?;
+    let out = port::_latest_mail_received_at(value)?;
+    Ok(out)
+}
+
+/// `_latest_mail_received_at`.
+#[pyfunction]
+#[pyo3(name = "_latest_mail_received_at", signature = (value))]
+fn _latest_mail_received_at(value: Bound<'_, PyAny>) -> PyResult<String> {
+    _latest_mail_received_at_inner(value).map_err(error)
+}
+
+fn _decode_js_string_inner(raw: String) -> Result<String, String> {
+    let out = port::_decode_js_string(raw)?;
+    Ok(out)
+}
+
+/// `_decode_js_string`.
+#[pyfunction]
+#[pyo3(name = "_decode_js_string", signature = (raw))]
+fn _decode_js_string(raw: String) -> PyResult<String> {
+    _decode_js_string_inner(raw).map_err(error)
+}
+
+fn _with_message_limit_inner(url: String, limit: Bound<'_, PyAny>) -> Result<String, String> {
+    let limit: serde_json::Value = crate::pyconv::FromPy::from_py(&limit)?;
+    let out = port::_with_message_limit(url, limit)?;
+    Ok(out)
+}
+
+/// `_with_message_limit`.
+#[pyfunction]
+#[pyo3(name = "_with_message_limit", signature = (url, limit))]
+fn _with_message_limit(url: String, limit: Bound<'_, PyAny>) -> PyResult<String> {
+    _with_message_limit_inner(url, limit).map_err(error)
+}
+
+fn _same_origin_inner(base_url: String, candidate_url: String) -> Result<bool, String> {
+    let out = port::_same_origin(base_url, candidate_url)?;
+    Ok(out)
+}
+
+/// `_same_origin`.
+#[pyfunction]
+#[pyo3(name = "_same_origin", signature = (base_url, candidate_url))]
+fn _same_origin(base_url: String, candidate_url: String) -> PyResult<bool> {
+    _same_origin_inner(base_url, candidate_url).map_err(error)
+}
+
+fn _extract_url_credentials_inner(
+    url: String,
+    fallback_email: String,
+) -> Result<(String, String, bool), String> {
+    let out = port::_extract_url_credentials(url, fallback_email)?;
+    Ok(out)
+}
+
+/// `_extract_url_credentials`.
+#[pyfunction]
+#[pyo3(name = "_extract_url_credentials", signature = (url, fallback_email))]
+fn _extract_url_credentials(
+    py: Python<'_>,
+    url: String,
+    fallback_email: String,
+) -> PyResult<Py<PyAny>> {
+    _extract_url_credentials_inner(url, fallback_email)
+        .map_err(error)
+        .and_then(|v| crate::pyconv::ToPy::to_py(&v, py))
+}
+
 #[pymodule]
 #[pyo3(name = "_native")]
 fn native_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(_strip_html_to_visible_text, m)?)?;
+    m.add_function(wrap_pyfunction!(_latest_mail_received_at, m)?)?;
+    m.add_function(wrap_pyfunction!(_decode_js_string, m)?)?;
+    m.add_function(wrap_pyfunction!(_with_message_limit, m)?)?;
+    m.add_function(wrap_pyfunction!(_same_origin, m)?)?;
+    m.add_function(wrap_pyfunction!(_extract_url_credentials, m)?)?;
     Ok(())
 }

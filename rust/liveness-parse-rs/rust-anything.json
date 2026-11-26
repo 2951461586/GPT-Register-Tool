@@ -1,0 +1,49 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/accounts/account_liveness.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "liveness-parse-rs",
+  "exports": [
+    {
+      "name": "_is_token_invalid",
+      "file": "sms_tool/accounts/account_liveness.py",
+      "line": 392,
+      "params": [
+        {
+          "name": "status_code",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "error_text",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "probe_account_liveness",
+      "file": "sms_tool/accounts/account_liveness.py",
+      "line": 157,
+      "reason": "HTTP/browser liveness probe orchestration stays in Python"
+    },
+    {
+      "name": "quota_result_from_payload",
+      "file": "sms_tool/accounts/account_liveness.py",
+      "line": 295,
+      "reason": "small dict assembly calling wham_usage; stays in Python"
+    }
+  ]
+}

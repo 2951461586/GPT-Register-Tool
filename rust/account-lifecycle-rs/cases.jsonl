@@ -1,0 +1,217 @@
+{"fn": "_email_core", "args": ["😀"], "ok": ""}
+{"fn": "_email_core", "args": ["src/a/b.ts日本語のテキスト"], "ok": "srcabts日本語のテキスト"}
+{"fn": "_email_core", "args": ["./x/**/*.json"], "ok": "xjson"}
+{"fn": "_email_core", "args": ["日本語のテキスト"], "ok": "日本語のテキスト"}
+{"fn": "_email_core", "args": ["﻿bom"], "ok": "bom"}
+{"fn": "_email_core", "args": ["İstanbul"], "ok": "istanbul"}
+{"fn": "_email_core", "args": ["straße"], "ok": "straße"}
+{"fn": "_email_core", "args": ["ab"], "ok": "ab"}
+{"fn": "_email_core", "args": ["key_name-1a😀b😀c"], "ok": "keyname1abc"}
+{"fn": "_email_core", "args": ["Hello World"], "ok": "helloworld"}
+{"fn": "_email_core", "args": ["abcΣΊΣΥΦΟΣ"], "ok": "abcσίσυφος"}
+{"fn": "_email_core", "args": ["ünïcödé"], "ok": "ünïcödé"}
+{"fn": "_email_core", "args": ["trailing."], "ok": "trailing"}
+{"fn": "_email_core", "args": ["hello worldemoji 👍🏽 mix"], "ok": "helloworldemojimix"}
+{"fn": "_email_core", "args": [".leading.leading"], "ok": "leadingleading"}
+{"fn": "_email_core", "args": ["a.b.c日本語のテキスト"], "ok": "abc日本語のテキスト"}
+{"fn": "_email_core", "args": [".leadingHELLO"], "ok": "leadinghello"}
+{"fn": "_email_core", "args": ["ΣΊΣΥΦΟΣİstanbul"], "ok": "σίσυφοσistanbul"}
+{"fn": "_email_core", "args": ["key_name-1"], "ok": "keyname1"}
+{"fn": "_email_core", "args": ["a.b.c"], "ok": "abc"}
+{"fn": "_email_core", "args": ["line1\nline2"], "ok": "line1line2"}
+{"fn": "_email_core", "args": ["emoji 👍🏽 mixa.b.c"], "ok": "emojimixabc"}
+{"fn": "_email_core", "args": ["﻿bomİstanbul"], "ok": "bomistanbul"}
+{"fn": "_email_core", "args": ["a..b"], "ok": "ab"}
+{"fn": "_email_core", "args": ["./x/**/*.jsonns:key.path"], "ok": "xjsonnskeypath"}
+{"fn": "_email_core", "args": ["emoji 👍🏽 mix"], "ok": "emojimix"}
+{"fn": "_email_core", "args": [".leading"], "ok": "leading"}
+{"fn": "_email_core", "args": ["a😀b😀cünïcödé"], "ok": "abcünïcödé"}
+{"fn": "_email_core", "args": ["a:b:csrc/a/b.ts"], "ok": "abcsrcabts"}
+{"fn": "_email_core", "args": [""], "ok": ""}
+{"fn": "_email_core", "args": ["src/a/b.tsa.b.c"], "ok": "srcabtsabc"}
+{"fn": "_email_core", "args": ["key_name-1ns:key.path"], "ok": "keyname1nskeypath"}
+{"fn": "_email_core", "args": ["hello"], "ok": "hello"}
+{"fn": "_email_core", "args": ["tab\tseparated"], "ok": "tabseparated"}
+{"fn": "_email_core", "args": ["ns:key.path"], "ok": "nskeypath"}
+{"fn": "_email_core", "args": ["HELLO"], "ok": "hello"}
+{"fn": "_email_core", "args": ["line1\nline2hello world"], "ok": "line1line2helloworld"}
+{"fn": "_email_core", "args": ["tab\tseparatedhello world"], "ok": "tabseparatedhelloworld"}
+{"fn": "_email_core", "args": ["  padded  "], "ok": "padded"}
+{"fn": "_email_core", "args": ["hellostraße"], "ok": "hellostraße"}
+{"fn": "_email_core", "args": [":"], "ok": ""}
+{"fn": "_email_core", "args": ["ΣΊΣΥΦΟΣ"], "ok": "σίσυφος"}
+{"fn": "_email_core", "args": ["a😀b😀c"], "ok": "abc"}
+{"fn": "_email_core", "args": ["abns:key.path"], "ok": "abnskeypath"}
+{"fn": "_email_core", "args": ["a:b:c"], "ok": "abc"}
+{"fn": "_email_core", "args": ["a.b.cΣΊΣΥΦΟΣ"], "ok": "abcσίσυφος"}
+{"fn": "_email_core", "args": ["é"], "ok": "e"}
+{"fn": "_email_core", "args": ["trailing.  padded  "], "ok": "trailingpadded"}
+{"fn": "_email_core", "args": ["HELLO.leading"], "ok": "helloleading"}
+{"fn": "_email_core", "args": ["a"], "ok": "a"}
+{"fn": "_email_core", "args": ["ünïcödé😀"], "ok": "ünïcödé"}
+{"fn": "_email_core", "args": ["😀İstanbul"], "ok": "istanbul"}
+{"fn": "_email_core", "args": ["﻿bom😀"], "ok": "bom"}
+{"fn": "_email_core", "args": ["{name} has {count} items"], "ok": "namehascountitems"}
+{"fn": "_email_core", "args": ["a..b😀"], "ok": "ab"}
+{"fn": "_email_core", "args": ["ünïcödéa😀b😀c"], "ok": "ünïcödéabc"}
+{"fn": "_email_core", "args": ["{name} has {count} itemsİstanbul"], "ok": "namehascountitemsistanbul"}
+{"fn": "_email_core", "args": ["straßehello world"], "ok": "straßehelloworld"}
+{"fn": "_email_core", "args": ["straßeİstanbul"], "ok": "straßeistanbul"}
+{"fn": "_email_core", "args": ["hello world"], "ok": "helloworld"}
+{"fn": "_email_core", "args": ["trailing.a😀b😀c"], "ok": "trailingabc"}
+{"fn": "_email_core", "args": ["abcsrc/a/b.ts"], "ok": "abcsrcabts"}
+{"fn": "_email_core", "args": ["  padded  ﻿bom"], "ok": "paddedbom"}
+{"fn": "_email_core", "args": ["src/a/b.ts"], "ok": "srcabts"}
+{"fn": "_email_core", "args": ["a😀b😀ca😀b😀c"], "ok": "abcabc"}
+{"fn": "_email_core", "args": ["日本語のテキストtrailing."], "ok": "日本語のテキストtrailing"}
+{"fn": "_email_core", "args": ["a..bline1\nline2"], "ok": "abline1line2"}
+{"fn": "_email_core", "args": ["src/a/b.tssrc/a/b.ts"], "ok": "srcabtssrcabts"}
+{"fn": "_email_core", "args": ["abc"], "ok": "abc"}
+{"fn": "_email_core", "args": ["hello worldé"], "ok": "helloworlde"}
+{"fn": "_email_core", "args": ["a:b:cé"], "ok": "abce"}
+{"fn": "_email_core", "args": ["ΣΊΣΥΦΟΣ.leading"], "ok": "σίσυφοσleading"}
+{"fn": "_email_core", "args": ["src/a/b.ts./x/**/*.json"], "ok": "srcabtsxjson"}
+{"fn": "_email_core", "args": ["line1\nline2ΣΊΣΥΦΟΣ"], "ok": "line1line2σίσυφος"}
+{"fn": "_email_core", "args": ["ns:key.pathline1\nline2"], "ok": "nskeypathline1line2"}
+{"fn": "_email_core", "args": ["aba..b"], "ok": "abab"}
+{"fn": "_email_core", "args": ["hello worlda.b.c"], "ok": "helloworldabc"}
+{"fn": "_email_core", "args": ["aHello World"], "ok": "ahelloworld"}
+{"fn": "_email_core", "args": ["ΣΊΣΥΦΟΣünïcödé"], "ok": "σίσυφοσünïcödé"}
+{"fn": "_email_core", "args": ["日本語のテキスト{name} has {count} items"], "ok": "日本語のテキストnamehascountitems"}
+{"fn": "_email_core", "args": ["😀ns:key.path"], "ok": "nskeypath"}
+{"fn": "_email_core", "args": ["atrailing."], "ok": "atrailing"}
+{"fn": "_email_core", "args": ["İstanbulİstanbul"], "ok": "istanbulistanbul"}
+{"fn": "_email_core", "args": ["ünïcödé:"], "ok": "ünïcödé"}
+{"fn": "_email_core", "args": ["straßeΣΊΣΥΦΟΣ"], "ok": "straßeσίσυφος"}
+{"fn": "_email_core", "args": ["a:b:ca😀b😀c"], "ok": "abcabc"}
+{"fn": "_email_core", "args": ["{name} has {count} itemsns:key.path"], "ok": "namehascountitemsnskeypath"}
+{"fn": "_email_core", "args": ["ΣΊΣΥΦΟΣHello World"], "ok": "σίσυφοσhelloworld"}
+{"fn": "_email_core", "args": ["a😀b😀chello world"], "ok": "abchelloworld"}
+{"fn": "_email_core", "args": ["😀日本語のテキスト"], "ok": "日本語のテキスト"}
+{"fn": "_email_core", "args": ["./x/**/*.jsona.b.c"], "ok": "xjsonabc"}
+{"fn": "_email_core", "args": ["a😀b😀cé"], "ok": "abce"}
+{"fn": "_email_core", "args": ["﻿boma"], "ok": "boma"}
+{"fn": "_email_core", "args": ["line1\nline2日本語のテキスト"], "ok": "line1line2日本語のテキスト"}
+{"fn": "_email_core", "args": ["emoji 👍🏽 mixHello World"], "ok": "emojimixhelloworld"}
+{"fn": "_email_core", "args": ["hello{name} has {count} items"], "ok": "hellonamehascountitems"}
+{"fn": "_email_core", "args": ["line1\nline2a😀b😀c"], "ok": "line1line2abc"}
+{"fn": "_email_core", "args": ["ns:key.pathhello"], "ok": "nskeypathhello"}
+{"fn": "_email_core", "args": ["trailing.😀"], "ok": "trailing"}
+{"fn": "_email_core", "args": ["﻿bomab"], "ok": "bomab"}
+{"fn": "_email_core", "args": ["Hello World./x/**/*.json"], "ok": "helloworldxjson"}
+{"fn": "_email_core", "args": ["Hello World﻿bom"], "ok": "helloworldbom"}
+{"fn": "_email_core", "args": ["aab"], "ok": "aab"}
+{"fn": "_email_core", "args": ["a.b.cstraße"], "ok": "abcstraße"}
+{"fn": "_email_core", "args": ["a:b:c😀"], "ok": "abc"}
+{"fn": "_email_core", "args": ["  padded  Hello World"], "ok": "paddedhelloworld"}
+{"fn": "_email_core", "args": ["line1\nline2trailing."], "ok": "line1line2trailing"}
+{"fn": "_email_core", "args": [":abc"], "ok": "abc"}
+{"fn": "_email_core", "args": ["Hello Worldline1\nline2"], "ok": "helloworldline1line2"}
+{"fn": "_email_core", "args": ["a.b.ctrailing."], "ok": "abctrailing"}
+{"fn": "_email_core", "args": ["a:b:c./x/**/*.json"], "ok": "abcxjson"}
+{"fn": "_email_core", "args": ["HELLOkey_name-1"], "ok": "hellokeyname1"}
+{"fn": "_email_core", "args": ["  padded  emoji 👍🏽 mix"], "ok": "paddedemojimix"}
+{"fn": "_email_core", "args": ["src/a/b.tsΣΊΣΥΦΟΣ"], "ok": "srcabtsσίσυφος"}
+{"fn": "_email_core", "args": ["line1\nline2abc"], "ok": "line1line2abc"}
+{"fn": "_email_core", "args": ["helloünïcödé"], "ok": "helloünïcödé"}
+{"fn": "_email_core", "args": [":ΣΊΣΥΦΟΣ"], "ok": "σίσυφος"}
+{"fn": "_email_core", "args": ["ΣΊΣΥΦΟΣé"], "ok": "σίσυφοσe"}
+{"fn": "_email_core", "args": ["ab  padded  "], "ok": "abpadded"}
+{"fn": "_email_core", "args": ["ünïcödésrc/a/b.ts"], "ok": "ünïcödésrcabts"}
+{"fn": "_email_core", "args": ["Hello Worlda..b"], "ok": "helloworldab"}
+{"fn": "_email_core", "args": ["ab😀"], "ok": "ab"}
+{"fn": "_email_core", "args": ["Hello Worldabc"], "ok": "helloworldabc"}
+{"fn": "_email_core", "args": ["éhello world"], "ok": "ehelloworld"}
+{"fn": "_email_core", "args": ["src/a/b.ts﻿bom"], "ok": "srcabtsbom"}
+{"fn": "_email_core", "args": ["aünïcödé"], "ok": "aünïcödé"}
+{"fn": "_email_core", "args": ["İstanbul.leading"], "ok": "istanbulleading"}
+{"fn": "_email_core", "args": [".leadinga.b.c"], "ok": "leadingabc"}
+{"fn": "_email_core", "args": ["﻿bomé"], "ok": "bome"}
+{"fn": "_email_core", "args": ["a..b  padded  "], "ok": "abpadded"}
+{"fn": "_email_core", "args": ["ünïcödéhello world"], "ok": "ünïcödéhelloworld"}
+{"fn": "_email_core", "args": ["emoji 👍🏽 mixkey_name-1"], "ok": "emojimixkeyname1"}
+{"fn": "_email_core", "args": ["{name} has {count} items./x/**/*.json"], "ok": "namehascountitemsxjson"}
+{"fn": "_email_core", "args": ["  padded  hello"], "ok": "paddedhello"}
+{"fn": "_email_core", "args": [":a😀b😀c"], "ok": "abc"}
+{"fn": "_email_core", "args": ["straße  padded  "], "ok": "straßepadded"}
+{"fn": "_email_core", "args": ["éhello"], "ok": "ehello"}
+{"fn": "_email_core", "args": ["HELLO﻿bom"], "ok": "hellobom"}
+{"fn": "_email_core", "args": [":ab"], "ok": "ab"}
+{"fn": "_email_core", "args": ["a.b.cns:key.path"], "ok": "abcnskeypath"}
+{"fn": "_email_core", "args": ["HELLOHello World"], "ok": "hellohelloworld"}
+{"fn": "_email_core", "args": ["ababc"], "ok": "ababc"}
+{"fn": "_email_core", "args": ["tab\tseparatedsrc/a/b.ts"], "ok": "tabseparatedsrcabts"}
+{"fn": "_email_core", "args": ["😀ΣΊΣΥΦΟΣ"], "ok": "σίσυφος"}
+{"fn": "_email_core", "args": [".leadinga"], "ok": "leadinga"}
+{"fn": "_email_core", "args": ["helloa.b.c"], "ok": "helloabc"}
+{"fn": "_email_core", "args": ["{name} has {count} itemsemoji 👍🏽 mix"], "ok": "namehascountitemsemojimix"}
+{"fn": "_email_core", "args": ["./x/**/*.json日本語のテキスト"], "ok": "xjson日本語のテキスト"}
+{"fn": "_email_core", "args": [".leadinga😀b😀c"], "ok": "leadingabc"}
+{"fn": "_email_core", "args": ["HELLOabc"], "ok": "helloabc"}
+{"fn": "_email_core", "args": ["﻿boma.b.c"], "ok": "bomabc"}
+{"fn": "_email_core", "args": ["src/a/b.ts😀"], "ok": "srcabts"}
+{"fn": "_email_core", "args": ["ünïcödé  padded  "], "ok": "ünïcödépadded"}
+{"fn": "_email_core", "args": ["a.b.cHello World"], "ok": "abchelloworld"}
+{"fn": "_email_core", "args": ["abab"], "ok": "abab"}
+{"fn": "_email_core", "args": ["éé"], "ok": "ee"}
+{"fn": "_email_core", "args": ["{name} has {count} itemsa.b.c"], "ok": "namehascountitemsabc"}
+{"fn": "_email_core", "args": ["./x/**/*.jsonkey_name-1"], "ok": "xjsonkeyname1"}
+{"fn": "_email_core", "args": ["Hello WorldΣΊΣΥΦΟΣ"], "ok": "helloworldσίσυφος"}
+{"fn": "_email_core", "args": ["ns:key.pathé"], "ok": "nskeypathe"}
+{"fn": "_email_core", "args": ["trailing.a"], "ok": "trailinga"}
+{"fn": "_email_core", "args": ["emoji 👍🏽 mixtab\tseparated"], "ok": "emojimixtabseparated"}
+{"fn": "_email_core", "args": ["src/a/b.ts:"], "ok": "srcabts"}
+{"fn": "_email_core", "args": ["straßea.b.c"], "ok": "straßeabc"}
+{"fn": "_email_core", "args": ["Hello Worldab"], "ok": "helloworldab"}
+{"fn": "_email_core", "args": ["emoji 👍🏽 mixstraße"], "ok": "emojimixstraße"}
+{"fn": "_email_core", "args": ["İstanbulΣΊΣΥΦΟΣ"], "ok": "istanbulσίσυφος"}
+{"fn": "_email_core", "args": ["  padded  .leading"], "ok": "paddedleading"}
+{"fn": "_email_core", "args": ["😀a.b.c"], "ok": "abc"}
+{"fn": "_email_core", "args": [":a:b:c"], "ok": "abc"}
+{"fn": "_email_core", "args": ["straßens:key.path"], "ok": "straßenskeypath"}
+{"fn": "_email_core", "args": ["日本語のテキスト  padded  "], "ok": "日本語のテキストpadded"}
+{"fn": "_email_core", "args": ["{name} has {count} itemsab"], "ok": "namehascountitemsab"}
+{"fn": "_email_core", "args": ["a..bns:key.path"], "ok": "abnskeypath"}
+{"fn": "_email_core", "args": ["{name} has {count} itemstrailing."], "ok": "namehascountitemstrailing"}
+{"fn": "_email_core", "args": ["a😀b😀cΣΊΣΥΦΟΣ"], "ok": "abcσίσυφος"}
+{"fn": "_email_core", "args": ["{name} has {count} itemshello"], "ok": "namehascountitemshello"}
+{"fn": "_email_core", "args": ["a.b.cİstanbul"], "ok": "abcistanbul"}
+{"fn": "_email_core", "args": ["hello worldhello world"], "ok": "helloworldhelloworld"}
+{"fn": "_email_core", "args": ["😀﻿bom"], "ok": "bom"}
+{"fn": "_email_core", "args": ["a:b:ca:b:c"], "ok": "abcabc"}
+{"fn": "_email_core", "args": ["日本語のテキストé"], "ok": "日本語のテキストe"}
+{"fn": "_email_core", "args": ["日本語のテキスト.leading"], "ok": "日本語のテキストleading"}
+{"fn": "_email_core", "args": ["HELLO:"], "ok": "hello"}
+{"fn": "_email_core", "args": ["emoji 👍🏽 mixİstanbul"], "ok": "emojimixistanbul"}
+{"fn": "_email_core", "args": ["src/a/b.tsa😀b😀c"], "ok": "srcabtsabc"}
+{"fn": "_email_core", "args": ["hellotab\tseparated"], "ok": "hellotabseparated"}
+{"fn": "_email_core", "args": ["hello😀"], "ok": "hello"}
+{"fn": "_email_core", "args": ["abcHello World"], "ok": "abchelloworld"}
+{"fn": "_email_core", "args": ["İstanbulline1\nline2"], "ok": "istanbulline1line2"}
+{"fn": "_email_core", "args": ["a:b:c﻿bom"], "ok": "abcbom"}
+{"fn": "_email_core", "args": ["a.leading"], "ok": "aleading"}
+{"fn": "_email_core", "args": [":.leading"], "ok": "leading"}
+{"fn": "_email_core", "args": ["éHello World"], "ok": "ehelloworld"}
+{"fn": "_email_core", "args": ["hello worlda:b:c"], "ok": "helloworldabc"}
+{"fn": "_email_core", "args": [".leadinghello world"], "ok": "leadinghelloworld"}
+{"fn": "_email_core", "args": ["ΣΊΣΥΦΟΣa"], "ok": "σίσυφοσa"}
+{"fn": "_email_core", "args": ["trailing.ünïcödé"], "ok": "trailingünïcödé"}
+{"fn": "_email_core", "args": ["ns:key.path日本語のテキスト"], "ok": "nskeypath日本語のテキスト"}
+{"fn": "_email_core", "args": ["./x/**/*.jsontrailing."], "ok": "xjsontrailing"}
+{"fn": "_email_core", "args": ["héllo wörld"], "ok": "héllowörld"}
+{"fn": "_email_core", "args": ["👍🏽 thumbs"], "ok": "thumbs"}
+{"fn": "_email_core", "args": ["日本語"], "ok": "日本語"}
+{"fn": "_email_core", "args": ["ılık ırmak"], "ok": "ılıkırmak"}
+{"fn": "_email_core", "args": ["👨‍👩‍👧 family"], "ok": "family"}
+{"fn": "_email_core", "args": ["a b"], "ok": "ab"}
+{"fn": "_email_core", "args": ["a😀b"], "ok": "ab"}
+{"fn": "_email_core", "args": ["a²b x½ y①"], "ok": "a²bx½y①"}
+{"fn": "_email_core", "args": ["aⅠb Ⅻ"], "ok": "aⅰbⅻ"}
+{"fn": "_email_core", "args": ["a𐐀b 𝐀bc"], "ok": "a𐐨b𝐀bc"}
+{"fn": "_email_core", "args": ["कि ٣٤"], "ok": "क٣٤"}
+{"fn": "_email_core", "args": ["SampleAccount66@+oai01hotmail.com"], "ok": "sampleaccount66oai01hotmailcom"}
+{"fn": "_email_core", "args": ["sampleaccount66+oai01@hotmail.com"], "ok": "sampleaccount66oai01hotmailcom"}
+{"fn": "_email_core", "args": ["User.Name_123+tag@Sub.Example-Domain.org"], "ok": "username123tagsubexampledomainorg"}
+{"fn": "_email_core", "args": [""], "ok": ""}
+{"fn": "_email_core", "args": ["---@@@+++..."], "ok": ""}
+{"fn": "_email_core", "args": ["AbCdEf0123456789+tag@gmail.com"], "ok": "abcdef0123456789taggmailcom"}

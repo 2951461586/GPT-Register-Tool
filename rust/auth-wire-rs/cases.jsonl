@@ -1,0 +1,32 @@
+{"fn": "_is_existing_login_redirect", "args": ["x"], "ok": false}
+{"fn": "_is_existing_login_redirect", "args": [["a", 1]], "error": "AttributeError: 'list' object has no attribute 'decode'"}
+{"fn": "_is_existing_login_redirect", "args": [0], "ok": false}
+{"fn": "_is_existing_login_redirect", "args": [[]], "ok": false}
+{"fn": "_is_existing_login_redirect", "args": [true], "error": "AttributeError: 'bool' object has no attribute 'decode'"}
+{"fn": "_is_existing_login_redirect", "args": [null], "ok": false}
+{"fn": "_is_existing_login_redirect", "args": [{"a": "b"}], "error": "AttributeError: 'dict' object has no attribute 'decode'"}
+{"fn": "_is_existing_login_redirect", "args": [{"a": {"b": "c"}}], "error": "AttributeError: 'dict' object has no attribute 'decode'"}
+{"fn": "_is_existing_login_redirect", "args": [{}], "ok": false}
+{"fn": "_is_existing_login_redirect", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "error": "AttributeError: 'dict' object has no attribute 'decode'"}
+{"fn": "_is_existing_login_redirect", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "error": "AttributeError: 'dict' object has no attribute 'decode'"}
+{"fn": "_is_existing_login_redirect", "args": [[3, 1, 2]], "error": "AttributeError: 'list' object has no attribute 'decode'"}
+{"fn": "_is_existing_login_redirect", "args": [null], "ok": false}
+{"fn": "_is_existing_login_redirect", "args": [""], "ok": false}
+{"fn": "_is_existing_login_redirect", "args": ["   "], "ok": false}
+{"fn": "_is_existing_login_redirect", "args": ["https://auth.openai.com/log-in"], "ok": true}
+{"fn": "_is_existing_login_redirect", "args": ["https://auth.openai.com/log-in/"], "ok": true}
+{"fn": "_is_existing_login_redirect", "args": ["https://auth.openai.com/log-in/password?state=1"], "ok": true}
+{"fn": "_is_existing_login_redirect", "args": ["https://auth.openai.com/login"], "ok": true}
+{"fn": "_is_existing_login_redirect", "args": ["https://auth.openai.com/login/callback"], "ok": true}
+{"fn": "_is_existing_login_redirect", "args": ["https://sub.auth.openai.com/log-in/password"], "ok": true}
+{"fn": "_is_existing_login_redirect", "args": ["https://AUTH.OPENAI.COM/LOG-IN/"], "ok": true}
+{"fn": "_is_existing_login_redirect", "args": ["https://auth.openai.com/log-in;params=1"], "ok": true}
+{"fn": "_is_existing_login_redirect", "args": ["https://auth.openai.com/log-in-extra"], "ok": false}
+{"fn": "_is_existing_login_redirect", "args": ["https://auth.openai.com/email-verification"], "ok": false}
+{"fn": "_is_existing_login_redirect", "args": ["https://chatgpt.com/log-in"], "ok": false}
+{"fn": "_is_existing_login_redirect", "args": ["https://evil-auth.openai.com/log-in"], "ok": false}
+{"fn": "_is_existing_login_redirect", "args": ["/log-in"], "ok": true}
+{"fn": "_is_existing_login_redirect", "args": ["/log-in/password"], "ok": true}
+{"fn": "_is_existing_login_redirect", "args": ["/login/"], "ok": true}
+{"fn": "_is_existing_login_redirect", "args": ["/create-account"], "ok": false}
+{"fn": "_is_existing_login_redirect", "args": ["https://auth.openai.com"], "ok": false}

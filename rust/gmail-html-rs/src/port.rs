@@ -336,6 +336,171 @@ pub fn _html_to_text(value: serde_json::Value) -> Result<String, String> {
     Ok(collapse_whitespace_and_strip(&unescaped))
 }
 
+#[inline]
+fn hex_val(b: u8) -> Option<u8> {
+    match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        _ => None,
+    }
+}
+
+fn percent_unquote(s: &str) -> String {
+    let bytes = s.as_bytes();
+    if memchr(b'%', bytes).is_none() {
+        return s.to_string();
+    }
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let (Some(hi), Some(lo)) = (hex_val(bytes[i + 1]), hex_val(bytes[i + 2]))
+        {
+            out.push((hi << 4) | lo);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+pub fn _parse_proxy_url(proxy: serde_json::Value) -> Result<serde_json::Value, String> {
+    let raw = py_str_or_empty(&proxy);
+    let trimmed = raw.trim_matches(py_is_space);
+    if trimmed.is_empty() {
+        return Err("RuntimeError: empty gmail imap proxy".to_string());
+    }
+    let prefixed = if trimmed.contains("://") {
+        trimmed.to_string()
+    } else {
+        format!("http://{trimmed}")
+    };
+
+    let cleaned: String = prefixed
+        .trim_start_matches(|c: char| (c as u32) <= 0x20)
+        .chars()
+        .filter(|c| !matches!(c, '\t' | '\r' | '\n'))
+        .collect();
+    let s = cleaned.as_str();
+
+    let (scheme_raw, rest) = if let Some(idx) = s.find(':') {
+        let cand = &s[..idx];
+        let valid_scheme = !cand.is_empty()
+            && cand.as_bytes()[0].is_ascii_alphabetic()
+            && cand
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-' | b'.'));
+        if valid_scheme {
+            (cand.to_ascii_lowercase(), &s[idx + 1..])
+        } else {
+            (String::new(), s)
+        }
+    } else {
+        (String::new(), s)
+    };
+    let scheme = if scheme_raw.is_empty() {
+        "http".to_string()
+    } else {
+        scheme_raw
+    };
+
+    let before_frag = rest.split_once('#').map_or(rest, |(a, _)| a);
+    let before_query = before_frag.split_once('?').map_or(before_frag, |(a, _)| a);
+    let netloc = if let Some(after) = before_query.strip_prefix("//") {
+        match after.find('/') {
+            Some(pos) => &after[..pos],
+            None => after,
+        }
+    } else {
+        ""
+    };
+
+    let (userinfo, hostinfo) = match netloc.rfind('@') {
+        Some(pos) => (Some(&netloc[..pos]), &netloc[pos + 1..]),
+        None => (None, netloc),
+    };
+
+    if (hostinfo.contains('[') && !hostinfo.contains(']'))
+        || (hostinfo.contains(']') && !hostinfo.contains('['))
+    {
+        return Err("ValueError: Invalid IPv6 URL".to_string());
+    }
+
+    let (host, port_str) = if let Some(after_open) = hostinfo.strip_prefix('[') {
+        let Some(close) = after_open.find(']') else {
+            return Err("ValueError: Invalid IPv6 URL".to_string());
+        };
+        let h = &after_open[..close];
+        let ip_part = h.split('%').next().unwrap_or(h);
+        if ip_part.parse::<std::net::Ipv6Addr>().is_err() {
+            return Err(format!(
+                "ValueError: {h:?} does not appear to be an IPv4 or IPv6 address"
+            ));
+        }
+        let tail = &after_open[close + 1..];
+        let p = tail.strip_prefix(':').unwrap_or("");
+        (h.to_lowercase(), p)
+    } else if hostinfo.contains('[') || hostinfo.contains(']') {
+        return Err("ValueError: Invalid IPv6 URL".to_string());
+    } else if let Some((h, p)) = hostinfo.split_once(':') {
+        (h.to_lowercase(), p)
+    } else {
+        (hostinfo.to_lowercase(), "")
+    };
+
+    if host.is_empty() {
+        let mut repr = String::new();
+        py_repr_into(&proxy, &mut repr);
+        return Err(format!("RuntimeError: invalid gmail imap proxy: {repr}"));
+    }
+
+    let parsed_port: Option<u16> = if port_str.is_empty() {
+        None
+    } else if port_str.bytes().all(|b| b.is_ascii_digit()) {
+        match port_str.parse::<u32>() {
+            Ok(v) if v <= 65535 => Some(v as u16),
+            _ => {
+                return Err(format!(
+                    "ValueError: Port out of range 0-65535: {port_str:?}"
+                ));
+            }
+        }
+    } else {
+        return Err(format!(
+            "ValueError: Port could not be cast to integer value as {port_str:?}"
+        ));
+    };
+
+    let port: i64 = match parsed_port {
+        Some(p) if p > 0 => i64::from(p),
+        _ => match scheme.as_str() {
+            "socks5" | "socks5h" => 1080,
+            "http" | "https" => 8080,
+            _ => 0,
+        },
+    };
+
+    let (username, password) = match userinfo {
+        Some(u) => match u.split_once(':') {
+            Some((user, pass)) => (percent_unquote(user), percent_unquote(pass)),
+            None => (percent_unquote(u), String::new()),
+        },
+        None => (String::new(), String::new()),
+    };
+
+    let mut obj = serde_json::Map::with_capacity(5);
+    obj.insert("scheme".to_string(), Value::String(scheme));
+    obj.insert("host".to_string(), Value::String(host));
+    obj.insert("port".to_string(), Value::Number(port.into()));
+    obj.insert("username".to_string(), Value::String(username));
+    obj.insert("password".to_string(), Value::String(password));
+    Ok(Value::Object(obj))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

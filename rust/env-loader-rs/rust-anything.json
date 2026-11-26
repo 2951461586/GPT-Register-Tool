@@ -1,0 +1,49 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/kernel/env_loader.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "env-loader-rs",
+  "exports": [
+    {
+      "name": "_parse_lines",
+      "file": "sms_tool/kernel/env_loader.py",
+      "line": 62,
+      "params": [
+        {
+          "name": "lines",
+          "ts_type": "string[]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_decode_value",
+      "file": "sms_tool/kernel/env_loader.py",
+      "line": 33,
+      "reason": "measured 0.61x on short unquoted strings due to PyO3 crossing cost; kept in Python"
+    },
+    {
+      "name": "read_env_file",
+      "file": "sms_tool/kernel/env_loader.py",
+      "line": 80,
+      "reason": "filesystem I/O stays in Python"
+    },
+    {
+      "name": "load_env",
+      "file": "sms_tool/kernel/env_loader.py",
+      "line": 90,
+      "reason": "mutates process os.environ in Python"
+    }
+  ]
+}

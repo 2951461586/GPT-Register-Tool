@@ -40,6 +40,11 @@ def _load_native_icloud_html() -> Any | None:
 
 _NATIVE_ICLOUD_HTML = _load_native_icloud_html()
 _NATIVE_STRIP_HTML_TO_VISIBLE_TEXT = getattr(_NATIVE_ICLOUD_HTML, "_strip_html_to_visible_text", None)
+_NATIVE_LATEST_MAIL_RECEIVED_AT = getattr(_NATIVE_ICLOUD_HTML, "_latest_mail_received_at", None)
+_NATIVE_DECODE_JS_STRING = getattr(_NATIVE_ICLOUD_HTML, "_decode_js_string", None)
+_NATIVE_WITH_MESSAGE_LIMIT = getattr(_NATIVE_ICLOUD_HTML, "_with_message_limit", None)
+_NATIVE_SAME_ORIGIN = getattr(_NATIVE_ICLOUD_HTML, "_same_origin", None)
+_NATIVE_EXTRACT_URL_CREDENTIALS = getattr(_NATIVE_ICLOUD_HTML, "_extract_url_credentials", None)
 
 from ..mailbox.mail_otp import _extract_otp_from_text, _message_received_ts
 from ..mailbox.errors import MailboxEndpointUnavailableError
@@ -318,6 +323,12 @@ def _valid_mailbox_url(value: Any) -> bool:
 
 
 def _with_message_limit(url: str, limit: int) -> str:
+    if (
+        _NATIVE_WITH_MESSAGE_LIMIT is not None
+        and isinstance(url, str)
+        and (limit is None or isinstance(limit, (int, float, bool, str)))
+    ):
+        return _NATIVE_WITH_MESSAGE_LIMIT(url, limit)
     parsed = urlsplit(url)
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))
     query["n"] = str(max(1, min(int(limit or 25), 50)))
@@ -354,6 +365,8 @@ def _decode_js_string(raw: str) -> str:
     解出来的就是一封完整邮件（HTML），所以直接交给下游的验证码提取，
     而不是再走一遍卡片解析。
     """
+    if _NATIVE_DECODE_JS_STRING is not None and isinstance(raw, str):
+        return _NATIVE_DECODE_JS_STRING(raw)
     try:
         return json.loads(f'"{raw}"')
     except ValueError:
@@ -366,6 +379,8 @@ def _latest_mail_received_at(value: str) -> str:
     页面已标注北京时间，所以显式带上 ``+08:00``，让下游 ``issued_after_unix``
     的比较拿到真实时刻，而不是落到「解析不出 ⇒ 不参与比较」那条宽容分支上。
     """
+    if _NATIVE_LATEST_MAIL_RECEIVED_AT is not None and (value is None or isinstance(value, str)):
+        return _NATIVE_LATEST_MAIL_RECEIVED_AT(value)
     match = _CN_TIME_RE.search(value or "")
     if not match:
         return ""
@@ -721,6 +736,8 @@ _GENERIC_SENDER_RE = re.compile(r"\b[a-z0-9._%+\-]+@(?:[a-z0-9\-]+\.)*(?:openai|
 
 
 def _same_origin(base_url: str, candidate_url: str) -> bool:
+    if _NATIVE_SAME_ORIGIN is not None and isinstance(base_url, str) and isinstance(candidate_url, str):
+        return bool(_NATIVE_SAME_ORIGIN(base_url, candidate_url))
     left = urlsplit(str(base_url or ""))
     right = urlsplit(str(candidate_url or ""))
     if left.scheme.lower() != right.scheme.lower():
@@ -741,6 +758,8 @@ def _parse_url_params(raw: str) -> dict[str, str]:
 
 
 def _extract_url_credentials(url: str, fallback_email: str) -> tuple[str, str, bool]:
+    if _NATIVE_EXTRACT_URL_CREDENTIALS is not None and isinstance(url, str) and isinstance(fallback_email, str):
+        return _NATIVE_EXTRACT_URL_CREDENTIALS(url, fallback_email)
     parsed = urlsplit(str(url or ""))
     frag_params = _parse_url_params(parsed.fragment)
     query_params = _parse_url_params(parsed.query)

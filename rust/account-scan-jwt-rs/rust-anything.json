@@ -1,0 +1,37 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/accounts/account_scan.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "account-scan-jwt-rs",
+  "exports": [
+    {
+      "name": "_jwt_plan_type",
+      "file": "sms_tool/accounts/account_scan.py",
+      "line": 668,
+      "params": [
+        {
+          "name": "token",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "scan_accounts",
+      "file": "sms_tool/accounts/account_scan.py",
+      "line": 76,
+      "reason": "threaded OAuth/liveness scan orchestration stays in Python"
+    }
+  ]
+}

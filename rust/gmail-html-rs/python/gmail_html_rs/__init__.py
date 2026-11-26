@@ -88,5 +88,6 @@ def _method(name, positions, names, json_result):
     return call
 
 _html_to_text = _native._html_to_text
+_parse_proxy_url = _native._parse_proxy_url
 
-__all__ = ['_html_to_text']
+__all__ = ['_html_to_text', '_parse_proxy_url']

@@ -1,0 +1,67 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/importers/sub2api.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "sub2api-parse-rs",
+  "exports": [
+    {
+      "name": "_normalize_sub2api_origin",
+      "file": "sms_tool/importers/sub2api.py",
+      "line": 682,
+      "params": [
+        {
+          "name": "api_url",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_parse_int_list",
+      "file": "sms_tool/importers/sub2api.py",
+      "line": 965,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "number[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_parse_name_list",
+      "file": "sms_tool/importers/sub2api.py",
+      "line": 950,
+      "reason": "measured 1.09x tie due to PyO3 list return overhead; kept in Python"
+    },
+    {
+      "name": "import_sub2api_session",
+      "file": "sms_tool/importers/sub2api.py",
+      "line": 31,
+      "reason": "HTTP upload and SQLite persistence stays in Python"
+    },
+    {
+      "name": "import_sub2api_sessions",
+      "file": "sms_tool/importers/sub2api.py",
+      "line": 121,
+      "reason": "threaded batch orchestration stays in Python"
+    }
+  ]
+}

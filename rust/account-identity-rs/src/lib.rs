@@ -78,9 +78,22 @@ fn proxy_egress_key(proxy: Bound<'_, PyAny>) -> PyResult<String> {
     proxy_egress_key_inner(proxy).map_err(error)
 }
 
+fn chatgpt_account_id_from_token_inner(value: String) -> Result<String, String> {
+    let out = port::chatgpt_account_id_from_token(value)?;
+    Ok(out)
+}
+
+/// `chatgpt_account_id_from_token`.
+#[pyfunction]
+#[pyo3(name = "chatgpt_account_id_from_token", signature = (value))]
+fn chatgpt_account_id_from_token(value: String) -> PyResult<String> {
+    chatgpt_account_id_from_token_inner(value).map_err(error)
+}
+
 #[pymodule]
 #[pyo3(name = "_native")]
 fn native_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(proxy_egress_key, m)?)?;
+    m.add_function(wrap_pyfunction!(chatgpt_account_id_from_token, m)?)?;
     Ok(())
 }

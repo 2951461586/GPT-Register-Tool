@@ -1,0 +1,266 @@
+{"fn": "_references_profile", "args": ["😀", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["  padded  ", "tab\tseparated"], "ok": false}
+{"fn": "_references_profile", "args": ["src/a/b.ts", "é"], "ok": false}
+{"fn": "_references_profile", "args": ["a😀b😀c", "tab\tseparated"], "ok": false}
+{"fn": "_references_profile", "args": ["{name} has {count} items", "a:b:c"], "ok": false}
+{"fn": "_references_profile", "args": ["{name} has {count} items", "hello world"], "ok": false}
+{"fn": "_references_profile", "args": ["emoji 👍🏽 mix", "a:b:c"], "ok": false}
+{"fn": "_references_profile", "args": ["C", "a😀b😀c"], "ok": false}
+{"fn": "_references_profile", "args": ["straßeHello World", "SSEHELLO W"], "ok": false}
+{"fn": "_references_profile", "args": ["a😀b😀c./x/**/*.json", "ab"], "ok": false}
+{"fn": "_references_profile", "args": [".leading", "日本語のテキスト"], "ok": false}
+{"fn": "_references_profile", "args": ["key_name-1", "abc"], "ok": false}
+{"fn": "_references_profile", "args": ["a:b:c", "ünïcödéns:key.path"], "ok": false}
+{"fn": "_references_profile", "args": ["a😀b😀c", "İstanbul"], "ok": false}
+{"fn": "_references_profile", "args": ["Hello World{name} has {count} items", "hello"], "ok": true}
+{"fn": "_references_profile", "args": ["", ".leadingΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_references_profile", "args": ["emoji 👍🏽 mix", "﻿bom"], "ok": false}
+{"fn": "_references_profile", "args": ["HELLO", "a😀b😀cemoji 👍🏽 mix"], "ok": false}
+{"fn": "_references_profile", "args": ["M", "﻿bom"], "ok": false}
+{"fn": "_references_profile", "args": ["HELLO", "a..b"], "ok": false}
+{"fn": "_references_profile", "args": ["日本語のテキスト", "日本語のテキスト"], "ok": true}
+{"fn": "_references_profile", "args": ["  padded  HELLO", "İstanbul"], "ok": false}
+{"fn": "_references_profile", "args": ["key_name-1", "İstanbulline1\nline2"], "ok": false}
+{"fn": "_references_profile", "args": ["スト", "日本語のテキスト"], "ok": false}
+{"fn": "_references_profile", "args": ["trailing.", "😀"], "ok": false}
+{"fn": "_references_profile", "args": ["tab\tseparated", "a:b:c"], "ok": false}
+{"fn": "_references_profile", "args": ["trailing.", "  padded  "], "ok": false}
+{"fn": "_references_profile", "args": ["o world", "hello world"], "ok": false}
+{"fn": "_references_profile", "args": [".leading", "a"], "ok": false}
+{"fn": "_references_profile", "args": ["emoji 👍🏽 mix", "abc"], "ok": false}
+{"fn": "_references_profile", "args": ["a", "İstanbul"], "ok": false}
+{"fn": "_references_profile", "args": ["B", "İstanbul"], "ok": false}
+{"fn": "_references_profile", "args": ["İstanbul", "日本語のテキスト"], "ok": false}
+{"fn": "_references_profile", "args": ["straße日本語のテキスト", "key_name-1"], "ok": false}
+{"fn": "_references_profile", "args": ["a", "trailing.日本語のテキスト"], "ok": false}
+{"fn": "_references_profile", "args": [".leading", "src/a/b.ts"], "ok": false}
+{"fn": "_references_profile", "args": ["ΥΦ", "aΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_references_profile", "args": [":", ".leading  padded  "], "ok": false}
+{"fn": "_references_profile", "args": ["a..bHello World", "hello"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "İstanbul"], "ok": false}
+{"fn": "_references_profile", "args": [":", "a"], "ok": false}
+{"fn": "_references_profile", "args": ["a..b", "a"], "ok": false}
+{"fn": "_references_profile", "args": ["./x/**/*.json", "﻿bom"], "ok": false}
+{"fn": "_references_profile", "args": ["trailing.", "ling."], "ok": false}
+{"fn": "_references_profile", "args": ["tsΣΊΣΥΦΟ", "src/a/b.tsΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_references_profile", "args": ["a.b.c", "a..b"], "ok": false}
+{"fn": "_references_profile", "args": ["hello world", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["İstanbul", "tab\tseparated"], "ok": false}
+{"fn": "_references_profile", "args": ["emoji 👍🏽 mixsrc/a/b.ts", "ns:key.path"], "ok": false}
+{"fn": "_references_profile", "args": ["{name} has {count} items", "line1\nline2"], "ok": false}
+{"fn": "_references_profile", "args": ["hello", "HELLO"], "ok": false}
+{"fn": "_references_profile", "args": [".leadinga", "😀"], "ok": false}
+{"fn": "_references_profile", "args": [".", "ünïcödé./x/**/*.json"], "ok": false}
+{"fn": "_references_profile", "args": ["İstan", "İstanbul"], "ok": false}
+{"fn": "_references_profile", "args": ["a.b.c", "日本語のテキスト"], "ok": false}
+{"fn": "_references_profile", "args": [":", ".leading"], "ok": false}
+{"fn": "_references_profile", "args": ["tab\tseparated", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_references_profile", "args": ["key_name-1", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_references_profile", "args": ["helloa:b:c", "a:b"], "ok": false}
+{"fn": "_references_profile", "args": ["a:b:c", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_references_profile", "args": ["abc", ""], "ok": false}
+{"fn": "_references_profile", "args": ["a..b", "line1\nline2"], "ok": false}
+{"fn": "_references_profile", "args": ["{name} has {count} items", "tem"], "ok": false}
+{"fn": "_references_profile", "args": ["moji 👍🏽 ", "emoji 👍🏽 mix"], "ok": false}
+{"fn": "_references_profile", "args": ["hello", "a.b.c"], "ok": false}
+{"fn": "_references_profile", "args": ["hello", "hello"], "ok": true}
+{"fn": "_references_profile", "args": ["a", "hello world"], "ok": false}
+{"fn": "_references_profile", "args": ["hello", "l"], "ok": false}
+{"fn": "_references_profile", "args": ["́", "é"], "ok": false}
+{"fn": "_references_profile", "args": ["  padded  ", "日本語のテキスト"], "ok": false}
+{"fn": "_references_profile", "args": ["{name} has {count} items  padded  ", "a.b.c"], "ok": false}
+{"fn": "_references_profile", "args": ["key_name-1", "HELLO"], "ok": false}
+{"fn": "_references_profile", "args": ["İstanbul", ""], "ok": false}
+{"fn": "_references_profile", "args": ["a:b:c", ""], "ok": false}
+{"fn": "_references_profile", "args": ["Hello World", "  padded  "], "ok": false}
+{"fn": "_references_profile", "args": ["日本語のテキストa😀b😀c", "src/a/b.ts"], "ok": false}
+{"fn": "_references_profile", "args": ["İstanbulab", "LAB"], "ok": false}
+{"fn": "_references_profile", "args": ["a..", "a..b"], "ok": false}
+{"fn": "_references_profile", "args": [":", "./x/**/*.json"], "ok": false}
+{"fn": "_references_profile", "args": ["﻿bomé", "line1\nline2"], "ok": false}
+{"fn": "_references_profile", "args": ["é", "éİstanbul"], "ok": false}
+{"fn": "_references_profile", "args": ["ab", "é"], "ok": false}
+{"fn": "_references_profile", "args": ["helloé", ":"], "ok": false}
+{"fn": "_references_profile", "args": ["﻿bom.leading", "ans:key.path"], "ok": false}
+{"fn": "_references_profile", "args": ["tab\tseparated", "t"], "ok": false}
+{"fn": "_references_profile", "args": ["emoji 👍🏽 mix", "a"], "ok": false}
+{"fn": "_references_profile", "args": ["a.b.c", "key_name-1"], "ok": false}
+{"fn": "_references_profile", "args": ["tab\tseparated", "Hello World"], "ok": false}
+{"fn": "_references_profile", "args": [".leading:", "a:b:c"], "ok": false}
+{"fn": "_references_profile", "args": ["line1\nline2hello", "a..b"], "ok": false}
+{"fn": "_references_profile", "args": ["😀ns:key.path", "a..b"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "😀"], "ok": true}
+{"fn": "_references_profile", "args": ["c", "a.b.c"], "ok": false}
+{"fn": "_references_profile", "args": ["ΣΊΣΥΦΟΣ", "﻿bom./x/**/*.json"], "ok": false}
+{"fn": "_references_profile", "args": ["} ITEM", "{name} has {count} items"], "ok": false}
+{"fn": "_references_profile", "args": ["Hello WorldHello World", "﻿bom"], "ok": false}
+{"fn": "_references_profile", "args": ["ab", "helloabc"], "ok": false}
+{"fn": "_references_profile", "args": ["日本語のテキスト", ":"], "ok": false}
+{"fn": "_references_profile", "args": ["  padded  ", "a.b.c"], "ok": false}
+{"fn": "_references_profile", "args": ["ab", "ünïcödé"], "ok": false}
+{"fn": "_references_profile", "args": ["line1\nline2", "İstanbul"], "ok": false}
+{"fn": "_references_profile", "args": ["aa", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_references_profile", "args": ["a", "a😀b😀c"], "ok": false}
+{"fn": "_references_profile", "args": ["HELLO", "{name} has {count} items"], "ok": false}
+{"fn": "_references_profile", "args": ["tab\tseparated", ".leading.leading"], "ok": false}
+{"fn": "_references_profile", "args": ["a.b.c", "é"], "ok": false}
+{"fn": "_references_profile", "args": ["ΣΊΣΥΦΟΣ", "😀"], "ok": false}
+{"fn": "_references_profile", "args": ["tab\tseparated", "ated"], "ok": false}
+{"fn": "_references_profile", "args": ["straße", "a.b.chello"], "ok": false}
+{"fn": "_references_profile", "args": ["a:b:c😀", "key_name-1a:b:c"], "ok": false}
+{"fn": "_references_profile", "args": ["straße", "./x/**/*.json"], "ok": false}
+{"fn": "_references_profile", "args": ["EMOJI 👍🏽 MIXΣΊ", "emoji 👍🏽 mixΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_references_profile", "args": ["a:b:c", ":"], "ok": false}
+{"fn": "_references_profile", "args": ["*/*.js", "./x/**/*.json"], "ok": false}
+{"fn": "_references_profile", "args": ["hello", "﻿bom"], "ok": false}
+{"fn": "_references_profile", "args": [":", "{name} has {count} items"], "ok": false}
+{"fn": "_references_profile", "args": ["hello world", "a:b:c"], "ok": false}
+{"fn": "_references_profile", "args": ["a", ""], "ok": false}
+{"fn": "_references_profile", "args": ["tab\tseparated", "abc"], "ok": false}
+{"fn": "_references_profile", "args": ["Hello World", "tab\tseparated"], "ok": false}
+{"fn": "_references_profile", "args": ["﻿bomHELLO", "emoji 👍🏽 mix"], "ok": false}
+{"fn": "_references_profile", "args": ["a", "emoji 👍🏽 mix"], "ok": false}
+{"fn": "_references_profile", "args": ["hello world", "a😀b😀c./x/**/*.json"], "ok": false}
+{"fn": "_references_profile", "args": ["a", "日本語のテキスト"], "ok": false}
+{"fn": "_references_profile", "args": ["İstanbul", "ünïcödé"], "ok": false}
+{"fn": "_references_profile", "args": ["﻿bom", "./x/**/*.json"], "ok": false}
+{"fn": "_references_profile", "args": ["hello world日本語のテキスト", ".leading"], "ok": false}
+{"fn": "_references_profile", "args": ["hello", "abc"], "ok": false}
+{"fn": "_references_profile", "args": ["{name} has {count} items", "abc"], "ok": false}
+{"fn": "_references_profile", "args": ["tab\tseparated", ""], "ok": false}
+{"fn": "_references_profile", "args": ["d:", "Hello World:"], "ok": false}
+{"fn": "_references_profile", "args": ["S", "src/a/b.ts"], "ok": false}
+{"fn": "_references_profile", "args": ["a.b.c", "hello"], "ok": false}
+{"fn": "_references_profile", "args": ["src/a/b.ts", "."], "ok": false}
+{"fn": "_references_profile", "args": ["a.b.c", "a.b.c"], "ok": true}
+{"fn": "_references_profile", "args": ["-1", "key_name-1"], "ok": false}
+{"fn": "_references_profile", "args": ["emoji 👍🏽 mix", "HELLO"], "ok": false}
+{"fn": "_references_profile", "args": ["Hello World", "ab  padded  "], "ok": false}
+{"fn": "_references_profile", "args": ["a😀b😀c", "日本語のテキスト"], "ok": false}
+{"fn": "_references_profile", "args": ["abc", "a:b:chello world"], "ok": false}
+{"fn": "_references_profile", "args": ["﻿bom", "hello world"], "ok": false}
+{"fn": "_references_profile", "args": ["HELL", "hello"], "ok": false}
+{"fn": "_references_profile", "args": ["abc", "src/a/b.ts"], "ok": false}
+{"fn": "_references_profile", "args": ["line1\nline2", "emoji 👍🏽 mix"], "ok": false}
+{"fn": "_references_profile", "args": ["emoji 👍🏽 mixtab\tseparated", "HELLO"], "ok": false}
+{"fn": "_references_profile", "args": [":", ":"], "ok": true}
+{"fn": "_references_profile", "args": ["./x/**/*.json", "😀"], "ok": false}
+{"fn": "_references_profile", "args": ["hello worldns:key.path", "  padded  "], "ok": false}
+{"fn": "_references_profile", "args": ["a:b:c", "src/a/b.ts"], "ok": false}
+{"fn": "_references_profile", "args": ["hello", "a😀b😀cstraße"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "﻿bomhello"], "ok": false}
+{"fn": "_references_profile", "args": ["", "İstanbul"], "ok": false}
+{"fn": "_references_profile", "args": ["ünïcödé", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_references_profile", "args": ["helloHello World", "é"], "ok": false}
+{"fn": "_references_profile", "args": ["emoji 👍🏽 mix:", "{name} has {count} items"], "ok": false}
+{"fn": "_references_profile", "args": ["straße", "hello world﻿bom"], "ok": false}
+{"fn": "_references_profile", "args": ["l", "hello"], "ok": false}
+{"fn": "_references_profile", "args": ["line1\nline2", "line1\nl"], "ok": false}
+{"fn": "_references_profile", "args": ["nbu", "İstanbul"], "ok": false}
+{"fn": "_references_profile", "args": ["  padded  ", "  padded  "], "ok": false}
+{"fn": "_references_profile", "args": ["a", "hellokey_name-1"], "ok": false}
+{"fn": "_references_profile", "args": ["trailing.", "abc{name} has {count} items"], "ok": false}
+{"fn": "_references_profile", "args": ["*/*.JSON", "./x/**/*.json"], "ok": false}
+{"fn": "_references_profile", "args": ["hello", "trailing."], "ok": false}
+{"fn": "_references_profile", "args": ["adin", ".leading"], "ok": false}
+{"fn": "_references_profile", "args": ["a😀b😀c", "hello"], "ok": false}
+{"fn": "_references_profile", "args": ["trailing.", "ns:key.path"], "ok": false}
+{"fn": "_references_profile", "args": ["﻿bom", "日本語のテキストsrc/a/b.ts"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "é"], "ok": false}
+{"fn": "_references_profile", "args": ["ΣΊΣΥΦΟΣ", "  padded  "], "ok": false}
+{"fn": "_references_profile", "args": ["{name} has {count} items", "ns:key.path"], "ok": false}
+{"fn": "_references_profile", "args": ["in", ".leading"], "ok": false}
+{"fn": "_references_profile", "args": ["src/a/b.ts", "a:b:c"], "ok": false}
+{"fn": "_references_profile", "args": ["abc", "İstanbultrailing."], "ok": false}
+{"fn": "_references_profile", "args": ["a.b.c😀", "ns:key.path"], "ok": false}
+{"fn": "_references_profile", "args": ["日本語のテキスト", "a..b  padded  "], "ok": false}
+{"fn": "_references_profile", "args": [":", "a:b:c"], "ok": false}
+{"fn": "_references_profile", "args": ["helloHello World", "HELLO"], "ok": false}
+{"fn": "_references_profile", "args": ["  padded  ", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_references_profile", "args": [":k", "ns:key.path"], "ok": false}
+{"fn": "_references_profile", "args": ["Hello World", "ünïcödé"], "ok": false}
+{"fn": "_references_profile", "args": ["{name} has {count} items﻿bom", "日本語のテキスト"], "ok": false}
+{"fn": "_references_profile", "args": ["l", "hello world"], "ok": false}
+{"fn": "_references_profile", "args": ["日本語のテキスト", "ünïcödé"], "ok": false}
+{"fn": "_references_profile", "args": ["a.b.c", "😀"], "ok": false}
+{"fn": "_references_profile", "args": ["emoji 👍🏽 mix", ":"], "ok": false}
+{"fn": "_references_profile", "args": ["emoji 👍🏽 mix", "😀"], "ok": false}
+{"fn": "_references_profile", "args": ["  padded  ", "DED"], "ok": false}
+{"fn": "_references_profile", "args": ["İstanbul", "key_name-1"], "ok": false}
+{"fn": "_references_profile", "args": [".leadingé", "́"], "ok": false}
+{"fn": "_references_profile", "args": ["ésrc/a/b.ts", "./x/**/*.json"], "ok": false}
+{"fn": "_references_profile", "args": ["hello", "é"], "ok": false}
+{"fn": "_references_profile", "args": ["é", "emoji 👍🏽 mix"], "ok": false}
+{"fn": "_references_profile", "args": ["g", "trailing."], "ok": false}
+{"fn": "_references_profile", "args": [".leading", "trailing.ünïcödé"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "abc  padded  "], "ok": false}
+{"fn": "_references_profile", "args": ["﻿boma..b", "oma.."], "ok": false}
+{"fn": "_references_profile", "args": [":", "./x/**/*.json./x/**/*.json"], "ok": false}
+{"fn": "_references_profile", "args": ["a😀b😀c", "abkey_name-1"], "ok": false}
+{"fn": "_references_profile", "args": ["b", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["héllo wörld", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["👍🏽 thumbs", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["日本語", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["é", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["İstanbul", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["straße", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["ılık ırmak", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["👨‍👩‍👧 family", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["a b", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["ΣΊΣΥΦΟΣ", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["a😀b", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["﻿bom", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["a²b x½ y①", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["aⅠb Ⅻ", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["a𐐀b 𝐀bc", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["कि ٣٤", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["Iı İi", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["K K k", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["ſ s S", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["x‍y 👨‍👩‍👧", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["a b c　d", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["١٢٣ ٤٥", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["𝟘𝟙 ²³", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["snake_case foo-bar o'neil", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["ǅungla Ǆ", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["one\r\ntwo threefour", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["café café", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["ΣΑΣ σας ς", "ab"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "héllo wörld"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "👍🏽 thumbs"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "日本語"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", ""], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "straße"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "ılık ırmak"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "👨‍👩‍👧 family"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "a b"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "a😀b"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "﻿bom"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "a²b x½ y①"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "aⅠb Ⅻ"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "a𐐀b 𝐀bc"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "कि ٣٤"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "Iı İi"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "K K k"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "ſ s S"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "x‍y 👨‍👩‍👧"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "a b c　d"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "١٢٣ ٤٥"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "𝟘𝟙 ²³"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "snake_case foo-bar o'neil"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "ǅungla Ǆ"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "one\r\ntwo threefour"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "café café"], "ok": false}
+{"fn": "_references_profile", "args": ["😀", "ΣΑΣ σας ς"], "ok": false}
+{"fn": "_references_profile", "args": ["\"C:\\Program Files\\Camoufox\\camoufox.exe\" --no-remote --marionette --headless --disable-gpu --window-size=1280,960 --lang=en-US --proxy-server=socks5://127.0.0.1:10808 -profile \"F:\\epsoft\\GPT-Register-Tool\\runtime\\browser_profiles\\camoufox\\alice+01@icloud.com\" --new-instance --start-maximized", "f:/epsoft/gpt-register-tool/runtime/browser_profiles/camoufox/alice+01@icloud.com"], "ok": true}
+{"fn": "_references_profile", "args": ["\"C:\\Program Files\\Camoufox\\camoufox.exe\" --no-remote --marionette --headless --disable-gpu --window-size=1280,960 --lang=en-US --proxy-server=socks5://127.0.0.1:10808 -profile \"F:\\epsoft\\GPT-Register-Tool\\runtime\\browser_profiles\\camoufox\\alice+01@icloud.com\" --new-instance --start-maximized", "f:/epsoft/gpt-register-tool/runtime/browser_profiles/camoufox/alice"], "ok": false}
+{"fn": "_references_profile", "args": ["\"C:\\Program Files\\Camoufox\\camoufox.exe\" --no-remote --marionette --headless --disable-gpu --window-size=1280,960 --lang=en-US --proxy-server=socks5://127.0.0.1:10808 -profile \"F:\\epsoft\\GPT-Register-Tool\\runtime\\browser_profiles\\camoufox\\alice+01@icloud.com\" --new-instance --start-maximized", ""], "ok": false}
+{"fn": "_references_profile", "args": ["\"C:\\Users\\demo\\AppData\\Local\\ms-playwright\\chromium-1161\\chrome-win\\chrome.exe\" --disable-background-networking --enable-features=NetworkService,NetworkServiceInProcess --disable-background-timer-throttling --disable-renderer-backgrounding --user-data-dir=F:\\epsoft\\GPT-Register-Tool\\runtime\\browser_profiles\\playwright\\bob@example.com\\ --remote-debugging-pipe about:blank", "f:/epsoft/gpt-register-tool/runtime/browser_profiles/playwright/bob@example.com"], "ok": true}
+{"fn": "_references_profile", "args": ["\"C:\\Users\\demo\\AppData\\Local\\ms-playwright\\chromium-1161\\chrome-win\\chrome.exe\" --disable-background-networking --enable-features=NetworkService,NetworkServiceInProcess --disable-background-timer-throttling --disable-renderer-backgrounding --user-data-dir=F:\\epsoft\\GPT-Register-Tool\\runtime\\browser_profiles\\playwright\\bob@example.com\\ --remote-debugging-pipe about:blank", "f:/epsoft/gpt-register-tool/runtime/browser_profiles/playwright/bob"], "ok": false}
+{"fn": "_references_profile", "args": ["firefox.exe --profile=C:\\Profiles\\User1/", "c:/profiles/user1"], "ok": true}
+{"fn": "_references_profile", "args": ["firefox.exe -profile=C:\\Profiles\\User2", "c:/profiles/user2"], "ok": true}
+{"fn": "_references_profile", "args": ["python.exe -c \"print(\\\"f:/profiles/user1\\\")\"", "f:/profiles/user1"], "ok": false}
+{"fn": "_references_profile", "args": ["notepad.exe C:\\Users\\demo\\notes.txt", "c:/profiles/user1"], "ok": false}
+{"fn": "_references_profile", "args": ["", "c:/profiles/user1"], "ok": false}

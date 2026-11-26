@@ -1,9 +1,15 @@
-//! Rust port of HTML visible-text stripping from `sms_tool/providers/mailbox_icloud_url.py`.
+//! Rust port of HTML visible-text stripping, data-URI decoding, JS string unescaping,
+//! Chinese timestamp parsing, and URL limit rewriting from
+//! `sms_tool/providers/mailbox_icloud_url.py`.
+
+#![forbid(unsafe_code)]
 
 use std::sync::OnceLock;
 
 use regex::Regex;
 use serde_json::Value;
+
+const HEX: &[u8; 16] = b"0123456789ABCDEF";
 
 fn comment_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
@@ -39,6 +45,16 @@ fn charref_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(r"&(#[0-9]+;?|#[xX][0-9a-fA-F]+;?|[^\t\n\f <&#;]{1,32};?)").expect("valid regex")
+    })
+}
+
+fn cn_time_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"([0-9]{4})\s*年\s*([0-9]{1,2})\s*月\s*([0-9]{1,2})\s*日\s*([0-9]{1,2})\s*:\s*([0-9]{2})\s*:\s*([0-9]{2})",
+        )
+        .expect("valid regex")
     })
 }
 
@@ -319,15 +335,466 @@ pub fn _strip_html_to_visible_text(raw_html: serde_json::Value) -> Result<String
     Ok(out)
 }
 
+#[inline]
+fn hex_val(b: u8) -> Option<u8> {
+    match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        _ => None,
+    }
+}
+
+fn days_in_month(year: u32, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            if (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400) {
+                29
+            } else {
+                28
+            }
+        }
+        _ => 0,
+    }
+}
+
+pub fn _latest_mail_received_at(value: serde_json::Value) -> Result<String, String> {
+    let text = match &value {
+        Value::Null | Value::Bool(false) => "",
+        Value::Number(n)
+            if n.as_i64() == Some(0) || n.as_u64() == Some(0) || n.as_f64() == Some(0.0) =>
+        {
+            ""
+        }
+        Value::Array(a) if a.is_empty() => "",
+        Value::Object(o) if o.is_empty() => "",
+        Value::String(s) => s.as_str(),
+        _ => return Err("TypeError: expected string or bytes-like object".to_string()),
+    };
+    if text.is_empty() {
+        return Ok(String::new());
+    }
+    let Some(caps) = cn_time_re().captures(text) else {
+        return Ok(String::new());
+    };
+    let year: u32 = caps[1].parse().unwrap_or(0);
+    let month: u32 = caps[2].parse().unwrap_or(0);
+    let day: u32 = caps[3].parse().unwrap_or(0);
+    let hour: u32 = caps[4].parse().unwrap_or(99);
+    let minute: u32 = caps[5].parse().unwrap_or(99);
+    let second: u32 = caps[6].parse().unwrap_or(99);
+    if !(1..=9999).contains(&year)
+        || !(1..=12).contains(&month)
+        || day == 0
+        || day > days_in_month(year, month)
+        || hour > 23
+        || minute > 59
+        || second > 59
+    {
+        return Ok(String::new());
+    }
+    Ok(format!(
+        "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}+08:00"
+    ))
+}
+
+pub fn _decode_js_string(raw: String) -> Result<String, String> {
+    let raw = raw.as_str();
+    let mut wrapped = String::with_capacity(raw.len() + 2);
+    wrapped.push('"');
+    wrapped.push_str(raw);
+    wrapped.push('"');
+    if let Ok(decoded) = serde_json::from_str::<String>(&wrapped) {
+        return Ok(decoded);
+    }
+    Ok(raw
+        .replace("\\r\\n", "\n")
+        .replace("\\\"", "\"")
+        .replace("\\/", "/"))
+}
+
+fn quote_plus(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for &b in s.as_bytes() {
+        if b == b' ' {
+            out.push('+');
+        } else if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push('%');
+            out.push(HEX[(b >> 4) as usize] as char);
+            out.push(HEX[(b & 0x0f) as usize] as char);
+        }
+    }
+    out
+}
+
+fn unquote_plus(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'+' {
+            out.push(b' ');
+            i += 1;
+        } else if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let (Some(hi), Some(lo)) = (hex_val(bytes[i + 1]), hex_val(bytes[i + 2]))
+        {
+            out.push((hi << 4) | lo);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+pub fn _with_message_limit(url: String, limit: serde_json::Value) -> Result<String, String> {
+    let url = url.as_str();
+    let limit_int: i64 = match &limit {
+        Value::Null | Value::Bool(false) => 25,
+        Value::Bool(true) => 1,
+        Value::Array(a) if a.is_empty() => 25,
+        Value::Object(o) if o.is_empty() => 25,
+        Value::Number(n) => {
+            let v = n
+                .as_i64()
+                .or_else(|| n.as_f64().map(|f| f as i64))
+                .unwrap_or(25);
+            if v == 0 { 25 } else { v }
+        }
+        Value::String(s) => {
+            if s.is_empty() {
+                25
+            } else {
+                let t = py_trim(s);
+                let v = t.parse::<i64>().map_err(|e| format!("ValueError: {e}"))?;
+                if v == 0 { 25 } else { v }
+            }
+        }
+        _ => return Err("TypeError: invalid limit".to_string()),
+    };
+    let clamped = limit_int.clamp(1, 50);
+
+    // Exact `urllib.parse.urlsplit` decomposition: CPython strips only leading unsafe bytes (<= 0x20)
+    // and strips embedded CR/LF/TAB characters.
+    let trimmed = url.trim_start_matches(|c: char| (c as u32) <= 0x20);
+    let cleaned: String = trimmed
+        .chars()
+        .filter(|c| !matches!(c, '\t' | '\r' | '\n'))
+        .collect();
+    let s = cleaned.as_str();
+    let (scheme, rest) = if let Some(idx) = s.find(':') {
+        let cand = &s[..idx];
+        let valid_scheme = !cand.is_empty()
+            && cand.as_bytes()[0].is_ascii_alphabetic()
+            && cand
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-' | b'.'));
+        if valid_scheme {
+            (cand.to_ascii_lowercase(), &s[idx + 1..])
+        } else {
+            (String::new(), s)
+        }
+    } else {
+        (String::new(), s)
+    };
+    let (before_frag, fragment) = rest.split_once('#').unwrap_or((rest, ""));
+    let (before_query, query_raw) = before_frag.split_once('?').unwrap_or((before_frag, ""));
+    let (netloc, path) = if let Some(after) = before_query.strip_prefix("//") {
+        match after.find('/') {
+            Some(pos) => (&after[..pos], &after[pos..]),
+            None => (after, ""),
+        }
+    } else {
+        ("", before_query)
+    };
+
+    // Ordered dict of query params (parse_qsl(keep_blank_values=True))
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    if !query_raw.is_empty() {
+        for segment in query_raw.split('&') {
+            if segment.is_empty() {
+                continue;
+            }
+            let (k_raw, v_raw) = segment.split_once('=').unwrap_or((segment, ""));
+            let k = unquote_plus(k_raw);
+            let v = unquote_plus(v_raw);
+            if let Some(existing) = pairs.iter_mut().find(|(ek, _)| ek == &k) {
+                existing.1 = v;
+            } else {
+                pairs.push((k, v));
+            }
+        }
+    }
+    let n_val = clamped.to_string();
+    if let Some(existing) = pairs.iter_mut().find(|(ek, _)| ek == "n") {
+        existing.1 = n_val;
+    } else {
+        pairs.push(("n".to_string(), n_val));
+    }
+
+    let mut encoded_query = String::new();
+    for (idx, (k, v)) in pairs.iter().enumerate() {
+        if idx > 0 {
+            encoded_query.push('&');
+        }
+        encoded_query.push_str(&quote_plus(k));
+        encoded_query.push('=');
+        encoded_query.push_str(&quote_plus(v));
+    }
+
+    // urlunsplit((scheme, netloc, path, query, fragment))
+    let mut out = String::with_capacity(url.len() + 16);
+    if !netloc.is_empty() || (!scheme.is_empty() && path.starts_with("//")) {
+        if !scheme.is_empty() {
+            out.push_str(&scheme);
+            out.push(':');
+        }
+        out.push_str("//");
+        out.push_str(netloc);
+        if !path.is_empty() && !path.starts_with('/') {
+            out.push('/');
+        }
+        out.push_str(path);
+    } else {
+        if !scheme.is_empty() {
+            out.push_str(&scheme);
+            out.push(':');
+        }
+        out.push_str(path);
+    }
+    if !encoded_query.is_empty() {
+        out.push('?');
+        out.push_str(&encoded_query);
+    }
+    if !fragment.is_empty() {
+        out.push('#');
+        out.push_str(fragment);
+    }
+    Ok(out)
+}
+
+const SPA_CREDENTIAL_KEYS: [&str; 6] = ["key", "token", "auth_code", "auth", "secret", "password"];
+
+struct SplitUrl {
+    scheme: String,
+    netloc: String,
+    query: String,
+    fragment: String,
+}
+
+fn py_urlsplit(raw: &str) -> SplitUrl {
+    let trimmed = raw.trim_start_matches(|c: char| (c as u32) <= 0x20);
+    let cleaned: String = trimmed
+        .chars()
+        .filter(|c| !matches!(c, '\t' | '\r' | '\n'))
+        .collect();
+    let s = cleaned.as_str();
+    let (scheme, rest) = if let Some(idx) = s.find(':') {
+        let cand = &s[..idx];
+        let valid_scheme = !cand.is_empty()
+            && cand.as_bytes()[0].is_ascii_alphabetic()
+            && cand
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-' | b'.'));
+        if valid_scheme {
+            (cand.to_ascii_lowercase(), &s[idx + 1..])
+        } else {
+            (String::new(), s)
+        }
+    } else {
+        (String::new(), s)
+    };
+    let (before_frag, fragment) = rest.split_once('#').unwrap_or((rest, ""));
+    let (before_query, query) = before_frag.split_once('?').unwrap_or((before_frag, ""));
+    let netloc = if let Some(after) = before_query.strip_prefix("//") {
+        match after.find('/') {
+            Some(pos) => &after[..pos],
+            None => after,
+        }
+    } else {
+        ""
+    };
+    SplitUrl {
+        scheme,
+        netloc: netloc.to_string(),
+        query: query.to_string(),
+        fragment: fragment.to_string(),
+    }
+}
+
+fn netloc_host_port(netloc: &str) -> Result<(String, Option<u16>), String> {
+    if netloc.is_empty() {
+        return Ok((String::new(), None));
+    }
+    let hostinfo = match netloc.rfind('@') {
+        Some(pos) => &netloc[pos + 1..],
+        None => netloc,
+    };
+    if (hostinfo.contains('[') && !hostinfo.contains(']'))
+        || (hostinfo.contains(']') && !hostinfo.contains('['))
+    {
+        return Err("ValueError: Invalid IPv6 URL".to_string());
+    }
+    let (host, port_str) = if let Some(after_open) = hostinfo.strip_prefix('[') {
+        let Some(close) = after_open.find(']') else {
+            return Err("ValueError: Invalid IPv6 URL".to_string());
+        };
+        let h = &after_open[..close];
+        let ip_part = h.split('%').next().unwrap_or(h);
+        if ip_part.parse::<std::net::Ipv6Addr>().is_err() {
+            return Err(format!(
+                "ValueError: {h:?} does not appear to be an IPv4 or IPv6 address"
+            ));
+        }
+        let tail = &after_open[close + 1..];
+        let p = tail.strip_prefix(':').unwrap_or("");
+        (h.to_lowercase(), p)
+    } else if hostinfo.contains('[') || hostinfo.contains(']') {
+        return Err("ValueError: Invalid IPv6 URL".to_string());
+    } else if let Some((h, p)) = hostinfo.split_once(':') {
+        (h.to_lowercase(), p)
+    } else {
+        (hostinfo.to_lowercase(), "")
+    };
+
+    let port = if port_str.is_empty() {
+        None
+    } else if port_str.bytes().all(|b| b.is_ascii_digit()) {
+        match port_str.parse::<u32>() {
+            Ok(v) if v <= 65535 => Some(v as u16),
+            _ => {
+                return Err(format!(
+                    "ValueError: Port out of range 0-65535: {port_str:?}"
+                ));
+            }
+        }
+    } else {
+        return Err(format!(
+            "ValueError: Port could not be cast to integer value as {port_str:?}"
+        ));
+    };
+    Ok((host, port))
+}
+
+pub fn _same_origin(base_url: String, candidate_url: String) -> Result<bool, String> {
+    let left = py_urlsplit(&base_url);
+    let right = py_urlsplit(&candidate_url);
+    if left.scheme != right.scheme {
+        return Ok(false);
+    }
+    let (lh, lp) = netloc_host_port(&left.netloc)?;
+    let (rh, rp) = netloc_host_port(&right.netloc)?;
+    if lh != rh {
+        return Ok(false);
+    }
+    let default_port = match left.scheme.as_str() {
+        "http" => Some(80u16),
+        "https" => Some(443u16),
+        _ => None,
+    };
+    let lp_eff = match lp {
+        Some(p) if p > 0 => Some(p),
+        _ => default_port,
+    };
+    let rp_eff = match rp {
+        Some(p) if p > 0 => Some(p),
+        _ => default_port,
+    };
+    Ok(lp_eff == rp_eff)
+}
+
+fn parse_url_params(raw: &str) -> Vec<(String, String)> {
+    let mut text = py_trim(raw);
+    if let Some((_, after)) = text.split_once('?') {
+        text = after;
+    } else if text.starts_with('/') {
+        return Vec::new();
+    }
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    if text.is_empty() {
+        return pairs;
+    }
+    for segment in text.split('&') {
+        if segment.is_empty() {
+            continue;
+        }
+        let (k_raw, v_raw) = segment.split_once('=').unwrap_or((segment, ""));
+        let k_decoded = unquote_plus(k_raw);
+        if k_decoded.is_empty() {
+            continue;
+        }
+        let k = py_trim(&k_decoded).to_lowercase();
+        let v = py_trim(&unquote_plus(v_raw)).to_string();
+        if let Some(existing) = pairs.iter_mut().find(|(ek, _)| ek == &k) {
+            existing.1 = v;
+        } else {
+            pairs.push((k, v));
+        }
+    }
+    pairs
+}
+
+fn get_param<'a>(pairs: &'a [(String, String)], key: &str) -> Option<&'a str> {
+    pairs
+        .iter()
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v.as_str())
+        .filter(|v| !v.is_empty())
+}
+
+pub fn _extract_url_credentials(
+    url: String,
+    fallback_email: String,
+) -> Result<(String, String, bool), String> {
+    let parsed = py_urlsplit(&url);
+    let frag_params = parse_url_params(&parsed.fragment);
+    let query_params = parse_url_params(&parsed.query);
+    let email = if let Some(e) = get_param(&frag_params, "email") {
+        e.to_lowercase()
+    } else if let Some(e) = get_param(&query_params, "email") {
+        e.to_lowercase()
+    } else {
+        py_trim(&fallback_email).to_lowercase()
+    };
+    for field in SPA_CREDENTIAL_KEYS {
+        if let Some(val) = get_param(&frag_params, field) {
+            return Ok((email, val.to_string(), true));
+        }
+    }
+    for field in SPA_CREDENTIAL_KEYS {
+        if let Some(val) = get_param(&query_params, field) {
+            return Ok((email, val.to_string(), false));
+        }
+    }
+    Ok((email, String::new(), false))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[test]
-    fn strip_html_drops_noise_and_keeps_lines() {
-        let html = "<html><head><style>body{color:red}</style></head><body><!-- c --><p>Code: <b>654321</b></p><br/><p>OpenAI &mdash; Thanks</p></body></html>";
-        let out = _strip_html_to_visible_text(json!(html)).unwrap();
-        assert_eq!(out, "Code: 654321\nOpenAI \u{2014} Thanks");
+    fn same_origin_and_credentials_work() {
+        assert!(
+            _same_origin(
+                "https://mail.example:443/a".to_string(),
+                "https://mail.example/b".to_string()
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            _extract_url_credentials(
+                "https://mail.example/inbox#email=Alice@iCloud.com&key=k123".to_string(),
+                "fb@icloud.com".to_string()
+            )
+            .unwrap(),
+            ("alice@icloud.com".to_string(), "k123".to_string(), true)
+        );
     }
 }

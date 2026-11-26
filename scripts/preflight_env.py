@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
-"""环境预检：确认 Node.js、Playwright Chromium 和关键 Python 包就绪。
+"""环境预检：确认 Python、原生 Sentinel FFI、Playwright Chromium（可选）与关键 Python 包就绪。
 
 这些是 README「环境要求」里 `pip install -r requirements.txt` 覆盖不到的运行期
-前置依赖：Sentinel Token 的 quickjs 提取器需要 `node`，协议支付的 Stripe init
-需要 Playwright Chromium。缺失时运行期表现为 OTP 静默丢失或支付链接超时，很难排查，
-因此在首次启动前用本脚本一次性检出。
+前置依赖：Sentinel PoW / Turnstile / SO 签发通过进程内原生 Rust FFI
+（`sms_tool/sentinel/runtime/sentinel_vm.dll`，零 Node.js 依赖）执行；
+Playwright Chromium 仅在启用浏览器驱动注册或 PayPal 浏览器授权流程时需要。
 
-退出码：0 表示全部通过；非 0 表示存在缺失项（数量即失败项数）。
+退出码：0 表示全部必选项通过；非 0 表示存在缺失必选项（数量即失败项数）。
 """
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 import sys
 from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 
 def check_python_version() -> tuple[bool, str, str]:
@@ -24,16 +26,25 @@ def check_python_version() -> tuple[bool, str, str]:
     return False, f"Python {major}.{minor}", "安装 Python 3.12+（https://www.python.org/downloads/）"
 
 
-def check_node() -> tuple[bool, str, str]:
-    exe = shutil.which("node")
-    if not exe:
-        return False, "node 不在 PATH", "安装 Node.js 18+（https://nodejs.org）并确保 node 在 PATH"
+def check_sentinel_runtime() -> tuple[bool, str, str]:
     try:
-        proc = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=10)
+        from sms_tool.sentinel.selfcheck import run_selfcheck
+
+        report = run_selfcheck()
     except Exception as exc:  # pragma: no cover - defensive
-        return False, f"无法执行 node：{exc}", "重新安装 Node.js 18+"
-    version = (proc.stdout or proc.stderr or "").strip()
-    return True, version or "node (版本未知)", ""
+        return (
+            False,
+            f"无法执行 Sentinel 自检：{exc}",
+            "运行 scripts/build_sentinel_vm.ps1 重新构建 sms_tool/sentinel/runtime/sentinel_vm.dll",
+        )
+    detail = f"bundle={report.get('bundle')} native={report.get('native')} mint={report.get('mint')}"
+    if report.get("ok"):
+        return True, detail, ""
+    return (
+        False,
+        detail,
+        "运行 scripts/build_sentinel_vm.ps1 重新构建 sentinel_vm.dll，或执行 python -m sms_tool.sentinel.selfcheck",
+    )
 
 
 def check_import(module: str, pip_name: str) -> tuple[bool, str, str]:
@@ -61,11 +72,11 @@ def check_playwright_chromium() -> tuple[bool, str, str]:
 
 CHECKS = (
     ("Python 版本", check_python_version, True),
-    ("Node.js (Sentinel quickjs)", check_node, True),
-    ("Playwright Chromium (Stripe init)", check_playwright_chromium, True),
-    ("curl_cffi (协议支付 TLS)", lambda: check_import("curl_cffi", "curl_cffi"), True),
+    ("原生 Sentinel VM FFI (Rust)", check_sentinel_runtime, True),
+    ("curl_cffi (协议传输 TLS)", lambda: check_import("curl_cffi", "curl_cffi"), True),
     ("requests", lambda: check_import("requests", "requests"), True),
-    ("PyNaCl (Agent Identity Ed25519)", lambda: check_import("nacl", "PyNaCl"), False),
+    ("Playwright Chromium (可选，浏览器驱动/PayPal)", check_playwright_chromium, False),
+    ("PyNaCl (可选，Agent Identity Ed25519)", lambda: check_import("nacl", "PyNaCl"), False),
 )
 
 

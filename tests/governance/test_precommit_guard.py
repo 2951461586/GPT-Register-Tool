@@ -82,21 +82,13 @@ def test_allowlisted_names_are_not_blocked(rel: str) -> None:
         "scripts/move_specs/proxy.json",
         "scripts/move_specs/payment.json",
         "scripts/move_specs/session.json",
+        "scripts/move_specs_notes/proxy.json",
+        "proxy.json",
     ],
 )
-def test_migration_specs_are_exempt_from_the_name_gate(rel: str) -> None:
-    """``module_move.py`` names each spec after the package it moves.
-
-    That makes every spec collide with the local-artefact family by construction
-    (``proxy.json``, ``payment.json``, ...), which is how P2-4's spec was silently
-    swallowed by ``.gitignore``'s ``proxy.json*`` and never committed. The name
-    gate gets the same exemption, scoped to the directory; the **content** gate
-    still runs on these files.
-    """
-    assert precommit_guard.name_is_blocked(rel) is False
-    # A sibling path that merely *contains* the directory name is not exempt.
-    assert precommit_guard.name_is_blocked("scripts/move_specs_notes/proxy.json") is True
-    assert precommit_guard.name_is_blocked("proxy.json") is True
+def test_nested_config_filenames_are_blocked(rel: str) -> None:
+    """Retired migration specs are gone; config-family filenames are blocked everywhere."""
+    assert precommit_guard.name_is_blocked(rel) is True
 
 
 def test_config_example_is_not_blocked_but_real_config_is() -> None:

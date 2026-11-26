@@ -1,0 +1,37 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/phone/nexsms.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "nexsms-phone-rs",
+  "exports": [
+    {
+      "name": "api_phone_number",
+      "file": "sms_tool/phone/nexsms.py",
+      "line": 139,
+      "params": [
+        {
+          "name": "phone",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "NexSmsClient",
+      "file": "sms_tool/phone/nexsms.py",
+      "line": 200,
+      "reason": "HTTP vendor client stays in Python"
+    }
+  ]
+}

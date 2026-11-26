@@ -23,7 +23,7 @@
 
 ## 简介
 
-GPT-Register-Tool 采用 **WPF (.NET 10) 桌面端 + Python 3.12+ 业务核心 + 原生 Rust 加速层**（内置 `native/sentinel_vm/` 进程内 Rust Sentinel VM，彻底移除 Node.js 依赖；并集成 25 个 `rust-anything` PyO3 热点扩展，覆盖脱敏、OTP/SMS 解析、Sentinel SHA3-512 PoW 求解、指纹头与协议解析、边缘探测挑战分类、支付线缆与资格状态分类、提链契约归一化、代理归一化/凭据掩码/地区改写与出口键重写、HTML 清洗、静态资源过滤、HTTP 回调/Cookie 处理、错误与重登恢复分类、JWT 离线解析、CPA 分类与会话转换），提供邮箱 OTP 注册、账号与 Session 管理、Plus 与 GPT Team 5 席位试用优惠检测及原生 Team 托管提链、代理池治理、统一提链服务器对接和账号导出能力。运行数据默认保存在本机，不写入 Git。
+GPT-Register-Tool 采用 **WPF (.NET 10) 桌面端 + Python 3.12+ 业务核心 + 原生 Rust 加速层**（内置 `native/sentinel_vm/` 进程内 Rust Sentinel VM，彻底移除 Node.js 依赖；并集成 43 个 `rust-anything` PyO3 热点扩展，覆盖脱敏、`.env` 解析、OTP/SMS/NexSMS 号码解析、Sentinel SHA3-512 PoW 求解、TLS 扩展序置换与指纹头、认证流程步骤/SO Token/跳转解析、CAPTCHA 配置/桥接 HTML 与进程 Profile 匹配、代理归一化/凭据掩码/地区改写/手机代理模板/出口键与批次交错、边缘探测挑战分类、支付线缆/PayPal DOM 匹配与资格方式/状态分类、Team 试用/巡检/测活/Codex/身份 JWT 解析、账号邮箱核心归一化、提链契约归一化、HTML/JS/URL 凭据清洗、静态资源过滤、HTTP 回调/Cookie 与会话拼装、错误与重登恢复分类、CPA/SUB2API 解析与会话转换），提供邮箱 OTP 注册、账号与 Session 管理、Plus 与 GPT Team 5 席位试用优惠检测及原生 Team 托管提链、代理池治理、统一提链服务器对接和账号导出能力。运行数据默认保存在本机，不写入 Git。
 
 当前发布说明：[release-v2026.11.25.md](docs/releases/release-v2026.11.25.md)。
 
@@ -53,7 +53,7 @@ GPT-Register-Tool 采用 **WPF (.NET 10) 桌面端 + Python 3.12+ 业务核心 +
 | **协议一致性与恢复** | 领取或购买邮箱前预检 ChatGPT / Auth / Sentinel 三段网络；账号 ↔ 代理会话绑定，只在故障时换出口；NextAuth / Auth / ChatGPT 共享稳定的 `oai-did`、UA 与 client hints，指纹语言与时区随出口 GeoIP；403/429 熔断且不做纯 HTTP PoW 降级；创建账号后先持久化断点再探活，可从断点恢复且不重复烧 OTP |
 | **邮箱与 OTP** | 统一 mailbox seam：ReMail、Smailr、CFWorker、Microsoft Graph/OAuth、Outlook/Hotmail IMAP、Gmail、iCloud 接码链接与历史邮箱池格式；OTP 按主题、发件人、精确收件人、服务端时间戳过滤并排序；ReMail 支持自适应轮询、详情正文补取与 30s 内重发 |
 | **支付链接提取** | 目录共 16 种方式：15 种 Plus 协议方式（PayPal、GoPay、GCash、GrabPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo、QRIS、Bizum、Naver Pay）统一经 `sms_tool/pay_link/extract_server.py` 对接外部提链服务器（CDK 仅经环境变量透传）；另原生内置 **GPT Team 5 席位试用托管提链**（`team_trial`，`sms_tool/pay_link/team_trial.py` 进程内直连 `POST /backend-api/payments/checkout`，无需外部 CDK，自动对齐账单国家并支持 `--team-workspace-name` / `--team-seat-quantity`）；保留只读能力探测、统一五态终态与原子断点续跑 |
-| **原生 Rust 加速** | `native/sentinel_vm/` 编译为进程内 `sentinel_vm.dll` FFI，零 Node.js 运行时依赖；25 个 `rust-anything` PyO3 扩展加速 52 个热点函数（脱敏 8.3×、OTP 提取 6.9×/单函数最高 63×、Sentinel PoW 6.9×、错误分类 6.2×、支付线缆 Attestation/诊断压缩 4.6×/单函数 14.4×、HTML 清洗 4.0×/3.5×/3.0×、代理串解析/掩码/改写 3.4×/单函数 15×、指纹头解析 2.8×/单函数 8.9×、出口身份与恢复脱敏 2.4×/2.3×、提链契约归一化 2.0×、边缘探测分类 1.3× 等），零 `unsafe`、零 MinGW 运行时 DLL 依赖，详见 [Rust 原生加速架构](docs/current/rust-acceleration.md) |
+| **原生 Rust 加速** | `native/sentinel_vm/` 编译为进程内 `sentinel_vm.dll` FFI，零 Node.js 运行时依赖；43 个 `rust-anything` PyO3 扩展加速 85 个热点函数（脱敏 8.3×、OTP 提取 6.9×/单函数最高 63×、Sentinel PoW 6.9×、错误分类 6.2×、支付线缆 Attestation/诊断压缩 4.6×/单函数 14.4×、HTML/JS/URL 清洗 4.0×/2.5×/2.2×、代理串解析/掩码/改写/手机代理模板与交错 3.4×/2.1×/1.5×/单函数 15×、Profile 进程匹配 3.3×、账号身份出口键与 JWT 解析 3.2×/单函数 3.4×、指纹头与 TLS 扩展序置换 2.8×/1.3×、会话 Cookie 拼装 2.8×、SUB2API 解析 2.7×、CAPTCHA 配置与桥接 HTML 生成 2.6×/单函数 5.7×、Team 试用/Codex/巡检/测活 JWT 解析 2.4×/2.4×/2.3×/2.0×、NexSMS 号码归一化 2.3×、认证流程步骤/SO Token 2.2×、PayPal DOM 匹配 2.1×、账号邮箱核心归一化 2.0×、提链契约归一化 2.0×、认证跳转判定 1.9×、`.env` 解析 1.7×、支付资格解析 1.5×/1.2×、边缘探测分类 1.3× 等），零 `unsafe`、零 MinGW 运行时 DLL 依赖，详见 [Rust 原生加速架构](docs/current/rust-acceleration.md) |
 | **账号与数据管理** | Session JSON + SQLite 双层索引；账号测活、离线 JWT 轻量快速盘点（`--inspect-accounts`）与增强型 401 恢复（独立 `relogin` 代理泳道轮询、OTP 前故障自动换出口、旧账号无密码 Email-OTP 自动回退与探活传输重试）；优惠状态徽章同时探测并持久化 Plus 试用与 **GPT Team 5 席位试用（`team-1-month-free`）** 机读资格标志；Codex / CPA / SUB2API 导入导出；本地数据在 `sessions/` 与 `runtime/`，均被 Git 忽略 |
 | **桌面外壳** | 角色目录命名空间隔离（`Models` / `Services` / `ViewModels` / `Views` / `Dialogs` / `Interop`）+ 独立 Coordinator 编排；主题三态（跟随系统 / 浅色 / 深色，`System` 持续跟随 OS）；关闭窗口=隐藏到托盘，托盘菜单或 `Ctrl+Alt+R` 唤回，两个开关都可关；状态条实时显示吞吐/成功率/失败分类；代理池每行内联测速；工作区一键备份/恢复（配置 shard + 账号库 + 邮箱池 + UI 偏好，恢复前自动留旧副本） |
 | **桌面端操作** | 勾选账号后走「支付链接提取」窗口（内置提链服务器配置、并发、重试、Canary、可折叠可选代理池、断点续跑）；注册批次每输出一次 `Saved session:` 即防抖刷新账号池；多选删除合并为一次后端批量命令；浏览器驱动支持 `--block-assets` 省流拦截静态图像/字体/媒体资源 |
@@ -110,7 +110,7 @@ flowchart TB
         KERN["kernel/（仅标准库）<br/>paths · sanitizer · timeouts · flags"]
         INFRA["config/ · transport/ · proxy/ · geo/<br/>observability/"]
         SEAMS["不可变领域契约与跨泳道原语<br/>account_models · payment/wire & checkout_contract<br/>desktop/ipc · operation_journal · cross_process_gate"]
-        RUST["rust/（25 个 PyO3 热点扩展 · 52 函数）<br/>sanitizer · mail_otp · sentinel_pow · auth_headers · proxy · edge_probe · html · sms · data_saver · http · session · store · cpa · accounts · payment_wire · pay_link · qualification"]
+        RUST["rust/（43 个 PyO3 热点扩展 · 85 函数）<br/>sanitizer · env_loader · mail_otp · sentinel_pow · tls_fingerprint · auth_headers · auth_flow_steps · auth_wire · captcha_config · profile_reclaim · proxy · phone_proxy · batch_proxy · edge_probe · html · sms · nexsms · data_saver · http · session_builder · session · codex_jwt · store · cpa · sub2api · accounts · lifecycle · liveness · team_trial · payment_wire · paypal_dom · pay_link · qualification"]
     end
 
     EXT["外部提链服务器（HTTP API）<br/>EXTRACT_LINK_* 环境变量鉴权"]
@@ -143,7 +143,7 @@ flowchart TB
 | ⑤ 领域契约与共享原语 | `sms_tool/accounts/account_models.py`、`sms_tool/payment/wire.py`、`sms_tool/payment/checkout_contract.py`、`sms_tool/payment/catalog.py`、`sms_tool/desktop/ipc.py`、`sms_tool/operation_journal.py`、`sms_tool/cross_process_gate.py` | 跨泳道不可变契约（账号模型、Checkout 与支付线缆核、方法目录、优惠/支付资格状态机、唯一 `@@SMSWORKBENCH_V2@@` IPC 写入器、幂等恢复日志与跨进程文件锁） |
 
 - **提链外部服务边界**：旧版内置协议支付源提取器已彻底退役，全部 15 种支付方式统一经 `sms_tool/pay_link/extract_server.py` 对接外部提链服务器（`protocol_payments.extract_link_server` / `EXTRACT_LINK_*` 环境变量）。
-- **Rust 原生加速与零 Node.js 依赖**：`native/sentinel_vm/` 提供进程内 Sentinel VM FFI；`rust/` 下 25 个由 `rust-anything` 管理的 PyO3 扩展加速 52 个热点函数（6,712 条录制用例 100% 一致，0 `unsafe`，完整基准见 [Rust 原生加速架构](docs/current/rust-acceleration.md)）。
+- **Rust 原生加速与零 Node.js 依赖**：`native/sentinel_vm/` 提供进程内 Sentinel VM FFI；`rust/` 下 43 个由 `rust-anything` 管理的 PyO3 扩展加速 85 个热点函数（12,504 条录制用例 100% 一致，0 `unsafe`，完整基准见 [Rust 原生加速架构](docs/current/rust-acceleration.md)）。
 - **自动化架构门禁**：五层依赖方向与命名空间隔离由 CI 和预提交钩子强制守卫，包括 `scripts/import_layer_ratchet.py`、`scripts/kernel_boundary_ratchet.py`、`scripts/root_module_ratchet.py`、`scripts/architecture_scan.py` 以及 `tests/SmsWorkbench.Tests/NamespaceArchitectureTests.cs`。
 
 更详细的边界规则见 [架构与边界说明](docs/architecture.md)，WPF 前端架构见 [桌面端 UI 架构](docs/current/ui-architecture.md)，Rust 原生加速见 [Rust 加速架构](docs/current/rust-acceleration.md)，物理文件归属见 [目录职责](docs/directory-map.md)。

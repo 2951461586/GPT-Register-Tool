@@ -1,0 +1,67 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/transport/tls_fingerprint.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "tls-fingerprint-rs",
+  "exports": [
+    {
+      "name": "permute_extension_order",
+      "file": "sms_tool/transport/tls_fingerprint.py",
+      "line": 183,
+      "params": [
+        {
+          "name": "base",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "seed",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "build",
+      "file": "sms_tool/transport/tls_fingerprint.py",
+      "line": 204,
+      "reason": "returns TlsFingerprint dataclass and reads config"
+    },
+    {
+      "name": "set_tls_fingerprint",
+      "file": "sms_tool/transport/tls_fingerprint.py",
+      "line": 226,
+      "reason": "mutates thread-local state in Python"
+    },
+    {
+      "name": "clear_tls_fingerprint",
+      "file": "sms_tool/transport/tls_fingerprint.py",
+      "line": 242,
+      "reason": "mutates thread-local state in Python"
+    },
+    {
+      "name": "current_tls_fingerprint",
+      "file": "sms_tool/transport/tls_fingerprint.py",
+      "line": 262,
+      "reason": "reads thread-local state in Python"
+    },
+    {
+      "name": "apply_to_session",
+      "file": "sms_tool/transport/tls_fingerprint.py",
+      "line": 297,
+      "reason": "mutates curl_cffi session object in Python"
+    }
+  ]
+}

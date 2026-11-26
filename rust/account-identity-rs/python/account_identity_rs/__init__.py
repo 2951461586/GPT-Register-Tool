@@ -88,5 +88,6 @@ def _method(name, positions, names, json_result):
     return call
 
 proxy_egress_key = _native.proxy_egress_key
+chatgpt_account_id_from_token = _native.chatgpt_account_id_from_token
 
-__all__ = ['proxy_egress_key']
+__all__ = ['proxy_egress_key', 'chatgpt_account_id_from_token']
