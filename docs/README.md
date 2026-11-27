@@ -208,7 +208,7 @@ Directory layout (since 2026-09-06):
     `registration/concurrency.py`、`registration/cancel.py`；结果装配统一走
     `registration.result.build_registration_result`。
   - 邮箱逻辑仍在 `mailbox/router.py`、`providers/`、`mailbox/service.py` 等模块；
-    `k12_*`、`importers/agent_identity.py`、`importers/sub2api.py` 保持原有归属。
+    `importers/agent_identity.py`、`importers/sub2api.py` 保持原有归属。
 - 新增 Agent Identity、SUB2API、导入导出逻辑时，在 `importers/agent_identity.py`、
   `importers/sub2api.py`、`session/converter.py` 中落实现，不侵入注册或支付模块。
 

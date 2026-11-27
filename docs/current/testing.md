@@ -103,8 +103,8 @@ CI 的并行分片跑 `--cov=sms_tool`，并且带 `--cov-fail-under=70`。
 `tests/governance/test_coverage_gate.py`（它钉住 CI 参数与本节的数字一致）。
 
 **它不替代什么**：覆盖率是"有没有执行过"的信号，不是"行为对不对"的判据。本仓的
-行为证据仍然是各泳道的契约测试与回放差分（`stage2_replay_selfcheck`、
-`extractor_parity_report`、`lane_coupling_ratchet` 等）。下限的作用只有一个：阻止
+行为证据仍然是各泳道的契约测试、双模式 Rust 对拍与边界门禁（`rust_crates_guard`、
+`spec_validate`、`lane_coupling_ratchet` 等）。下限的作用只有一个：阻止
 新增的大块未执行代码静默进来。
 
 **本地怎么复现**：

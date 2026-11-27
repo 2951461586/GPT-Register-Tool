@@ -13,7 +13,7 @@
 - **Payment wire**: the cross-lane payment kernel — the non-Checkout session
   factory, the Checkout primitives, the country→currency map, the provider-stage
   order and the shared failure vocabulary. Owned by `sms_tool/payment/wire.py`;
-  `paypal_extract` re-exports it rather than redefining it.
+  `sms_tool/paypal/extract.py` re-exports it rather than redefining it.
 - **Payment batch**: a resumable cohort execution with per-account terminal results.
 - **Payment capability probe**: a side-effect-limited Checkout and Stripe-init
   observation that lists offered methods without creating or confirming one.
@@ -21,6 +21,10 @@
   `sms_tool/pay_link/extract_server.py` (dispatched via
   `sms_tool/pay_link/registry.py`) that handles link extraction for all 15
   catalog payment methods after retiring the legacy in-repo source extractors.
+- **Protocol card payment**: in-repo offline Stripe/Checkout codec and card-payment
+  workflow owned by `sms_tool/payment/protocol_codec.py` (accelerated by
+  `rust/protocol-payment-rs/`) and `sms_tool/payment/protocol_pay.py`, surfaced
+  through CLI (`--protocol-pay`) and WPF (`ProtocolCardPaymentWindow`).
 
 ## Ownership Rules
 

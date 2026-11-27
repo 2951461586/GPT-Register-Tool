@@ -27,6 +27,13 @@ adapter (`sms_tool/pay_link/registry.py` → `sms_tool/pay_link/extract_server.p
 while `sms_tool/payment/capability.py` and `sms_tool/payment/qualification.py` remain in-tree
 for read-only capability and payment-qualification checks.
 
+## 3. Native Protocol Card Payment
+
+Offline codecs and protocol card-payment workflows live in two focused modules under `sms_tool/payment/`:
+
+- `payment/protocol_codec.py` owns Hosted Checkout `rv_timestamp` encode/decode, Stripe.js build-field extraction, deep quote parsing, billing catalog lookups, card secret scrubbing, and Stripe outcome classification (with optional PyO3 acceleration via `rust/protocol-payment-rs/`, **9.4×** geometric mean, pure-Python fallback preserved, zero network I/O, zero CAPTCHA solving).
+- `payment/protocol_pay.py` owns the protocol card-payment execution flow and result assembly, dispatched via CLI (`--protocol-pay`, `sms_tool/commands/payment.py`) and the desktop `ProtocolCardPaymentWindow` (`SmsWorkbench/Views/ProtocolCardPaymentWindow.xaml` + `ProtocolCardPaymentViewModel`).
+
 ## 4. 支付资格查询（read-only）
 
 `payment/qualification.py` answers “can this account reach a zero-due Checkout

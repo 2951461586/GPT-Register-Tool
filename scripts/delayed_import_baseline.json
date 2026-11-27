@@ -382,7 +382,7 @@
     "sms_tool/commands/helpers.py": 3,
     "sms_tool/commands/mailbox_ops.py": 8,
     "sms_tool/commands/one_click.py": 7,
-    "sms_tool/commands/payment.py": 23,
+    "sms_tool/commands/payment.py": 20,
     "sms_tool/commands/payment_links.py": 9,
     "sms_tool/commands/proxy_admin.py": 4,
     "sms_tool/commands/registration.py": 9,
@@ -477,5 +477,5 @@
     "startup": 104,
     "test-seam": 0
   },
-  "total": 459
+  "total": 456
 }

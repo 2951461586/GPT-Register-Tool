@@ -26,7 +26,7 @@
 **GPT-Register-Tool** 是一款基于 **WPF (.NET 10) + Python 3.12+ + 原生 Rust** 构建的 Windows 桌面工作台，聚焦 ChatGPT 账号全生命周期自动化与运维：
 
 - **自动化注册与接码**：支持协议直连与多浏览器驱动双泳道注册、多供应商邮箱 OTP 与手机接码、断点续跑及 AT 200 验真。
-- **账号与支付工作流**：内置账号测活、401 分层恢复、离线 JWT 巡检、Plus / GPT Team 5 席位试用检测、原生 Team 托管提链与统一外部提链服务器对接，支持 Codex / CPA / SUB2API 导入导出。
+- **账号与支付工作流**：内置账号测活、401 分层恢复、离线 JWT 巡检、Plus / GPT Team 5 席位试用检测、原生 Team 托管提链、协议绑卡支付与统一外部提链服务器对接，支持 Codex / CPA / SUB2API 导入导出。
 - **高性能与本机隔离**：内置进程内 Rust Sentinel VM（零 Node.js 依赖）与 [53 个 PyO3 热点加速扩展](docs/current/rust-acceleration.md)；配置分片、Session 与运行数据默认存放在本机用户目录，不写入 Git。
 
 当前发布说明：[release-v2026.11.25.md](docs/releases/release-v2026.11.25.md)

@@ -25,7 +25,7 @@
 **GPT-Register-Tool** is a Windows desktop workbench built on **WPF (.NET 10), Python 3.12+, and native Rust** for end-to-end ChatGPT account automation and operations:
 
 - **Registration & OTP**: Dual-lane registration (built-in protocol + browser drivers), unified multi-provider email OTP and SMS verification, resumable checkpoints, and HTTP 200 AT verification.
-- **Account & Payment Workflows**: Liveness probing, layered 401 recovery, offline JWT inspection, Plus & GPT Team 5-seat trial detection, native Team hosted checkout extraction, unified external paylink-server integration, and Codex / CPA / SUB2API import-export.
+- **Account & Payment Workflows**: Liveness probing, layered 401 recovery, offline JWT inspection, Plus & GPT Team 5-seat trial detection, native Team hosted checkout extraction, protocol card payment, unified external paylink-server integration, and Codex / CPA / SUB2API import-export.
 - **Native Performance & Local-First Data**: In-process Rust Sentinel VM (zero Node.js dependency) paired with [53 PyO3 hot-path extensions](docs/current/rust-acceleration.md); sharded configs, sessions, and runtime state stay local and Git-ignored.
 
 Current release notes: [v2026.11.25](./docs/releases/release-v2026.11.25.md)
