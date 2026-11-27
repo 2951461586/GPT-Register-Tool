@@ -1,0 +1,43 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/registration_drivers/browser_flow/recovery.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "browser-flow-recovery-rs",
+  "exports": [
+    {
+      "name": "is_navigation_retryable",
+      "file": "sms_tool/registration_drivers/browser_flow/recovery.py",
+      "line": 15,
+      "params": [
+        {
+          "name": "err",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "stage_timeout",
+      "file": "sms_tool/registration_drivers/browser_flow/recovery.py",
+      "line": 20,
+      "reason": "takes keyword-only arguments and small dict lookup"
+    },
+    {
+      "name": "probe_pending",
+      "file": "sms_tool/registration_drivers/browser_flow/recovery.py",
+      "line": 30,
+      "reason": "stays in Python (small mapping check)"
+    }
+  ]
+}

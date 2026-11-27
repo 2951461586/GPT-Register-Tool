@@ -86,14 +86,9 @@ PAYMENT_PREFIXES = (
     "payment_",
     "pay_link",
     "paypal",
-    "paypal_link",
-    "upi_link",
-    "gcash_",
-    "wallet_",
     "pp_link_helpers",
     "checkout_contract",
     "promotion_states",
-    "regional_payment_adapter",
 )
 
 #: Registration-lane modules the payment lane may import.  All three are shared

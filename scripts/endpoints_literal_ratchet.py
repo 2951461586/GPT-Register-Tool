@@ -57,14 +57,12 @@ SCAN_DIRS: tuple[Path, ...] = (Path("sms_tool"),)
 EXCLUDED_FILES = {"endpoints.py"}
 EXCLUDED_DIRS = {"__pycache__", "_vendor"}
 
-#: Hosts owned by one of the two ``endpoints.py`` authorities.
+#: Hosts owned by ``sms_tool/transport/endpoints.py``.
 MANAGED_HOSTS: tuple[str, ...] = (
-    # services/protocol-payment/common/endpoints.py
     "chatgpt.com",
     "api.stripe.com",
     "checkout.stripe.com",
     "pay.openai.com",
-    # sms_tool/endpoints.py
     "auth.openai.com",
     "api.openai.com",
 )
@@ -222,9 +220,8 @@ def main(argv: list[str] | None = None) -> int:
         for path, current, allowed in grown:
             print(
                 f"{path}: {current} inline managed-host literal(s) > baseline {allowed} "
-                f"(+{current - allowed}). Import the host from the matching endpoints.py "
-                f"authority (services/protocol-payment/common/ or sms_tool/) instead of "
-                f"inlining it, or justify a baseline bump.",
+                f"(+{current - allowed}). Import the host from sms_tool/transport/endpoints.py "
+                f"instead of inlining it, or justify a baseline bump.",
                 file=sys.stderr,
             )
         return 1

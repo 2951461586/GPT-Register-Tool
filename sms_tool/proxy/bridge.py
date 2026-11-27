@@ -39,7 +39,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from .entry import ProxyEntry, _SOCKS_DEFAULT_PORT, _normalize_scheme, parse_proxy
+from .entry import ProxyEntry, _SOCKS_DEFAULT_PORT, _normalize_scheme, load_native_module, parse_proxy
 from .pool import (
     _ATYP_DOMAIN,
     _ATYP_IPV4,
@@ -69,6 +69,14 @@ _HOP_ENV_KEYS = ("GPT_PROXY_CHAIN_HOP", "PROXY_CHAIN_HOP")
 _MAX_DEST_STATS = 512
 _DEAD_IP_TTL_SECONDS = 60.0
 
+_NATIVE_PROXY_BRIDGE_PARSE = load_native_module(
+    "proxy-bridge-parse-rs",
+    "proxy_bridge_parse_rs",
+    "RUST_ANYTHING_UNIT_PROXY_BRIDGE_PARSE",
+)
+_NATIVE_ADDR_TYPE = getattr(_NATIVE_PROXY_BRIDGE_PARSE, "_addr_type", None)
+_NATIVE_HOST_MATCHES_BLOCKED = getattr(_NATIVE_PROXY_BRIDGE_PARSE, "_host_matches_blocked", None)
+
 
 def _format_host_port(host: str, port: int) -> str:
     clean = str(host or "").strip()
@@ -78,6 +86,8 @@ def _format_host_port(host: str, port: int) -> str:
 
 
 def _addr_type(host: str) -> int:
+    if _NATIVE_ADDR_TYPE is not None and isinstance(host, str):
+        return _NATIVE_ADDR_TYPE(host)
     try:
         socket.inet_aton(host)
         return _ATYP_IPV4
@@ -142,6 +152,15 @@ def _normalize_blocked_hosts(hosts: Any) -> tuple[str, ...]:
 
 def _host_matches_blocked(host: str, rules: tuple[str, ...]) -> bool:
     """Exact domain or subdomain-boundary match (never partial label prefix)."""
+    if (
+        _NATIVE_HOST_MATCHES_BLOCKED is not None
+        and (host is None or isinstance(host, str))
+        and isinstance(rules, (tuple, list))
+    ):
+        try:
+            return _NATIVE_HOST_MATCHES_BLOCKED(host, rules)
+        except TypeError:
+            pass
     candidate = str(host or "").strip().lower().rstrip(".")
     if not candidate or not rules:
         return False

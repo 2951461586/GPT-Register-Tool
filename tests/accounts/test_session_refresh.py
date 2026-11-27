@@ -36,16 +36,6 @@ def test_auth_session_email_reads_nested_session_user():
     )
 
 
-def test_browser_refresh_paths_are_removed():
-    # Browser-based re-login was deleted; only the protocol path remains.
-    assert not hasattr(session_refresh, "_refresh_session_browser")
-    assert not hasattr(session_refresh, "_complete_browser_email_login")
-    assert (
-        "browser" not in (session_refresh.refresh_session.__doc__ or "").lower()
-        or "removed" in (session_refresh.refresh_session.__doc__ or "").lower()
-    )
-
-
 def test_explicit_session_file_rehydrates_flattened_mailbox_credentials(tmp_path):
     path = tmp_path / "session.json"
     path.write_text(

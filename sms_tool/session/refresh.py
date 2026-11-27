@@ -9,8 +9,15 @@ from ..config import CFG
 from ..kernel.paths import output_dir
 from ..storage import get_account_record, list_paypal_accounts, upsert_account
 from ..transport.http_client import _retry_after_seconds
-from ..transport.http_utils import minimal_chatgpt_cookie_header
+from ..transport.http_utils import load_native_module, minimal_chatgpt_cookie_header
 from ..transport import endpoints
+
+_NATIVE_SESSION_REFRESH_PARSE = load_native_module(
+    "session-refresh-parse-rs",
+    "session_refresh_parse_rs",
+    "RUST_ANYTHING_UNIT_SESSION_REFRESH_PARSE",
+)
+_NATIVE_HAS_SESSION_COOKIE = getattr(_NATIVE_SESSION_REFRESH_PARSE, "_has_session_cookie", None)
 
 
 def refresh_session(
@@ -340,6 +347,8 @@ def _ensure_session_cookie(cookie_header, data):
 
 
 def _has_session_cookie(cookie_header):
+    if _NATIVE_HAS_SESSION_COOKIE is not None and (cookie_header is None or isinstance(cookie_header, str)):
+        return _NATIVE_HAS_SESSION_COOKIE(cookie_header)
     prefix = "__Secure-next-auth.session-token"
     return any(
         ((name := item.strip().split("=", 1)[0].strip()) == prefix or name.startswith(prefix + "."))

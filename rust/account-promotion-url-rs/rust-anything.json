@@ -1,0 +1,44 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/accounts/account_promotion.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "account-promotion-url-rs",
+  "exports": [
+    {
+      "name": "coupon_url_for_campaign",
+      "file": "sms_tool/accounts/account_promotion.py",
+      "line": 112,
+      "params": [
+        {
+          "name": "campaign_id",
+          "ts_type": "string",
+          "optional": true,
+          "rest": false,
+          "default": "\"\""
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "parse_accounts_check",
+      "file": "sms_tool/accounts/account_promotion.py",
+      "line": 123,
+      "reason": "stays in Python (nested dict traversal)"
+    },
+    {
+      "name": "check_account_promotion",
+      "file": "sms_tool/accounts/account_promotion.py",
+      "line": 451,
+      "reason": "stays in Python (HTTP I/O and probe orchestration)"
+    }
+  ]
+}

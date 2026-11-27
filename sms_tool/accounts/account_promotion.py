@@ -24,6 +24,7 @@ from .account_identity import (
     account_chatgpt_id,
     bind_account_identity,
     chatgpt_account_id_from_token,
+    load_native_module,
 )
 from ..transport.auth_headers import auth_impersonate, chatgpt_headers
 from ..transport import endpoints
@@ -59,6 +60,18 @@ TEAM_COUPON_INELIGIBILITY_REASONS: dict[str, str] = {
     "promo_ineligible": "不符合活动资格，未提供更细原因",
 }
 _UUID_RE = re.compile(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$", re.I)
+
+_DEFAULT_CHATGPT_BASE = endpoints.CHATGPT_BASE
+_NATIVE_ACCOUNT_PROMOTION_URL = load_native_module(
+    "account-promotion-url-rs",
+    "account_promotion_url_rs",
+    "RUST_ANYTHING_UNIT_ACCOUNT_PROMOTION_URL",
+)
+_NATIVE_COUPON_URL_FOR_CAMPAIGN = getattr(_NATIVE_ACCOUNT_PROMOTION_URL, "coupon_url_for_campaign", None)
+if _NATIVE_COUPON_URL_FOR_CAMPAIGN is not None and not _NATIVE_COUPON_URL_FOR_CAMPAIGN("").startswith(
+    f"{_DEFAULT_CHATGPT_BASE}{COUPON_PATH}?"
+):
+    _NATIVE_COUPON_URL_FOR_CAMPAIGN = None
 
 
 def _accounts_mapping(body: Any) -> dict[str, Any] | None:
@@ -116,6 +129,12 @@ def coupon_url_for_campaign(campaign_id: str = "") -> str:
     omits a campaign id, while preserving non-default campaigns such as
     ``plus-2-months-50-pct-off`` instead of probing the wrong coupon.
     """
+    if (
+        _NATIVE_COUPON_URL_FOR_CAMPAIGN is not None
+        and endpoints.CHATGPT_BASE == _DEFAULT_CHATGPT_BASE
+        and (campaign_id is None or isinstance(campaign_id, str))
+    ):
+        return _NATIVE_COUPON_URL_FOR_CAMPAIGN(campaign_id)
     resolved = str(campaign_id or "").strip() or DEFAULT_COUPON_CAMPAIGN_ID
     return f"{endpoints.CHATGPT_BASE}{COUPON_PATH}?coupon={quote(resolved, safe='')}&is_coupon_from_query_param=true"
 

@@ -79,7 +79,7 @@ def test_no_test_patches_an_inert_config_seam():
     offenders: list[str] = []
 
     for path in _iter_test_sources():
-        # utf-8-sig: some files in tests/ carry a BOM (test_mail_otp_web.py).
+        # utf-8-sig: tolerate any test file saved with a UTF-8 BOM.
         tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
         aliases = _shell_aliases(tree)
         for node in ast.walk(tree):

@@ -1,0 +1,50 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/auth_flow/password_step.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "auth-password-step-rs",
+  "exports": [
+    {
+      "name": "_is_login_password_step",
+      "file": "sms_tool/auth_flow/password_step.py",
+      "line": 31,
+      "params": [
+        {
+          "name": "url",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "payload",
+          "ts_type": "Record<string, unknown> | undefined",
+          "optional": true,
+          "rest": false,
+          "default": "None"
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_probe_login_password_step",
+      "file": "sms_tool/auth_flow/password_step.py",
+      "line": 57,
+      "reason": "stays in Python (HTTP request orchestration)"
+    },
+    {
+      "name": "_password_login_existing_account",
+      "file": "sms_tool/auth_flow/password_step.py",
+      "line": 163,
+      "reason": "stays in Python (HTTP login & TOTP orchestration)"
+    }
+  ]
+}

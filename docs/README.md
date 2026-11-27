@@ -52,7 +52,7 @@ Directory layout (since 2026-09-06):
   `python -m sms_tool --doctor`）。每条清单按顺序可执行，并指向负责该行为的
   `file.py:line`。排错时**先读这个**，再去读契约文档。
 - [Rust Acceleration](current/rust-acceleration.md) - `native/sentinel_vm/` 进程内
-  Rust Sentinel FFI（零 Node.js 依赖）与 57 个 `rust-anything` PyO3 热点扩展的覆盖范围、实测加速比与开关约定。
+  Rust Sentinel FFI（零 Node.js 依赖）与 62 个 `rust-anything` PyO3 热点扩展的覆盖范围、实测加速比与开关约定。
 - [Type Checking](current/typing.md) - pyright 逐文件 ratchet：为什么是 ratchet、
   如何安装与运行、修一条类型错误的首选写法。
 - [C# Gates](current/dotnet-gates.md) - C# 构建告警门禁：零基线、为什么解析控制台
@@ -64,6 +64,7 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.11.28 发布说明](releases/release-v2026.11.28.md) - 修复 `camoufox 0.5.9` 启动崩溃（#32），新增协议绑卡支付工作流与桌面端窗口，扩展 `rust-anything` PyO3 热点至全仓 62 个 crate · 122 个函数（20,848/20,848 用例一致），并完成五层架构收口与退役残留清理。
 - [v2026.11.25 发布说明](releases/release-v2026.11.25.md) - GPT Team 5 席位试用优惠检测与原生进程内托管提链（`team_trial`，无需外部 CDK）、
   AT 401 重登恢复链路升级（独立 `relogin` 代理泳道、OTP 前换出口、旧号无密码回退与探活闪断重试）、
   新增 Wave-3/Wave-4 共 8 个 `rust-anything` PyO3 扩展（全仓 22 个 crate · 42 函数 · 5,609/5,609 用例一致），以及退役驱动壳与未用导入清理。

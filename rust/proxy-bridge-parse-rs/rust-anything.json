@@ -1,0 +1,61 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/proxy/bridge.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "proxy-bridge-parse-rs",
+  "exports": [
+    {
+      "name": "_addr_type",
+      "file": "sms_tool/proxy/bridge.py",
+      "line": 80,
+      "params": [
+        {
+          "name": "host",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "number",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_host_matches_blocked",
+      "file": "sms_tool/proxy/bridge.py",
+      "line": 143,
+      "params": [
+        {
+          "name": "host",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "rules",
+          "ts_type": "string[]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "LocalProxyBridge",
+      "file": "sms_tool/proxy/bridge.py",
+      "line": 179,
+      "reason": "stays in Python (asyncio TCP/SOCKS5 server)"
+    }
+  ]
+}

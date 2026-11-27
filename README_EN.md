@@ -26,11 +26,11 @@
 
 - **Registration & OTP**: Dual-lane registration (built-in protocol + browser drivers), unified multi-provider email OTP and SMS verification, resumable checkpoints, and HTTP 200 AT verification.
 - **Account & Payment Workflows**: Liveness probing, layered 401 recovery, offline JWT inspection, Plus & GPT Team 5-seat trial detection, native Team hosted checkout extraction, protocol card payment, unified external paylink-server integration, and Codex / CPA / SUB2API import-export.
-- **Native Performance & Local-First Data**: In-process Rust Sentinel VM (zero Node.js dependency) paired with [57 PyO3 hot-path extensions](docs/current/rust-acceleration.md); sharded configs, sessions, and runtime state stay local and Git-ignored.
+- **Native Performance & Local-First Data**: In-process Rust Sentinel VM (zero Node.js dependency) paired with [62 PyO3 hot-path extensions](docs/current/rust-acceleration.md); sharded configs, sessions, and runtime state stay local and Git-ignored.
 
-Current release notes: [v2026.11.25](./docs/releases/release-v2026.11.25.md)
+Current release notes: [v2026.11.28](./docs/releases/release-v2026.11.28.md)
 
-[![Buy me AI tokens](https://buymeatokens.com/api/badge/2951461586)](https://buymeatokens.com/api/badge/2951461586?ref=badge)
+[![Buy me AI tokens](https://buymeatokens.com/api/badge/2951461586)](https://buymeatokens.com/2951461586?ref=badge)
 
 
 ## Sponsor
@@ -111,7 +111,7 @@ flowchart TB
         KERN["kernel/ (stdlib-only)<br/>paths · sanitizer · timeouts · flags<br/>circuit_breaker · cross_process_gate · humanize · native_loader"]
         INFRA["config/ · transport/ · proxy/ · geo/<br/>observability/"]
         SEAMS["Immutable Contracts & Cross-Lane Primitives<br/>account_models · payment/wire & checkout_contract<br/>desktop/ipc · operation_journal · store/account_seed"]
-        RUST["rust/ (57 PyO3 Hot-Path Crates · 116 Functions)<br/>protocol_payment · sanitizer · env_loader · mail_otp · sentinel_pow · tls_fingerprint · auth_headers · auth_flow_steps · auth_wire · account_stages · captcha_config · profile_reclaim · proxy · phone_proxy · batch_proxy · edge_probe · html · sms · smsbower · nexsms · data_saver · http · http_client · browser_flow_session · browser_flow_dom · session_builder · session · codex_jwt · codex_oauth · agent_identity · store · cpa · sub2api · accounts · lifecycle · liveness · wham_usage · team_trial · payment_wire · batch_report · paypal_dom · paypal_reverse_html · pay_link · extract_server · capability_browser · qualification · qualification_batch"]
+        RUST["rust/ (62 PyO3 Hot-Path Crates · 122 Functions)<br/>protocol_payment · sanitizer · env_loader · mail_otp · sentinel_pow · tls_fingerprint · auth_headers · auth_flow_steps · auth_password_step · auth_wire · account_stages · account_promotion · captcha_config · profile_reclaim · proxy · proxy_bridge · phone_proxy · batch_proxy · edge_probe · html · sms · smsbower · nexsms · data_saver · http · http_client · browser_flow_session · browser_flow_dom · browser_flow_recovery · session_builder · session_refresh · session · codex_jwt · codex_oauth · agent_identity · store · cpa · sub2api · accounts · lifecycle · liveness · wham_usage · team_trial · payment_wire · batch_report · paypal_dom · paypal_reverse_html · pay_link · extract_server · capability_browser · qualification · qualification_batch"]
     end
 
     EXT["External Paylink Extraction Server<br/>HTTP API · EXTRACT_LINK_* env auth"]
@@ -144,8 +144,8 @@ Module ownership and responsibility per layer:
 | ⑤ Domain Contracts & Shared Seams | `sms_tool/accounts/account_models.py`, `sms_tool/payment/wire.py`, `sms_tool/payment/checkout_contract.py`, `sms_tool/payment/catalog.py`, `sms_tool/desktop/ipc.py`, `sms_tool/operation_journal.py`, `sms_tool/store/account_seed.py` | Immutable cross-lane seams: typed account models, Checkout & payment wire kernel, method catalog, promotion/qualification states, sole `@@SMSWORKBENCH_V2@@` IPC writer, durable idempotency journal, and account-seed lookup |
 
 - **External extraction server boundary**: Legacy in-repo protocol-payment extractors have been retired; all 15 catalog payment methods route through `sms_tool/pay_link/extract_server.py` (`protocol_payments.extract_link_server` / `EXTRACT_LINK_*` env vars).
-- **Native Rust acceleration & zero Node.js**: `native/sentinel_vm/` provides the in-process Sentinel VM FFI; 57 `rust-anything`-managed PyO3 crates under `rust/` accelerate 116 hot functions (19,265 recorded cases 100% matched, 0 `unsafe`; see [Rust acceleration](docs/current/rust-acceleration.md)).
-- **Enforced architecture gates**: Layer direction (0 outward allow-list edges, 0 cross-lane coupling), 24 machine-validated boundary specs, 57 Rust PyO3 crate compilation checks, and namespace isolation are enforced automatically in CI and pre-commit by `scripts/import_layer_ratchet.py`, `scripts/kernel_boundary_ratchet.py`, `scripts/root_module_ratchet.py`, `scripts/lane_coupling_ratchet.py`, `scripts/spec_validate.py`, `scripts/rust_crates_guard.py`, `scripts/architecture_scan.py`, and `tests/SmsWorkbench.Tests/NamespaceArchitectureTests.cs`.
+- **Native Rust acceleration & zero Node.js**: `native/sentinel_vm/` provides the in-process Sentinel VM FFI; 62 `rust-anything`-managed PyO3 crates under `rust/` accelerate 122 hot functions (20,848 recorded cases 100% matched, 0 `unsafe`; see [Rust acceleration](docs/current/rust-acceleration.md)).
+- **Enforced architecture gates**: Layer direction (0 outward allow-list edges, 0 cross-lane coupling), 24 machine-validated boundary specs, 62 Rust PyO3 crate compilation checks, and namespace isolation are enforced automatically in CI and pre-commit by `scripts/import_layer_ratchet.py`, `scripts/kernel_boundary_ratchet.py`, `scripts/root_module_ratchet.py`, `scripts/lane_coupling_ratchet.py`, `scripts/spec_validate.py`, `scripts/rust_crates_guard.py`, `scripts/architecture_scan.py`, and `tests/SmsWorkbench.Tests/NamespaceArchitectureTests.cs`.
 
 See [architecture and boundaries](docs/architecture.md), [desktop UI architecture](docs/current/ui-architecture.md), [Rust acceleration](docs/current/rust-acceleration.md), and [directory map](docs/directory-map.md).
 

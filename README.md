@@ -27,11 +27,11 @@
 
 - **自动化注册与接码**：支持协议直连与多浏览器驱动双泳道注册、多供应商邮箱 OTP 与手机接码、断点续跑及 AT 200 验真。
 - **账号与支付工作流**：内置账号测活、401 分层恢复、离线 JWT 巡检、Plus / GPT Team 5 席位试用检测、原生 Team 托管提链、协议绑卡支付与统一外部提链服务器对接，支持 Codex / CPA / SUB2API 导入导出。
-- **高性能与本机隔离**：内置进程内 Rust Sentinel VM（零 Node.js 依赖）与 [57 个 PyO3 热点加速扩展](docs/current/rust-acceleration.md)；配置分片、Session 与运行数据默认存放在本机用户目录，不写入 Git。
+- **高性能与本机隔离**：内置进程内 Rust Sentinel VM（零 Node.js 依赖）与 [62 个 PyO3 热点加速扩展](docs/current/rust-acceleration.md)；配置分片、Session 与运行数据默认存放在本机用户目录，不写入 Git。
 
-当前发布说明：[release-v2026.11.25.md](docs/releases/release-v2026.11.25.md)
+当前发布说明：[release-v2026.11.28.md](docs/releases/release-v2026.11.28.md)
 
-[![Buy me AI tokens](https://buymeatokens.com/api/badge/2951461586)](https://buymeatokens.com/api/badge/2951461586?ref=badge)
+[![Buy me AI tokens](https://buymeatokens.com/api/badge/2951461586)](https://buymeatokens.com/2951461586?ref=badge)
 
 
 ## 赞助商
@@ -112,7 +112,7 @@ flowchart TB
         KERN["kernel/（仅标准库）<br/>paths · sanitizer · timeouts · flags<br/>circuit_breaker · cross_process_gate · humanize · native_loader"]
         INFRA["config/ · transport/ · proxy/ · geo/<br/>observability/"]
         SEAMS["不可变领域契约与跨泳道原语<br/>account_models · payment/wire & checkout_contract<br/>desktop/ipc · operation_journal · store/account_seed"]
-        RUST["rust/（57 个 PyO3 热点扩展 · 116 函数）<br/>protocol_payment · sanitizer · env_loader · mail_otp · sentinel_pow · tls_fingerprint · auth_headers · auth_flow_steps · auth_wire · account_stages · captcha_config · profile_reclaim · proxy · phone_proxy · batch_proxy · edge_probe · html · sms · smsbower · nexsms · data_saver · http · http_client · browser_flow_session · browser_flow_dom · session_builder · session · codex_jwt · codex_oauth · agent_identity · store · cpa · sub2api · accounts · lifecycle · liveness · wham_usage · team_trial · payment_wire · batch_report · paypal_dom · paypal_reverse_html · pay_link · extract_server · capability_browser · qualification · qualification_batch"]
+        RUST["rust/（62 个 PyO3 热点扩展 · 122 函数）<br/>protocol_payment · sanitizer · env_loader · mail_otp · sentinel_pow · tls_fingerprint · auth_headers · auth_flow_steps · auth_password_step · auth_wire · account_stages · account_promotion · captcha_config · profile_reclaim · proxy · proxy_bridge · phone_proxy · batch_proxy · edge_probe · html · sms · smsbower · nexsms · data_saver · http · http_client · browser_flow_session · browser_flow_dom · browser_flow_recovery · session_builder · session_refresh · session · codex_jwt · codex_oauth · agent_identity · store · cpa · sub2api · accounts · lifecycle · liveness · wham_usage · team_trial · payment_wire · batch_report · paypal_dom · paypal_reverse_html · pay_link · extract_server · capability_browser · qualification · qualification_batch"]
     end
 
     EXT["外部提链服务器（HTTP API）<br/>EXTRACT_LINK_* 环境变量鉴权"]
@@ -145,8 +145,8 @@ flowchart TB
 | ⑤ 领域契约与共享原语 | `sms_tool/accounts/account_models.py`、`sms_tool/payment/wire.py`、`sms_tool/payment/checkout_contract.py`、`sms_tool/payment/catalog.py`、`sms_tool/desktop/ipc.py`、`sms_tool/operation_journal.py`、`sms_tool/store/account_seed.py` | 跨泳道不可变契约（账号模型、Checkout 与支付线缆核、方法目录、优惠/支付资格状态机、唯一 `@@SMSWORKBENCH_V2@@` IPC 写入器、幂等恢复日志与账号种子解析） |
 
 - **提链外部服务边界**：旧版内置协议支付源提取器已彻底退役，全部 15 种支付方式统一经 `sms_tool/pay_link/extract_server.py` 对接外部提链服务器（`protocol_payments.extract_link_server` / `EXTRACT_LINK_*` 环境变量）。
-- **Rust 原生加速与零 Node.js 依赖**：`native/sentinel_vm/` 提供进程内 Sentinel VM FFI；`rust/` 下 57 个由 `rust-anything` 管理的 PyO3 扩展加速 116 个热点函数（19,265 条录制用例 100% 一致，0 `unsafe`，完整基准见 [Rust 原生加速架构](docs/current/rust-acceleration.md)）。
-- **自动化架构门禁**：五层依赖方向（零反向白名单、零跨泳道耦合）、24 份机读边界 Spec、57 个 Rust PyO3 扩展编译校验与命名空间隔离由 CI 和预提交钩子强制守卫，包括 `scripts/import_layer_ratchet.py`、`scripts/kernel_boundary_ratchet.py`、`scripts/root_module_ratchet.py`、`scripts/lane_coupling_ratchet.py`、`scripts/spec_validate.py`、`scripts/rust_crates_guard.py`、`scripts/architecture_scan.py` 以及 `tests/SmsWorkbench.Tests/NamespaceArchitectureTests.cs`。
+- **Rust 原生加速与零 Node.js 依赖**：`native/sentinel_vm/` 提供进程内 Sentinel VM FFI；`rust/` 下 62 个由 `rust-anything` 管理的 PyO3 扩展加速 122 个热点函数（20,848 条录制用例 100% 一致，0 `unsafe`，完整基准见 [Rust 原生加速架构](docs/current/rust-acceleration.md)）。
+- **自动化架构门禁**：五层依赖方向（零反向白名单、零跨泳道耦合）、24 份机读边界 Spec、62 个 Rust PyO3 扩展编译校验与命名空间隔离由 CI 和预提交钩子强制守卫，包括 `scripts/import_layer_ratchet.py`、`scripts/kernel_boundary_ratchet.py`、`scripts/root_module_ratchet.py`、`scripts/lane_coupling_ratchet.py`、`scripts/spec_validate.py`、`scripts/rust_crates_guard.py`、`scripts/architecture_scan.py` 以及 `tests/SmsWorkbench.Tests/NamespaceArchitectureTests.cs`。
 
 更详细的边界规则见 [架构与边界说明](docs/architecture.md)，WPF 前端架构见 [桌面端 UI 架构](docs/current/ui-architecture.md)，Rust 原生加速见 [Rust 加速架构](docs/current/rust-acceleration.md)，物理文件归属见 [目录职责](docs/directory-map.md)。
 

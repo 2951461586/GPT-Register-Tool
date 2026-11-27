@@ -98,7 +98,6 @@ SUBPACKAGES = (
     "session",
     "codex",
     "importers",
-    "wallet",
     "registration",
     "payment",
     "mailbox",
@@ -111,12 +110,10 @@ SUBPACKAGES = (
     "kernel",
     "pay_link",
     "paypal",
-    "paypal_link",
     "providers",
     "registration_drivers",
     "sentinel",
     "store",
-    "upi_link",
 )
 
 MODULE_SCOPE = "module"

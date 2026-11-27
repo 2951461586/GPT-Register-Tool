@@ -3,9 +3,9 @@
 This repository uses Rust in two complementary ways to eliminate external runtime dependencies and accelerate hot CPU-bound Python paths while preserving 100% behavioral parity and pure-Python fallbacks:
 
 1. **In-process Sentinel VM (`native/sentinel_vm/`)** — a compiled pure-Rust `cdylib` (`sms_tool/sentinel/runtime/sentinel_vm.dll`, loaded via `sms_tool/sentinel/native_ffi.py` and `sms_tool/sentinel/runner.py`) that executes OpenAI Sentinel PoW, Turnstile `dx`, and Session Observer `so` challenges in-process with **zero Node.js runtime dependency**. Binary integrity is pinned by SHA-256 in `sms_tool/sentinel/bundle.py` (`NATIVE_LIB_SHA256`) and checked by `scripts/sentinel_asset_guard.py`.
-2. **Hot-path PyO3 extensions (`rust/*-rs/`)** — fifty-seven focused Python extension modules managed by `rust-anything` (PyO3 `abi3-py39`, `0 unsafe`, static CRT with zero MinGW runtime DLL dependencies). Every unit ships only functions that empirically clear **100% diff parity** and **≥ 1.1× end-to-end speedup** (FFI crossing included).
+2. **Hot-path PyO3 extensions (`rust/*-rs/`)** — sixty-two focused Python extension modules managed by `rust-anything` (PyO3 `abi3-py39`, `0 unsafe`, static CRT with zero MinGW runtime DLL dependencies). Every unit ships only functions that empirically clear **100% diff parity** and **≥ 1.1× end-to-end speedup** (FFI crossing included).
 
-## Active `rust-anything` PyO3 Units (57 Crates · 116 Functions)
+## Active `rust-anything` PyO3 Units (62 Crates · 122 Functions)
 
 | Crate | Python Owner | Accelerated Functions | Measured Speedup (Geo Mean) | Recorded Cases | Gate |
 | --- | --- | --- | ---: | ---: | --- |
@@ -16,6 +16,7 @@ This repository uses Rust in two complementary ways to eliminate external runtim
 | `rust/extract-server-parse-rs/` | `sms_tool/pay_link/extract_server.py` | `_validate_api_base` (6.3×) | **6.3×** | 222 / 222 | 12/12 PASS |
 | `rust/error-classification-rs/` | `sms_tool/kernel/error_classification.py` | `classify_error` (5.3×), `is_terminal_registration_error` (7.4×) | **6.2×** | 851 / 851 | 12/12 PASS |
 | `rust/account-stages-url-rs/` | `sms_tool/registration/account_stages.py` | `_strip_prompt_query` (6.0×) | **6.0×** | 220 / 220 | 12/12 PASS |
+| `rust/account-promotion-url-rs/` | `sms_tool/accounts/account_promotion.py` | `coupon_url_for_campaign` (4.9×) | **4.9×** | 231 / 231 | 12/12 PASS |
 | `rust/payment-wire-rs/` | `sms_tool/payment/wire.py` | `extract_web_deployment_attestation` (14.4×), `_compact_diagnostic` (1.5×) | **4.6×** | 226 / 226 | 12/12 PASS |
 | `rust/cfworker-html-rs/` | `sms_tool/providers/cfworker_client.py` | `_display_text` (8.9×), `_strip_leading_css` (4.3×), `_extract_emails` (1.7×) | **4.0×** | 122 / 122 | 12/12 PASS |
 | `rust/browser-flow-session-rs/` | `sms_tool/registration_drivers/browser_flow/session.py` | `_browser_failure_class` (3.9×) | **3.9×** | 255 / 255 | 12/12 PASS |
@@ -30,6 +31,7 @@ This repository uses Rust in two complementary ways to eliminate external runtim
 | `rust/session-builder-rs/` | `sms_tool/session/builder.py` | `_session_token_from_cookie_header` (2.8×) | **2.8×** | 221 / 221 | 12/12 PASS |
 | `rust/sub2api-parse-rs/` | `sms_tool/importers/sub2api.py` | `_normalize_sub2api_origin` (3.5×), `_parse_int_list` (2.1×) | **2.7×** | 254 / 254 | 12/12 PASS |
 | `rust/agent-identity-jwt-rs/` | `sms_tool/importers/agent_identity.py` | `_jwt_claims` (2.5×), `_chatgpt_user_id` (2.9×) | **2.6×** | 458 / 458 | 12/12 PASS |
+| `rust/browser-flow-recovery-rs/` | `sms_tool/registration_drivers/browser_flow/recovery.py` | `is_navigation_retryable` (2.6×) | **2.6×** | 240 / 240 | 12/12 PASS |
 | `rust/capability-browser-parse-rs/` | `sms_tool/payment/capability_browser.py` | `_playwright_proxy` (2.6×) | **2.6×** | 99 / 99 | 12/12 PASS |
 | `rust/captcha-config-rs/` | `sms_tool/browser/captcha_solver.py` | `extract_captcha_config` (2.1×), `_playwright_proxy` (1.4×), `_build_hcaptcha_bridge_html` (5.7×) | **2.6×** | 629 / 629 | 12/12 PASS |
 | `rust/proxy-screening-rs/` | `sms_tool/proxy/screening.py` | `classify_network_type` (2.6×) | **2.6×** | 45 / 45 | 12/12 PASS |
@@ -43,6 +45,7 @@ This repository uses Rust in two complementary ways to eliminate external runtim
 | `rust/icloud-html-rs/` | `sms_tool/providers/mailbox_icloud_url.py` | `_strip_html_to_visible_text` (2.1×), `_latest_mail_received_at` (1.0×), `_decode_js_string` (2.8×), `_with_message_limit` (1.8×), `_same_origin` (3.4×), `_extract_url_credentials` (3.3×), `_yangyang_api_paths` (2.8×) | **2.3×** | 1,316 / 1,316 | 12/12 PASS |
 | `rust/nexsms-phone-rs/` | `sms_tool/phone/nexsms.py` | `api_phone_number` (2.3×) | **2.3×** | 221 / 221 | 12/12 PASS |
 | `rust/qualification-batch-parse-rs/` | `sms_tool/payment/qualification_batch.py` | `_proxy_fingerprint` (4.3×), `_stripe_reason_text` (1.2×) | **2.3×** | 453 / 453 | 12/12 PASS |
+| `rust/session-refresh-parse-rs/` | `sms_tool/session/refresh.py` | `_has_session_cookie` (2.3×) | **2.3×** | 244 / 244 | 12/12 PASS |
 | `rust/auth-flow-steps-rs/` | `sms_tool/auth_flow/steps.py` | `_is_chatgpt_auth_login_landing` (2.1×), `_is_signup_password_page` (2.0×), `_is_signup_password_step` (2.2×), `_is_email_verification_step` (2.0×), `so_token_flow` (2.7×), `same_flow_so_token` (2.3×) | **2.2×** | 323 / 323 | 12/12 PASS |
 | `rust/gmail-html-rs/` | `sms_tool/providers/mailbox_gmail.py` | `_html_to_text` (2.6×), `_parse_proxy_url` (1.9×) | **2.2×** | 60 / 60 | 12/12 PASS |
 | `rust/account-inspection-rs/` | `sms_tool/accounts/account_inspection.py` | `decode_jwt_exp` (2.1×) | **2.1×** | 37 / 37 | 12/12 PASS |
@@ -54,8 +57,10 @@ This repository uses Rust in two complementary ways to eliminate external runtim
 | `rust/pay-link-normalize-rs/` | `sms_tool/pay_link/normalize.py` | `_normalized_contract_value` (1.7×), `_canonical_terminal_state` (2.3×) | **2.0×** | 84 / 84 | 12/12 PASS |
 | `rust/playwright-proxy-rs/` | `sms_tool/registration_drivers/browser_session.py` | `_playwright_proxy` (2.0×) | **2.0×** | 22 / 22 | 12/12 PASS |
 | `rust/auth-wire-rs/` | `sms_tool/transport/auth_wire.py` | `_is_existing_login_redirect` (1.9×) | **1.9×** | 32 / 32 | 12/12 PASS |
+| `rust/proxy-bridge-parse-rs/` | `sms_tool/proxy/bridge.py` | `_addr_type` (3.0×), `_host_matches_blocked` (1.2×) | **1.9×** | 541 / 541 | 12/12 PASS |
 | `rust/session-converter-rs/` | `sms_tool/session/converter.py` | `parse_jwt_payload` (1.4×), `collect_session_like_objects` (2.5×) | **1.9×** | 135 / 135 | 12/12 PASS |
 | `rust/store-normalize-rs/` | `sms_tool/store/normalize.py` | `_normalize_account_email` (1.6×), `_looks_codex_refresh_token` (2.8×), `_jwt_account_type` (1.7×) | **1.9×** | 192 / 192 | 12/12 PASS |
+| `rust/auth-password-step-rs/` | `sms_tool/auth_flow/password_step.py` | `_is_login_password_step` (1.8×) | **1.8×** | 327 / 327 | 12/12 PASS |
 | `rust/http-utils-rs/` | `sms_tool/transport/http_utils.py` | `_is_allowed_callback_url` (2.2×), `_minimal_chatgpt_cookie_header` (1.5×) | **1.8×** | 76 / 76 | 12/12 PASS |
 | `rust/cpa-classify-rs/` | `sms_tool/importers/cpa.py` | `classify_cpa_auth_file` (1.7×) | **1.7×** | 23 / 23 | 12/12 PASS |
 | `rust/env-loader-rs/` | `sms_tool/kernel/env_loader.py` | `_parse_lines` (1.7×) | **1.7×** | 205 / 205 | 12/12 PASS |
@@ -67,7 +72,7 @@ This repository uses Rust in two complementary ways to eliminate external runtim
 | `rust/tls-fingerprint-rs/` | `sms_tool/transport/tls_fingerprint.py` | `permute_extension_order` (1.3×) | **1.3×** | 241 / 241 | 12/12 PASS |
 | `rust/qualification-parse-rs/` | `sms_tool/payment/qualification.py` | `parse_method_selection` (1.2×) | **1.2×** | 219 / 219 | 12/12 PASS |
 
-Total across all 57 crates: **19,265 / 19,265 recorded cases matched (0.0% fallback)**, **684 / 684 `rust-anything gate` checks passing**, **0 `unsafe` blocks**, and **0 external MinGW runtime DLL dependencies**.
+Total across all 62 crates: **20,848 / 20,848 recorded cases matched (0.0% fallback)**, **744 / 744 `rust-anything gate` checks passing**, **0 `unsafe` blocks**, and **0 external MinGW runtime DLL dependencies**.
 
 Candidates benchmarked and deliberately left in Python (100% diff parity, but < 1.1× end-to-end speedup or tie due to PyO3 call-crossing cost on tiny dicts/strings/lists, or keyword-only harness mismatch): `mailbox/parsers.py` (0.72× / 1.01× on expanded helpers), `payment/promotion_states.py` (0.55×), `transport/auth_state.py` (0.58×), `session/converter.py::strip_unavailable` (0.31×), `payment/checkout_contract.py::_collect_method_group` (0.31×), `mailbox_icloud_url.py::{_api_payload_text,_walk_api_code,_decode_mail_body,_discover_spa_pickup_urls}` (0.91× / 0.96× / 1.10× tie / kw-only), `mailbox_gmail.py::_normalize_recipients` (1.10× tie), `payment/pp_link_helpers.py::extract_paypal_approve_url` (1.05× tie), `accounts/account_identity.py::_restore_session` (0.75×), `accounts/account_recovery.py::_relogin_failure_shape` (0.25×), `payment/qualification_states.py::{method_label,qualification_state_group}` (0.59× / 0.52×), `browser/fingerprint_pool.py::classify_proxy_org` (0.73×, 87/87 parity), `transport/auth_wire.py::_with_query_param` (0.73×), `registration/batch_runner.py::_proxy_endpoint_group` (1.06× tie), `importers/sub2api.py::_parse_name_list` (1.09× tie), `kernel/env_loader.py::_decode_value` (0.61×), `codex/sentinel.py::strip_cookie_names` (1.07× tie), `accounts/account_lifecycle.py::_email_fuzzy_pattern` (0.93×), `commands/accounts.py::_probe_reason_label` (0.94×, 238/238 parity), `paypal/reverse_protocol.py::{extract_form_action,is_js_only_page}` (1.02× tie / 0.44×), `accounts/wham_usage.py::format_wham_usage_label` (0.17×), `payment/protocol_codec.py::{expected_amount_minor,scrub_card_secrets,submission_failure_detail,classify_stripe_outcome}` (0.44× / 0.68× / 0.91× / 0.34×), `payment/capability_browser.py::_cookies_from_header` (0.38×, 242/242 parity), `geo/resolver.py::_extract_asn` (0.31×, 217/217 parity), `mailbox/pool_writer.py::_line_owner_email` (1.0× tie, 239/239 parity), and `payment/batch_report.py::unique_emails` (0.41×, 208/208 parity).
 
@@ -77,9 +82,9 @@ WPF / C# desktop frontend (`SmsWorkbench/` & `SmsWorkbench.Contracts/`) intentio
 
 Every accelerated Python module loads its native extension at import time and falls back cleanly to the pure-Python implementation if the compiled `_native.pyd` is absent (for example in a pure-Python CI checkout without a Rust build):
 
-- `RUST_ANYTHING_MODE=old` (or `original`): force all 57 units onto their pure-Python implementations (used for differential testing and re-recording).
+- `RUST_ANYTHING_MODE=old` (or `original`): force all 62 units onto their pure-Python implementations (used for differential testing and re-recording).
 - `RUST_ANYTHING_MODE=new` (or `rust`): require native extensions to load and raise immediately on import error.
-- Per-unit override: `RUST_ANYTHING_UNIT_<UNIT>=old|new` (for example `RUST_ANYTHING_UNIT_PROTOCOL_PAYMENT=old`, `RUST_ANYTHING_UNIT_SENTINEL_TOKENS=old`, `RUST_ANYTHING_UNIT_BROWSER_FLOW_SESSION=old`, `RUST_ANYTHING_UNIT_BROWSER_FLOW_DOM=old`, `RUST_ANYTHING_UNIT_BATCH_REPORT_PARSE=old`, `RUST_ANYTHING_UNIT_HTTP_CLIENT_PARSE=old`).
+- Per-unit override: `RUST_ANYTHING_UNIT_<UNIT>=old|new` (for example `RUST_ANYTHING_UNIT_PROTOCOL_PAYMENT=old`, `RUST_ANYTHING_UNIT_SENTINEL_TOKENS=old`, `RUST_ANYTHING_UNIT_ACCOUNT_PROMOTION_URL=old`, `RUST_ANYTHING_UNIT_SESSION_REFRESH_PARSE=old`, `RUST_ANYTHING_UNIT_AUTH_PASSWORD_STEP=old`, `RUST_ANYTHING_UNIT_PROXY_BRIDGE_PARSE=old`, `RUST_ANYTHING_UNIT_BROWSER_FLOW_RECOVERY=old`).
 
 ## Verification Commands
 
@@ -95,7 +100,7 @@ rust-anything gate
 Pop-Location
 
 # Dual-mode Python vs Rust parity tests
-python -m pytest -q tests/governance/test_proxy_screening_rust_parity.py tests/governance/test_html_extractors_rust_parity.py tests/governance/test_wave2_rust_parity.py tests/governance/test_wave3_rust_parity.py tests/governance/test_wave4_rust_parity.py tests/governance/test_wave5_rust_parity.py tests/governance/test_wave6_rust_parity.py tests/governance/test_wave7_rust_parity.py tests/governance/test_wave8_rust_parity.py tests/governance/test_wave9_rust_parity.py tests/governance/test_wave10_rust_parity.py tests/governance/test_wave11_rust_parity.py tests/governance/test_protocol_payment_rust_parity.py tests/governance/test_wave12_rust_parity.py tests/governance/test_wave13_rust_parity.py
+python -m pytest -q tests/governance/test_proxy_screening_rust_parity.py tests/governance/test_html_extractors_rust_parity.py tests/governance/test_wave2_rust_parity.py tests/governance/test_wave3_rust_parity.py tests/governance/test_wave4_rust_parity.py tests/governance/test_wave5_rust_parity.py tests/governance/test_wave6_rust_parity.py tests/governance/test_wave7_rust_parity.py tests/governance/test_wave8_rust_parity.py tests/governance/test_wave9_rust_parity.py tests/governance/test_wave10_rust_parity.py tests/governance/test_wave11_rust_parity.py tests/governance/test_protocol_payment_rust_parity.py tests/governance/test_wave12_rust_parity.py tests/governance/test_wave13_rust_parity.py tests/governance/test_wave14_rust_parity.py
 ```
 
 Detailed per-crate report cards live in each crate's `report/REPORT.md` and `report/card.svg`.

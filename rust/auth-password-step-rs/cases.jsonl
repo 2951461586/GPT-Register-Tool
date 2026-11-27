@@ -1,0 +1,327 @@
+{"fn": "_is_login_password_step", "args": ["HELLO", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ab", {"title": true, "home": null}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a:b:c", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["src/a/b.ts日本語のテキスト", {"a": {"b": "c"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["İstanbul"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello worldabc"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["straße"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ab"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a😀b😀c", {"10": {}, "😀": null}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["tab\tseparated", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["emoji 👍🏽 mix", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["😀", {"b": "x", "title": ["a", 1], "a": 0}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["😀trailing."], "ok": false}
+{"fn": "_is_login_password_step", "args": ["  padded  ", {"title": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["tab\tseparated", {"2": "x", "ünï": []}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ns:key.path", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["é"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a😀b😀c", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["tab\tseparateda😀b😀c"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a😀b😀c", {"title": null, "home": {"a": "b"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["abcünïcödé"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["HELLO", true], "ok": false}
+{"fn": "_is_login_password_step", "args": ["straßeΣΊΣΥΦΟΣ", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["trailing.a..b", {"a.b": 0, "2": [], "title": "x"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ΣΊΣΥΦΟΣ", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["İstanbul", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a..babc", "x"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["  padded  ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ab", {"a": "b"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["  padded  ", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["line1\nline2"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["😀", null], "ok": false}
+{"fn": "_is_login_password_step", "args": ["{name} has {count} items", {"😀": {"a": "b"}, "b": null}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a😀b😀c"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["./x/**/*.json", {"b": {"a": "b"}, "title": ["a", 1], "home": {}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["key_name-1a.b.c"], "ok": false}
+{"fn": "_is_login_password_step", "args": [":", {"2": "x"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["Hello World", {"2": ["a", 1], "title": [], "b": {"a": "b"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a😀b😀c", {"home": null, "😀": 0}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["./x/**/*.json", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": [":"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["trailing.:", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["./x/**/*.json", {"nav": {"a": "b"}, "a.b": 0}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["日本語のテキスト.leading", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["﻿bom", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["﻿bom"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["trailing.ns:key.path", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a", ["a", 1]], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a", []], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ünïcödé", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a..b:", {"title": ["a", 1], "a.b": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello"], "ok": false}
+{"fn": "_is_login_password_step", "args": [":", null], "ok": false}
+{"fn": "_is_login_password_step", "args": ["", []], "ok": false}
+{"fn": "_is_login_password_step", "args": ["key_name-1", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a.b.c"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello world", {"a": {"a": "b"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a😀b😀c", {"nav": null, "b": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["日本語のテキスト"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["tab\tseparateda..b"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a:b:c", {"a.b": {"a": "b"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a😀b😀c", {"😀": {"a": "b"}, "2": ["a", 1], "b": "x"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["İstanbula:b:c", {"title": null}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["abcΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello worldsrc/a/b.ts", {"home": null, "😀": [], "ünï": null}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["emoji 👍🏽 mix", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["line1\nline2.leading", {"a.b": {}, "10": {}, "2": 0}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["abc", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["😀", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["Hello World"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["src/a/b.ts", {"10": ["a", 1], "😀": 0}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["{name} has {count} itemsab", {"a": {"b": "c"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["HELLO", {"a": {"b": "c"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["helloemoji 👍🏽 mix", {"home": {"a": {"b": "c"}}, "😀": {}}], "ok": false}
+{"fn": "_is_login_password_step", "args": [""], "ok": false}
+{"fn": "_is_login_password_step", "args": [":", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["abc", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": [".leading"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["trailing.key_name-1", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["line1\nline2a.b.c", {"😀": [], "nav": null}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["Hello World", []], "ok": false}
+{"fn": "_is_login_password_step", "args": ["é", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["😀abc", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": [":", {"a": {"b": "c"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello", {"a": {}, "2": ["a", 1], "😀": null}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["😀"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["key_name-1"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ns:key.path﻿bom"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["😀", {"ünï": ["a", 1], "10": "x", "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello", {"nav": null}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["HELLOΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello world", {"2": "x", "10": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["trailing.{name} has {count} items", {"😀": []}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ab", true], "ok": false}
+{"fn": "_is_login_password_step", "args": ["emoji 👍🏽 mix", {"a": "b"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["HELLO"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello world", {"b": {"a": "b"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["tab\tseparated"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["trailing.", {"a": "b"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a😀b😀c", {"10": ["a", 1], "2": {"a": "b"}, "b": null}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["line1\nline2", 0], "ok": false}
+{"fn": "_is_login_password_step", "args": ["{name} has {count} items"], "ok": false}
+{"fn": "_is_login_password_step", "args": [":", {"a.b": null}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello world", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["日本語のテキスト", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["key_name-1", {"a": null, "title": 0}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello world"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["HELLO  padded  ", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": [".leadingns:key.path", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello worldline1\nline2"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["trailing.", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["  padded  emoji 👍🏽 mix", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["é", {"b": true, "ünï": 0, "nav": {"a": "b"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["HELLOline1\nline2"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["line1\nline2", {"ünï": {}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ΣΊΣΥΦΟΣ", {"b": null}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["src/a/b.tsHELLO", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a:b:cünïcödé"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a😀b😀c", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["tab\tseparated", {"title": {}, "home": {"a": "b"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["src/a/b.ts"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a..bünïcödé", null], "ok": false}
+{"fn": "_is_login_password_step", "args": ["line1\nline2", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["::", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["HELLO.leading"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["abcstraße", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["aa😀b😀c", {"a.b": [], "ünï": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a.b.c", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["😀Hello World", {"a": "b"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["./x/**/*.json", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": [".leadingsrc/a/b.ts", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello", {"😀": {"a": {"b": "c"}}, "title": 0}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["é", {"b": true, "a.b": "x"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["key_name-1ns:key.path"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["Hello World", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["line1\nline2", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["tab\tseparated", {"ünï": ["a", 1], "title": true, "2": {}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["line1\nline2", {"nav": "x", "b": {"a": {"b": "c"}}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["key_name-1", {"ünï": null}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello  padded  ", {"title": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["src/a/b.ts", ["a", 1]], "ok": false}
+{"fn": "_is_login_password_step", "args": ["HELLO", {"2": true, "ünï": [], "10": []}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["HELLOünïcödé", []], "ok": false}
+{"fn": "_is_login_password_step", "args": ["HELLO", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["line1\nline2", {"a.b": null, "title": {"a": "b"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a:b:c", {"a": [], "😀": []}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["emoji 👍🏽 mix", {"a": {}, "ünï": 0}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["trailing.  padded  ", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a..b", {"a.b": null}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["emoji 👍🏽 mix", 0], "ok": false}
+{"fn": "_is_login_password_step", "args": ["😀", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a:b:c", {"a": {"b": "c"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": [":", {"title": {"a": "b"}, "a.b": ["a", 1], "home": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["  padded    padded  "], "ok": false}
+{"fn": "_is_login_password_step", "args": ["﻿bom😀", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["Hello World", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ns:key.path", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["HELLOemoji 👍🏽 mix"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["emoji 👍🏽 mix😀", {"nav": {}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["straße", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": [".leading", {"10": {}, "home": true, "b": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a😀b😀c", ["a", 1]], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["abc{name} has {count} items", {"title": 0}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ünïcödé😀"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ns:key.pathstraße"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["straße", {"a.b": 0, "a": ["a", 1], "title": []}], "ok": false}
+{"fn": "_is_login_password_step", "args": [":trailing.", {"title": [], "home": 0, "b": {"a": "b"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["straße", {"a": null, "title": {}, "10": {}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a:b:c", {"a.b": true, "nav": {}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["emoji 👍🏽 mix", {"ünï": "x", "nav": []}], "ok": false}
+{"fn": "_is_login_password_step", "args": [":ns:key.path"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a:b:chello world", {"home": {}, "a": null}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["﻿bomΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ünïcödéa:b:c", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ab", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a..b", {"home": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a:b:c  padded  ", {"nav": {"a": {"b": "c"}}, "2": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["aΣΊΣΥΦΟΣ", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["日本語のテキスト", "x"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a.b.c", {"😀": {"a": "b"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ahello world", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello", {"home": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["line1\nline2", {"a": "b"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ns:key.path", {"a": "b"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["hello./x/**/*.json", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["  padded  ", {"ünï": true, "home": 0, "10": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["é", null], "ok": false}
+{"fn": "_is_login_password_step", "args": [".leading", null], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a..b", {"a": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["é", {"10": {"a": {"b": "c"}}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["Hello WorldΣΊΣΥΦΟΣ", {"$undefined": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["Hello World", {"a": {"b": "c"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["﻿bom", {"ünï": null, "title": null, "a": {"a": "b"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["😀a", {"b": {"a": {"b": "c"}}, "😀": [], "ünï": true}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["line1\nline2Hello World", {"😀": [], "ünï": {}, "nav": 0}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["héllo wörld", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["👍🏽 thumbs", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["日本語", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["é", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["İstanbul", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["straße", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ılık ırmak", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["👨‍👩‍👧 family", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a b", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ΣΊΣΥΦΟΣ", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a😀b", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["﻿bom", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a²b x½ y①", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["aⅠb Ⅻ", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a𐐀b 𝐀bc", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["कि ٣٤", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["Iı İi", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["K K k", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ſ s S", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["x‍y 👨‍👩‍👧", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["a b c　d", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["١٢٣ ٤٥", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["𝟘𝟙 ²³", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["snake_case foo-bar o'neil", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ǅungla Ǆ", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["one\r\ntwo threefour", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["café café", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ΣΑΣ σας ς", {"😀": 0, "nav": ["a", 1]}], "ok": false}
+{"fn": "_is_login_password_step", "args": [""], "ok": false}
+{"fn": "_is_login_password_step", "args": ["", null], "ok": false}
+{"fn": "_is_login_password_step", "args": [null], "ok": false}
+{"fn": "_is_login_password_step", "args": [null, null], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password"], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", null], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://AUTH.OPENAI.COM/LOG-IN/PASSWORD///?state=abc#frag"], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://AUTH.OPENAI.COM/LOG-IN/PASSWORD///?state=abc#frag", null], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/create-account/password"], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/create-account/password", null], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://sub.auth.openai.com/create-account/password;jsessionid=1?next=/"], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://sub.auth.openai.com/create-account/password;jsessionid=1?next=/", null], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", null], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/about-you"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/about-you", null], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://chatgpt.com/log-in/password"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://chatgpt.com/log-in/password", null], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com:443/log-in/password"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com:443/log-in/password", null], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://user:pass@auth.openai.com/log-in/password"], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://user:pass@auth.openai.com/log-in/password", null], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password/extra"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password/extra", null], "ok": false}
+{"fn": "_is_login_password_step", "args": ["  \thttps://auth.openai.com/log-in/password\r\n "], "ok": false}
+{"fn": "_is_login_password_step", "args": ["  \thttps://auth.openai.com/log-in/password\r\n ", null], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/\tpassword"], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/\tpassword", null], "ok": true}
+{"fn": "_is_login_password_step", "args": ["//auth.openai.com/log-in/password"], "ok": true}
+{"fn": "_is_login_password_step", "args": ["//auth.openai.com/log-in/password", null], "ok": true}
+{"fn": "_is_login_password_step", "args": ["/log-in/password"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["/log-in/password", null], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/a;b/log-in/password"], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/a;b/log-in/password", null], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password;p=1/other"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password;p=1/other", null], "ok": false}
+{"fn": "_is_login_password_step", "args": ["ftp://auth.openai.com/log-in/password;params=1"], "ok": true}
+{"fn": "_is_login_password_step", "args": ["ftp://auth.openai.com/log-in/password;params=1", null], "ok": true}
+{"fn": "_is_login_password_step", "args": ["custom+scheme://auth.openai.com/log-in/password;notparam"], "ok": false}
+{"fn": "_is_login_password_step", "args": ["custom+scheme://auth.openai.com/log-in/password;notparam", null], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://[::1/bad-ipv6"], "error": "ValueError: Invalid IPv6 URL"}
+{"fn": "_is_login_password_step", "args": ["https://[::1/bad-ipv6", null], "error": "ValueError: Invalid IPv6 URL"}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password#a?b"], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password#a?b", null], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", null], "ok": false}
+{"fn": "_is_login_password_step", "args": ["", null], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", null], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["", {}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {"page": {"type": "password"}}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["", {"page": {"type": "password"}}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {"page": {"type": "password"}}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {"page": {"type": "  LOGIN_PASSWORD  "}}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["", {"page": {"type": "  LOGIN_PASSWORD  "}}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {"page": {"type": "  LOGIN_PASSWORD  "}}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {"page": {"type": "create_account_password"}}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["", {"page": {"type": "create_account_password"}}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {"page": {"type": "create_account_password"}}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {"page": {"type": "email_otp"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["", {"page": {"type": "email_otp"}}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {"page": {"type": "email_otp"}}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {"page": {"type": ""}, "page_type": "password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["", {"page": {"type": ""}, "page_type": "password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {"page": {"type": ""}, "page_type": "password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {"page": {"type": null}, "page_type": "login_password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["", {"page": {"type": null}, "page_type": "login_password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {"page": {"type": null}, "page_type": "login_password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {"page": {"type": 0}, "page_type": "password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["", {"page": {"type": 0}, "page_type": "password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {"page": {"type": 0}, "page_type": "password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {"page": {"type": false}, "page_type": "password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["", {"page": {"type": false}, "page_type": "password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {"page": {"type": false}, "page_type": "password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {"page": {"type": true}, "page_type": "password"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["", {"page": {"type": true}, "page_type": "password"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {"page": {"type": true}, "page_type": "password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {"page": {"type": ["x"]}, "page_type": "password"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["", {"page": {"type": ["x"]}, "page_type": "password"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {"page": {"type": ["x"]}, "page_type": "password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {"page": {"type": {"k": 1}}, "page_type": "password"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["", {"page": {"type": {"k": 1}}, "page_type": "password"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {"page": {"type": {"k": 1}}, "page_type": "password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {"page": {"type": []}, "page_type": "password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["", {"page": {"type": []}, "page_type": "password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {"page": {"type": []}, "page_type": "password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {"page": "not-a-dict", "page_type": "create_account_password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["", {"page": "not-a-dict", "page_type": "create_account_password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {"page": "not-a-dict", "page_type": "create_account_password"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {"page_type": "  Password "}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["", {"page_type": "  Password "}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {"page_type": "  Password "}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {"page_type": "about_you"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["", {"page_type": "about_you"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {"page_type": "about_you"}], "ok": true}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/email-verification", {"page": {"type": "email_verification"}, "continue_url": "https://auth.openai.com/email-verification"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["", {"page": {"type": "email_verification"}, "continue_url": "https://auth.openai.com/email-verification"}], "ok": false}
+{"fn": "_is_login_password_step", "args": ["https://auth.openai.com/log-in/password", {"page": {"type": "email_verification"}, "continue_url": "https://auth.openai.com/email-verification"}], "ok": true}

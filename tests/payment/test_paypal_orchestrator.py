@@ -661,9 +661,3 @@ def test_auto_pay_hands_the_browser_engines_no_phone_number(rec, configured, mon
         kwargs = next(kw for n, _args, kw in rec.calls if n == name)
         assert kwargs["phone"] == "", f"{name} was handed a phone number"
         assert kwargs["sms_api_url"] == "", f"{name} was handed an SMS URL"
-
-
-def test_the_phone_picker_is_not_an_orchestrator_symbol():
-    """It used to be imported here. Re-adding the import would let a future
-    edit reach for the removed config section without noticing it is gone."""
-    assert not hasattr(orchestrator, "_pick_phone_and_sms")

@@ -8,6 +8,13 @@ from urllib.parse import urlparse
 from . import deps, steps, totp
 from ..kernel.transport import TRANSPORT_ERRORS
 
+_NATIVE_AUTH_PASSWORD_STEP = steps.load_native_module(
+    "auth-password-step-rs",
+    "auth_password_step_rs",
+    "RUST_ANYTHING_UNIT_AUTH_PASSWORD_STEP",
+)
+_NATIVE_IS_LOGIN_PASSWORD_STEP = getattr(_NATIVE_AUTH_PASSWORD_STEP, "_is_login_password_step", None)
+
 LOGIN_PASSWORD_STEP_TYPES = frozenset({"password", "login_password", "create_account_password"})
 
 SOURCE_TRANSACTION_STEP = "transaction_step"
@@ -30,6 +37,15 @@ def _login_password_page_type(payload):
 
 def _is_login_password_step(url, payload=None):
     """True when ``url`` / ``payload`` positively expose the password login step."""
+    if (
+        _NATIVE_IS_LOGIN_PASSWORD_STEP is not None
+        and (url is None or isinstance(url, str))
+        and (payload is None or isinstance(payload, dict))
+    ):
+        try:
+            return _NATIVE_IS_LOGIN_PASSWORD_STEP(url, payload)
+        except TypeError:
+            pass
     parsed = urlparse(str(url or ""))
     host = (parsed.netloc or "").lower()
     path = (parsed.path or "").rstrip("/").lower()

@@ -1,0 +1,240 @@
+{"fn": "is_navigation_retryable", "args": [".leading"], "ok": false}
+{"fn": "is_navigation_retryable", "args": [":"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["hello world"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["emoji 👍🏽 mix"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["日本語のテキスト"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["  padded  hello world"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["hello world日本語のテキスト"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["﻿bom"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["src/a/b.ts"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["abca..b"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["straße"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ns:key.path"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["é"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["HELLO"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["İstanbul"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a.b.c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["tab\tseparated"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["emoji 👍🏽 mixns:key.path"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["emoji 👍🏽 mix./x/**/*.json"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["😀"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["line1\nline2"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ünïcödé"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["abc"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["  padded  "], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["{name} has {count} itemskey_name-1"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["trailing."], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["﻿bomemoji 👍🏽 mix"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["Hello World"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["  padded  İstanbul"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a:b:c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a..b"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["./x/**/*.json"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["{name} has {count} items"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["HELLOa..b"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["é  padded  "], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ab"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ns:key.patha.b.c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["日本語のテキストkey_name-1"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["hello worlda"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a..b  padded  "], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a😀b😀cns:key.path"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["./x/**/*.jsonkey_name-1"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["{name} has {count} itemsa😀b😀c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a﻿bom"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ΣΊΣΥΦΟΣline1\nline2"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["éline1\nline2"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["trailing.straße"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a😀b😀c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": [":{name} has {count} items"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["İstanbulİstanbul"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["hellotrailing."], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["key_name-1"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["tab\tseparateda"], "ok": false}
+{"fn": "is_navigation_retryable", "args": [""], "ok": false}
+{"fn": "is_navigation_retryable", "args": [":ab"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["key_name-1tab\tseparated"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["İstanbulsrc/a/b.ts"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["étab\tseparated"], "ok": false}
+{"fn": "is_navigation_retryable", "args": [".leading  padded  "], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["İstanbultrailing."], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["HELLOa.b.c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["atab\tseparated"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["Hello Worldİstanbul"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["abca😀b😀c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": [":src/a/b.ts"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["  padded  ./x/**/*.json"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["{name} has {count} itemsHELLO"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["😀ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_navigation_retryable", "args": [":./x/**/*.json"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["hello"], "ok": false}
+{"fn": "is_navigation_retryable", "args": [":a.b.c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["😀hello world"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["trailing.﻿bom"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["key_name-1abc"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["./x/**/*.jsonsrc/a/b.ts"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["éns:key.path"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["{name} has {count} itemsİstanbul"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["Hello Worldhello world"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["{name} has {count} itemstab\tseparated"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a:b:cemoji 👍🏽 mix"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["trailing.ns:key.path"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["Hello World﻿bom"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a:b:cé"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["src/a/b.tsemoji 👍🏽 mix"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["İstanbula😀b😀c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["emoji 👍🏽 mix:"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["Hello Worlda😀b😀c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["abcsrc/a/b.ts"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ns:key.patha..b"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["trailing.a😀b😀c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["{name} has {count} itemsa.b.c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["emoji 👍🏽 mixé"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["line1\nline2😀"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["{name} has {count} items./x/**/*.json"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["abchello world"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["{name} has {count} itemsa"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a./x/**/*.json"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["trailing.hello"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["src/a/b.ts:"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a😀b😀cΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["aemoji 👍🏽 mix"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a😀b😀c.leading"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["日本語のテキストhello world"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["./x/**/*.jsona..b"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["emoji 👍🏽 mixa😀b😀c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ésrc/a/b.ts"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["src/a/b.ts﻿bom"], "ok": false}
+{"fn": "is_navigation_retryable", "args": [".leadingHello World"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ünïcödé./x/**/*.json"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ünïcödé.leading"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["😀ab"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["😀emoji 👍🏽 mix"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["  padded  a"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a:b:cHELLO"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["helloHello World"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["HELLO:"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["  padded  a:b:c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": [".leadingsrc/a/b.ts"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["  padded    padded  "], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["HELLOé"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ünïcödé{name} has {count} items"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a..ba😀b😀c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["key_name-1ns:key.path"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a.b.cHELLO"], "ok": false}
+{"fn": "is_navigation_retryable", "args": [".leading﻿bom"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["./x/**/*.jsontrailing."], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["abc﻿bom"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["straßea.b.c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["line1\nline2hello world"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a😀b😀csrc/a/b.ts"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["key_name-1{name} has {count} items"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ab.leading"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["hello worldHELLO"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["éa😀b😀c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["éHello World"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ünïcödéa😀b😀c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["hello world.leading"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["line1\nline2ünïcödé"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["éhello"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["😀İstanbul"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["hello worldtrailing."], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["tab\tseparateda..b"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["{name} has {count} itemsa:b:c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["emoji 👍🏽 mixab"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["HELLOabc"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["line1\nline2  padded  "], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["hello:"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["./x/**/*.json  padded  "], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["İstanbulé"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["hello world😀"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["HELLOkey_name-1"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["hello world./x/**/*.json"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["abc./x/**/*.json"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a😀b😀cstraße"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["abns:key.path"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["emoji 👍🏽 mixünïcödé"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["key_name-1HELLO"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a:b:cHello World"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["emoji 👍🏽 mix日本語のテキスト"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["emoji 👍🏽 mixİstanbul"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["hello worlda😀b😀c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["emoji 👍🏽 mixstraße"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["tab\tseparatedünïcödé"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["abünïcödé"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["hello world{name} has {count} items"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["line1\nline2a:b:c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["Hello Worldünïcödé"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["{name} has {count} itemsstraße"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a😀b😀c:"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a..b{name} has {count} items"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["hello world:"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["trailing.line1\nline2"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ΣΊΣΥΦΟΣsrc/a/b.ts"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["日本語のテキスト:"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["helloa"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a.b.chello"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["İstanbul日本語のテキスト"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["  padded  HELLO"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ΣΊΣΥΦΟΣΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["./x/**/*.json﻿bom"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["éstraße"], "ok": false}
+{"fn": "is_navigation_retryable", "args": [".leadingHELLO"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ünïcödé日本語のテキスト"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["  padded  key_name-1"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["日本語のテキストns:key.path"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ns:key.patha😀b😀c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["aΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["İstanbula.b.c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["abca"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["😀日本語のテキスト"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a:b:ca:b:c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["line1\nline2key_name-1"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["Hello WorldHELLO"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["emoji 👍🏽 mixline1\nline2"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["éa:b:c"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["abhello world"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a..bns:key.path"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["HELLOa"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["héllo wörld"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["👍🏽 thumbs"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["日本語"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["ılık ırmak"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["👨‍👩‍👧 family"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a b"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a😀b"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a²b x½ y①"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["aⅠb Ⅻ"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["a𐐀b 𝐀bc"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["कि ٣٤"], "ok": false}
+{"fn": "is_navigation_retryable", "args": [null], "ok": false}
+{"fn": "is_navigation_retryable", "args": [""], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["   "], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["account_deactivated"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["invalid_credentials"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["email_otp_timeout_expired_custom"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["TimeoutError: waiting for selector"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["Page.goto: net::ERR_ABORTED at https://chatgpt.com/"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["PAGE.GOTO: Target page, context or browser has been closed"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["Navigation failed because request was aborted by peer"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["navigation succeeded cleanly"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["abort without nav keyword"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["NS_ERROR_ABORT while loading https://auth.openai.com"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["Navigation aborted by new navigation"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["curl: (35) TLS connect error: OPENSSL_internal"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["curl: (7) Failed to connect to 127.0.0.1 port 7890"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["curl: (28) Operation timed out after 30000 ms"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["curl: (52) Empty reply from server"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["curl: (56) Recv failure: Connection reset by peer"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["Proxy CONNECT aborted"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["Connection refused by upstream"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["Connection aborted remotely"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["HTTP 403 Forbidden: sentinel challenge"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["HTTP 429 Too Many Requests"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["unexpected_page_state: about_you"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["中文错误：导航正常结束，无重试标记"], "ok": false}
+{"fn": "is_navigation_retryable", "args": ["中文错误：page.goto 加载中断"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx connection reset"], "ok": true}
+{"fn": "is_navigation_retryable", "args": ["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx benign failure"], "ok": false}

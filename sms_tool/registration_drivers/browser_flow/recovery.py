@@ -9,10 +9,19 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from ...transport.http_client import is_transient_transport_error
+from ...transport.http_client import is_transient_transport_error, load_native_module
+
+_NATIVE_BROWSER_FLOW_RECOVERY = load_native_module(
+    "browser-flow-recovery-rs",
+    "browser_flow_recovery_rs",
+    "RUST_ANYTHING_UNIT_BROWSER_FLOW_RECOVERY",
+)
+_NATIVE_IS_NAVIGATION_RETRYABLE = getattr(_NATIVE_BROWSER_FLOW_RECOVERY, "is_navigation_retryable", None)
 
 
 def is_navigation_retryable(error: object) -> bool:
+    if _NATIVE_IS_NAVIGATION_RETRYABLE is not None:
+        return _NATIVE_IS_NAVIGATION_RETRYABLE(error if error is None or isinstance(error, str) else str(error or ""))
     text = str(error or "").lower()
     return is_transient_transport_error(error) or "page.goto" in text or "navigation" in text and "abort" in text
 

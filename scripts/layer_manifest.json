@@ -4,7 +4,7 @@
     "1": "surface (IPC envelope, operator output, stdout mirror, WPF-facing reads)",
     "2": "command adapter (cli, cli_parsers, commands, doctor, diagnostics)",
     "3": "application workflow (registration, payment, mailbox, accounts, auth)",
-    "4": "adapter (providers, store, payment lanes, drivers, browser, phone, wallet)",
+    "4": "adapter (providers, store, payment lanes, drivers, browser, phone)",
     "5": "foundation & domain contract (kernel, config, geo, proxy, models, shared seams)"
   },
   "packages": {

@@ -1,0 +1,541 @@
+{"fn": "_addr_type", "args": ["ns:key.path"], "ok": 3}
+{"fn": "_addr_type", "args": ["ünïcödé"], "ok": 3}
+{"fn": "_addr_type", "args": ["﻿bom"], "ok": 3}
+{"fn": "_addr_type", "args": ["./x/**/*.json"], "ok": 3}
+{"fn": "_addr_type", "args": ["trailing."], "ok": 3}
+{"fn": "_addr_type", "args": ["日本語のテキスト"], "ok": 3}
+{"fn": "_addr_type", "args": ["./x/**/*.json:"], "ok": 3}
+{"fn": "_addr_type", "args": ["a..babc"], "ok": 3}
+{"fn": "_addr_type", "args": ["tab\tseparated"], "ok": 3}
+{"fn": "_addr_type", "args": ["abc"], "ok": 3}
+{"fn": "_addr_type", "args": ["key_name-1"], "ok": 3}
+{"fn": "_addr_type", "args": [":"], "ok": 3}
+{"fn": "_addr_type", "args": ["line1\nline2"], "ok": 3}
+{"fn": "_addr_type", "args": [".leadingİstanbul"], "ok": 3}
+{"fn": "_addr_type", "args": ["a.b.c"], "ok": 3}
+{"fn": "_addr_type", "args": ["HELLO"], "ok": 3}
+{"fn": "_addr_type", "args": [""], "ok": 3}
+{"fn": "_addr_type", "args": ["a😀b😀c"], "ok": 3}
+{"fn": "_addr_type", "args": ["  padded  "], "ok": 3}
+{"fn": "_addr_type", "args": ["hello world"], "ok": 3}
+{"fn": "_addr_type", "args": ["ΣΊΣΥΦΟΣ"], "ok": 3}
+{"fn": "_addr_type", "args": ["src/a/b.ts"], "ok": 3}
+{"fn": "_addr_type", "args": ["﻿boma😀b😀c"], "ok": 3}
+{"fn": "_addr_type", "args": ["a..bab"], "ok": 3}
+{"fn": "_addr_type", "args": ["hello"], "ok": 3}
+{"fn": "_addr_type", "args": ["ünïcödéa"], "ok": 3}
+{"fn": "_addr_type", "args": ["ünïcödéhello world"], "ok": 3}
+{"fn": "_addr_type", "args": ["a..b"], "ok": 3}
+{"fn": "_addr_type", "args": [".leadingemoji 👍🏽 mix"], "ok": 3}
+{"fn": "_addr_type", "args": ["straße"], "ok": 3}
+{"fn": "_addr_type", "args": ["a:b:cΣΊΣΥΦΟΣ"], "ok": 3}
+{"fn": "_addr_type", "args": ["é"], "ok": 3}
+{"fn": "_addr_type", "args": ["﻿bom﻿bom"], "ok": 3}
+{"fn": "_addr_type", "args": [".leading"], "ok": 3}
+{"fn": "_addr_type", "args": ["éhello world"], "ok": 3}
+{"fn": "_addr_type", "args": ["aba.b.c"], "ok": 3}
+{"fn": "_addr_type", "args": ["straße  padded  "], "ok": 3}
+{"fn": "_addr_type", "args": ["src/a/b.tshello"], "ok": 3}
+{"fn": "_addr_type", "args": ["{name} has {count} items"], "ok": 3}
+{"fn": "_addr_type", "args": ["İstanbul"], "ok": 3}
+{"fn": "_addr_type", "args": ["hello worldemoji 👍🏽 mix"], "ok": 3}
+{"fn": "_addr_type", "args": ["line1\nline2emoji 👍🏽 mix"], "ok": 3}
+{"fn": "_addr_type", "args": ["ünïcödéab"], "ok": 3}
+{"fn": "_addr_type", "args": ["ab"], "ok": 3}
+{"fn": "_addr_type", "args": ["a:b:c"], "ok": 3}
+{"fn": "_addr_type", "args": [":./x/**/*.json"], "ok": 3}
+{"fn": "_addr_type", "args": ["Hello World"], "ok": 3}
+{"fn": "_addr_type", "args": ["😀abc"], "ok": 3}
+{"fn": "_addr_type", "args": ["straßeabc"], "ok": 3}
+{"fn": "_addr_type", "args": ["a..bemoji 👍🏽 mix"], "ok": 3}
+{"fn": "_addr_type", "args": ["emoji 👍🏽 mix"], "ok": 3}
+{"fn": "_addr_type", "args": ["HELLOkey_name-1"], "ok": 3}
+{"fn": "_addr_type", "args": ["tab\tseparatedstraße"], "ok": 3}
+{"fn": "_addr_type", "args": ["😀"], "ok": 3}
+{"fn": "_addr_type", "args": ["straßehello"], "ok": 3}
+{"fn": "_addr_type", "args": ["key_name-1.leading"], "ok": 3}
+{"fn": "_addr_type", "args": ["HELLOHELLO"], "ok": 3}
+{"fn": "_addr_type", "args": ["{name} has {count} itemsemoji 👍🏽 mix"], "ok": 3}
+{"fn": "_addr_type", "args": ["aemoji 👍🏽 mix"], "ok": 3}
+{"fn": "_addr_type", "args": ["emoji 👍🏽 mixΣΊΣΥΦΟΣ"], "ok": 3}
+{"fn": "_addr_type", "args": ["a:b:cline1\nline2"], "ok": 3}
+{"fn": "_addr_type", "args": ["ΣΊΣΥΦΟΣ﻿bom"], "ok": 3}
+{"fn": "_addr_type", "args": ["tab\tseparated﻿bom"], "ok": 3}
+{"fn": "_addr_type", "args": ["﻿bomstraße"], "ok": 3}
+{"fn": "_addr_type", "args": ["😀hello"], "ok": 3}
+{"fn": "_addr_type", "args": ["helloΣΊΣΥΦΟΣ"], "ok": 3}
+{"fn": "_addr_type", "args": ["hello worlda:b:c"], "ok": 3}
+{"fn": "_addr_type", "args": ["a"], "ok": 3}
+{"fn": "_addr_type", "args": ["é  padded  "], "ok": 3}
+{"fn": "_addr_type", "args": ["a./x/**/*.json"], "ok": 3}
+{"fn": "_addr_type", "args": ["src/a/b.tsünïcödé"], "ok": 3}
+{"fn": "_addr_type", "args": ["key_name-1:"], "ok": 3}
+{"fn": "_addr_type", "args": ["a..ba..b"], "ok": 3}
+{"fn": "_addr_type", "args": ["emoji 👍🏽 mixabc"], "ok": 3}
+{"fn": "_addr_type", "args": ["a.b.c:"], "ok": 3}
+{"fn": "_addr_type", "args": ["./x/**/*.jsonHello World"], "ok": 3}
+{"fn": "_addr_type", "args": ["ΣΊΣΥΦΟΣa"], "ok": 3}
+{"fn": "_addr_type", "args": ["﻿bomemoji 👍🏽 mix"], "ok": 3}
+{"fn": "_addr_type", "args": ["a.b.c.leading"], "ok": 3}
+{"fn": "_addr_type", "args": ["tab\tseparatedkey_name-1"], "ok": 3}
+{"fn": "_addr_type", "args": ["ahello"], "ok": 3}
+{"fn": "_addr_type", "args": ["trailing.ns:key.path"], "ok": 3}
+{"fn": "_addr_type", "args": ["éstraße"], "ok": 3}
+{"fn": "_addr_type", "args": ["line1\nline2:"], "ok": 3}
+{"fn": "_addr_type", "args": ["HELLOhello"], "ok": 3}
+{"fn": "_addr_type", "args": ["ab😀"], "ok": 3}
+{"fn": "_addr_type", "args": ["aba..b"], "ok": 3}
+{"fn": "_addr_type", "args": ["日本語のテキストa:b:c"], "ok": 3}
+{"fn": "_addr_type", "args": ["key_name-1﻿bom"], "ok": 3}
+{"fn": "_addr_type", "args": ["hello{name} has {count} items"], "ok": 3}
+{"fn": "_addr_type", "args": ["ünïcödéa:b:c"], "ok": 3}
+{"fn": "_addr_type", "args": ["😀src/a/b.ts"], "ok": 3}
+{"fn": "_addr_type", "args": ["éa"], "ok": 3}
+{"fn": "_addr_type", "args": ["hello worldstraße"], "ok": 3}
+{"fn": "_addr_type", "args": ["key_name-1ünïcödé"], "ok": 3}
+{"fn": "_addr_type", "args": ["a:b:cé"], "ok": 3}
+{"fn": "_addr_type", "args": ["étrailing."], "ok": 3}
+{"fn": "_addr_type", "args": ["ünïcödéns:key.path"], "ok": 3}
+{"fn": "_addr_type", "args": ["ünïcödéΣΊΣΥΦΟΣ"], "ok": 3}
+{"fn": "_addr_type", "args": ["a😀b😀csrc/a/b.ts"], "ok": 3}
+{"fn": "_addr_type", "args": ["ünïcödé😀"], "ok": 3}
+{"fn": "_addr_type", "args": ["a.b.c﻿bom"], "ok": 3}
+{"fn": "_addr_type", "args": ["ΣΊΣΥΦΟΣhello world"], "ok": 3}
+{"fn": "_addr_type", "args": ["emoji 👍🏽 mixa..b"], "ok": 3}
+{"fn": "_addr_type", "args": ["a..b😀"], "ok": 3}
+{"fn": "_addr_type", "args": ["ünïcödéa😀b😀c"], "ok": 3}
+{"fn": "_addr_type", "args": ["İstanbulline1\nline2"], "ok": 3}
+{"fn": "_addr_type", "args": ["Hello Worldtrailing."], "ok": 3}
+{"fn": "_addr_type", "args": ["😀  padded  "], "ok": 3}
+{"fn": "_addr_type", "args": ["İstanbultab\tseparated"], "ok": 3}
+{"fn": "_addr_type", "args": ["emoji 👍🏽 mixtrailing."], "ok": 3}
+{"fn": "_addr_type", "args": ["tab\tseparatedline1\nline2"], "ok": 3}
+{"fn": "_addr_type", "args": ["src/a/b.tssrc/a/b.ts"], "ok": 3}
+{"fn": "_addr_type", "args": ["src/a/b.tsa:b:c"], "ok": 3}
+{"fn": "_addr_type", "args": ["abc{name} has {count} items"], "ok": 3}
+{"fn": "_addr_type", "args": ["straßetrailing."], "ok": 3}
+{"fn": "_addr_type", "args": ["  padded  a.b.c"], "ok": 3}
+{"fn": "_addr_type", "args": ["abckey_name-1"], "ok": 3}
+{"fn": "_addr_type", "args": ["HELLOline1\nline2"], "ok": 3}
+{"fn": "_addr_type", "args": [":trailing."], "ok": 3}
+{"fn": "_addr_type", "args": ["hello worlda.b.c"], "ok": 3}
+{"fn": "_addr_type", "args": ["./x/**/*.jsonab"], "ok": 3}
+{"fn": "_addr_type", "args": ["straße.leading"], "ok": 3}
+{"fn": "_addr_type", "args": ["ns:key.pathHello World"], "ok": 3}
+{"fn": "_addr_type", "args": ["İstanbulHELLO"], "ok": 3}
+{"fn": "_addr_type", "args": ["abcline1\nline2"], "ok": 3}
+{"fn": "_addr_type", "args": ["étab\tseparated"], "ok": 3}
+{"fn": "_addr_type", "args": ["trailing.line1\nline2"], "ok": 3}
+{"fn": "_addr_type", "args": ["a.b.chello world"], "ok": 3}
+{"fn": "_addr_type", "args": ["abctab\tseparated"], "ok": 3}
+{"fn": "_addr_type", "args": ["HELLOHello World"], "ok": 3}
+{"fn": "_addr_type", "args": ["./x/**/*.jsontab\tseparated"], "ok": 3}
+{"fn": "_addr_type", "args": ["src/a/b.tsns:key.path"], "ok": 3}
+{"fn": "_addr_type", "args": ["a😀"], "ok": 3}
+{"fn": "_addr_type", "args": ["straße😀"], "ok": 3}
+{"fn": "_addr_type", "args": ["hellosrc/a/b.ts"], "ok": 3}
+{"fn": "_addr_type", "args": ["{name} has {count} itemsline1\nline2"], "ok": 3}
+{"fn": "_addr_type", "args": ["hello  padded  "], "ok": 3}
+{"fn": "_addr_type", "args": ["key_name-1😀"], "ok": 3}
+{"fn": "_addr_type", "args": ["a😀b😀cemoji 👍🏽 mix"], "ok": 3}
+{"fn": "_addr_type", "args": ["hellotab\tseparated"], "ok": 3}
+{"fn": "_addr_type", "args": ["key_name-1ns:key.path"], "ok": 3}
+{"fn": "_addr_type", "args": ["{name} has {count} itemsabc"], "ok": 3}
+{"fn": "_addr_type", "args": ["aline1\nline2"], "ok": 3}
+{"fn": "_addr_type", "args": ["aHELLO"], "ok": 3}
+{"fn": "_addr_type", "args": ["😀Hello World"], "ok": 3}
+{"fn": "_addr_type", "args": ["emoji 👍🏽 mixtab\tseparated"], "ok": 3}
+{"fn": "_addr_type", "args": ["{name} has {count} itemsünïcödé"], "ok": 3}
+{"fn": "_addr_type", "args": ["a:b:ckey_name-1"], "ok": 3}
+{"fn": "_addr_type", "args": ["a:b:cemoji 👍🏽 mix"], "ok": 3}
+{"fn": "_addr_type", "args": ["./x/**/*.jsona"], "ok": 3}
+{"fn": "_addr_type", "args": ["İstanbul  padded  "], "ok": 3}
+{"fn": "_addr_type", "args": ["trailing.ΣΊΣΥΦΟΣ"], "ok": 3}
+{"fn": "_addr_type", "args": [":Hello World"], "ok": 3}
+{"fn": "_addr_type", "args": ["a:b:chello"], "ok": 3}
+{"fn": "_addr_type", "args": ["éΣΊΣΥΦΟΣ"], "ok": 3}
+{"fn": "_addr_type", "args": ["HELLO./x/**/*.json"], "ok": 3}
+{"fn": "_addr_type", "args": ["a:b:csrc/a/b.ts"], "ok": 3}
+{"fn": "_addr_type", "args": ["emoji 👍🏽 mix﻿bom"], "ok": 3}
+{"fn": "_addr_type", "args": [":straße"], "ok": 3}
+{"fn": "_addr_type", "args": ["abHELLO"], "ok": 3}
+{"fn": "_addr_type", "args": ["😀a.b.c"], "ok": 3}
+{"fn": "_addr_type", "args": ["HELLO{name} has {count} items"], "ok": 3}
+{"fn": "_addr_type", "args": ["😀İstanbul"], "ok": 3}
+{"fn": "_addr_type", "args": ["﻿bomé"], "ok": 3}
+{"fn": "_addr_type", "args": ["line1\nline2İstanbul"], "ok": 3}
+{"fn": "_addr_type", "args": ["a.b.cΣΊΣΥΦΟΣ"], "ok": 3}
+{"fn": "_addr_type", "args": ["a..btrailing."], "ok": 3}
+{"fn": "_addr_type", "args": ["a😀b😀c﻿bom"], "ok": 3}
+{"fn": "_addr_type", "args": ["Hello WorldHELLO"], "ok": 3}
+{"fn": "_addr_type", "args": ["﻿bom.leading"], "ok": 3}
+{"fn": "_addr_type", "args": ["İstanbulkey_name-1"], "ok": 3}
+{"fn": "_addr_type", "args": ["ahello world"], "ok": 3}
+{"fn": "_addr_type", "args": ["Hello WorldΣΊΣΥΦΟΣ"], "ok": 3}
+{"fn": "_addr_type", "args": ["{name} has {count} itemsns:key.path"], "ok": 3}
+{"fn": "_addr_type", "args": ["ns:key.pathünïcödé"], "ok": 3}
+{"fn": "_addr_type", "args": ["ΣΊΣΥΦΟΣsrc/a/b.ts"], "ok": 3}
+{"fn": "_addr_type", "args": ["a..ba"], "ok": 3}
+{"fn": "_addr_type", "args": ["key_name-1a:b:c"], "ok": 3}
+{"fn": "_addr_type", "args": ["tab\tseparateda"], "ok": 3}
+{"fn": "_addr_type", "args": ["key_name-1key_name-1"], "ok": 3}
+{"fn": "_addr_type", "args": ["﻿bomtab\tseparated"], "ok": 3}
+{"fn": "_addr_type", "args": ["a😀b😀c  padded  "], "ok": 3}
+{"fn": "_addr_type", "args": ["  padded  src/a/b.ts"], "ok": 3}
+{"fn": "_addr_type", "args": ["ünïcödéHello World"], "ok": 3}
+{"fn": "_addr_type", "args": ["trailing.emoji 👍🏽 mix"], "ok": 3}
+{"fn": "_addr_type", "args": ["abİstanbul"], "ok": 3}
+{"fn": "_addr_type", "args": ["﻿boma:b:c"], "ok": 3}
+{"fn": "_addr_type", "args": ["abcünïcödé"], "ok": 3}
+{"fn": "_addr_type", "args": ["a.b.chello"], "ok": 3}
+{"fn": "_addr_type", "args": ["Hello Worldİstanbul"], "ok": 3}
+{"fn": "_addr_type", "args": [".leadinghello"], "ok": 3}
+{"fn": "_addr_type", "args": [":abc"], "ok": 3}
+{"fn": "_addr_type", "args": ["./x/**/*.json./x/**/*.json"], "ok": 3}
+{"fn": "_addr_type", "args": ["src/a/b.ts{name} has {count} items"], "ok": 3}
+{"fn": "_addr_type", "args": ["./x/**/*.jsona:b:c"], "ok": 3}
+{"fn": "_addr_type", "args": ["hellostraße"], "ok": 3}
+{"fn": "_addr_type", "args": ["İstanbul日本語のテキスト"], "ok": 3}
+{"fn": "_addr_type", "args": ["emoji 👍🏽 mixa.b.c"], "ok": 3}
+{"fn": "_addr_type", "args": ["aHello World"], "ok": 3}
+{"fn": "_addr_type", "args": ["héllo wörld"], "ok": 3}
+{"fn": "_addr_type", "args": ["👍🏽 thumbs"], "ok": 3}
+{"fn": "_addr_type", "args": ["日本語"], "ok": 3}
+{"fn": "_addr_type", "args": ["ılık ırmak"], "ok": 3}
+{"fn": "_addr_type", "args": ["👨‍👩‍👧 family"], "ok": 3}
+{"fn": "_addr_type", "args": ["a b"], "ok": 3}
+{"fn": "_addr_type", "args": ["a😀b"], "ok": 3}
+{"fn": "_addr_type", "args": ["a²b x½ y①"], "ok": 3}
+{"fn": "_addr_type", "args": ["aⅠb Ⅻ"], "ok": 3}
+{"fn": "_addr_type", "args": ["a𐐀b 𝐀bc"], "ok": 3}
+{"fn": "_addr_type", "args": ["कि ٣٤"], "ok": 3}
+{"fn": "_host_matches_blocked", "args": ["./x/**/*.json", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["😀:", ["tab\tseparated", "日本語のテキスト", "hello world"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a😀b😀c", ["src/a/b.ts"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["", ["a😀b😀c", "﻿bom", "hello"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a:b:c", ["a:b:c", "HELLO", "a..b"]], "ok": true}
+{"fn": "_host_matches_blocked", "args": ["tab\tseparated", ["straßens:key.path"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ahello world", ["abline1\nline2"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": [":", ["ΣΊΣΥΦΟΣ", "tab\tseparated", "hello world"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["trailing.", ["Hello World", "日本語のテキスト"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a:b:c", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ünïcödé", ["line1\nline2", "é", "a..b"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["trailing.hello", ["ΣΊΣΥΦΟΣ", ":"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["😀", ["a:b:c", "emoji 👍🏽 mixline1\nline2"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["  padded  ", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["İstanbul", ["é", ".leadingline1\nline2", "a😀b😀c"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a😀b😀c", ["tab\tseparated", "a"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ünïcödéstraße", ["a..b"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["line1\nline2", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["😀", ["﻿bom", "日本語のテキスト", ""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["trailing.", ["tab\tseparatedstraße", "İstanbul"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["tab\tseparated", ["a.b.c", "emoji 👍🏽 mix"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": [".leading", ["  padded  ", "Hello World﻿bom", "./x/**/*.jsonünïcödé"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["😀", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["日本語のテキスト", ["HELLO", "éhello"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["日本語のテキスト", ["ab", "a.b.c", "  padded  "]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ΣΊΣΥΦΟΣHello World", ["İstanbulhello", "abc", "日本語のテキストa:b:c"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ΣΊΣΥΦΟΣ", ["日本語のテキスト", "ab", "ünïcödé"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["日本語のテキスト", ["  padded  日本語のテキスト", "hello"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["é", ["straße"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["src/a/b.ts", ["hello world", "a", "a"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a😀b😀c", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["  padded  ", ["ΣΊΣΥΦΟΣ", "key_name-1"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["Hello World", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["日本語のテキスト", ["key_name-1hello"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["{name} has {count} items", ["ab", "hello world"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["﻿bom", ["ns:key.path", "ns:key.path", "abc"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a.b.ca", ["a:b:c", ":", "hello world"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["{name} has {count} itemsHELLO", ["key_name-1", "straßea"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["straße", ["./x/**/*.json"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a..btab\tseparated", ["日本語のテキスト", "日本語のテキスト"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["abc", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": [":", ["😀", "日本語のテキスト", "ΣΊΣΥΦΟΣ{name} has {count} items"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["Hello World", ["ab"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["emoji 👍🏽 mix", ["a", "ns:key.path"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["key_name-1", ["hello world"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ab", ["a.b.c"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a.b.c", ["abcemoji 👍🏽 mix", "key_name-1"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a..b", ["ns:key.path", "straße{name} has {count} items", "hello"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["Hello World", ["tab\tseparatedabc"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["line1\nline2", ["😀", "abc", "a"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["straße", ["a.b.c", "a", "ΣΊΣΥΦΟΣab"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a", [".leading", "./x/**/*.json", "日本語のテキスト"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["trailing.", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": [":", ["a"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["tab\tseparated", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["﻿bomİstanbul", ["ns:key.path", "ünïcödéstraße", "key_name-1"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a:b:c  padded  ", ["hello", "ab", "abc"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["İstanbultab\tseparated", ["tab\tseparated", "ΣΊΣΥΦΟΣ"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["{name} has {count} items", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["", ["hello world", "﻿bom", "emoji 👍🏽 mix"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a😀b😀csrc/a/b.ts", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["﻿bom", ["ΣΊΣΥΦΟΣ"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a.b.c", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["hello", ["emoji 👍🏽 mix", "HELLO"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["tab\tseparated", ["HELLO"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["", ["hello world"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["é", ["Hello World", "a:b:c"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["﻿bom", ["emoji 👍🏽 mix", ":", "ab"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": [":", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a", ["src/a/b.ts", "日本語のテキストtab\tseparated", "日本語のテキスト"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": [":", ["ns:key.path", "ΣΊΣΥΦΟΣ", ":"]], "ok": true}
+{"fn": "_host_matches_blocked", "args": ["ΣΊΣΥΦΟΣ", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a..b", ["line1\nline2"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a.b.cHello World", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["line1\nline2", ["./x/**/*.json日本語のテキスト"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["﻿bom", ["﻿bom", "a", ""]], "ok": true}
+{"fn": "_host_matches_blocked", "args": ["a.b.c", ["Hello World", "trailing.", "tab\tseparated"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ns:key.path", ["hellokey_name-1"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["trailing.", [":trailing.", "a..b", "{name} has {count} items"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["abcİstanbul", [".leading", "  padded  "]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ns:key.path", ["  padded  "]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["hello:", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["./x/**/*.json", ["abc", "a:b:c"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["straßea:b:c", ["😀"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["日本語のテキスト", ["ΣΊΣΥΦΟΣ"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": [":", ["abc", ".leading", "key_name-1"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["straße", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["emoji 👍🏽 mix", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["Hello Worldé", [":", "ésrc/a/b.ts"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["😀", ["emoji 👍🏽 mix", "ünïcödé"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["abHELLO", ["{name} has {count} items", "key_name-1"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["Hello World", ["src/a/b.ts"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["hello world", ["abc", "HELLOab"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["hello", ["ns:key.path"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ünïcödéab", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["İstanbul", ["./x/**/*.json"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ünïcödé", ["éHELLO", "a😀b😀c", "a:b:c"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ab", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ünïcödé", ["HELLOkey_name-1"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["src/a/b.ts", ["ünïcödé"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["  padded  ", ["a", "trailing.HELLO"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a", ["hello world", "ns:key.path", "trailing."]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["straße", ["straße"]], "ok": true}
+{"fn": "_host_matches_blocked", "args": ["ünïcödé", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["key_name-1", ["./x/**/*.json", "  padded  ", "日本語のテキスト"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["trailing.é", ["a.b.c", "Hello Worldemoji 👍🏽 mix"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a", ["line1\nline2", "é", "é"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a.b.c", ["日本語のテキストstraße", "a", "src/a/b.ts"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["﻿bom", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["trailing.", ["abc"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["emoji 👍🏽 mix", ["ünïcödéa:b:c", "key_name-1", "İstanbul"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ab", ["HELLO", "  padded  ", "a"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["﻿bom", ["é", ".leadingline1\nline2", "HELLO"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["hello world", ["Hello World﻿bom", "emoji 👍🏽 mix", ""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["  padded  ", ["ünïcödéhello world"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": [".leading", ["tab\tseparated", "hello world", "ΣΊΣΥΦΟΣHELLO"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["{name} has {count} items", ["a..b", "emoji 👍🏽 mixa😀b😀c"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["hello world", ["{name} has {count} itemssrc/a/b.ts"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["é", ["éemoji 👍🏽 mix", ".leading"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["line1\nline2", ["line1\nline2", "ΣΊΣΥΦΟΣ", "{name} has {count} itemstrailing."]], "ok": true}
+{"fn": "_host_matches_blocked", "args": ["﻿bom", ["abcİstanbul"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a:b:c", ["日本語のテキスト"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a:b:cünïcödé", ["hello world", "emoji 👍🏽 mix"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": [":", ["key_name-1key_name-1", "hello worldabc", "é"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["﻿bom", ["", "ab", "é"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["./x/**/*.jsonabc", ["Hello World", "a.b.c", ".leading  padded  "]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["key_name-1", ["  padded  "]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["HELLO", ["straße"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ns:key.path", ["a😀b😀c", "日本語のテキスト"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a..b", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["hello world", ["ΣΊΣΥΦΟΣ", "trailing."]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["line1\nline2", ["abc", "Hello World"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["abc", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["İstanbula:b:c", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a..b", ["emoji 👍🏽 mix"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["abc.leading", ["{name} has {count} itemsabc", "日本語のテキストab", "hello"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["İstanbul", ["{name} has {count} items"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["HELLO", ["emoji 👍🏽 mix"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ns:key.path", ["trailing.", "trailing."]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a..b", ["tab\tseparated", "a😀b😀c"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["  padded    padded  ", [".leading"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["😀./x/**/*.json", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["hello", ["a..b", "a"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": [":", ["hello world"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["  padded  é", ["İstanbul"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["HELLOstraße", ["ΣΊΣΥΦΟΣ"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["{name} has {count} items", ["ΣΊΣΥΦΟΣa.b.c", "İstanbul", "a..b"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ünïcödéa:b:c", ["line1\nline2"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a.b.c", ["ab", "ΣΊΣΥΦΟΣé"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["İstanbul", ["ab", "é"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["key_name-1", ["tab\tseparated"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["tab\tseparated", ["İstanbul"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["Hello World", ["emoji 👍🏽 mix", "a", "ab"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ΣΊΣΥΦΟΣ", ["a.b.c", "a😀b😀c"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["HELLO", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": [":a", ["straßeline1\nline2", "trailing.", "line1\nline2"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["İstanbul", ["HELLO:", "emoji 👍🏽 mix", "😀"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["abcHello World", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["src/a/b.ts", ["abc", "key_name-1"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["line1\nline2", [".leading"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ns:key.path", ["key_name-1", "ünïcödé"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a..b:", ["", ":", "a.b.c"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["trailing.", ["abc", "tab\tseparated", "a.b.c"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["abc", ["😀", "日本語のテキスト"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["İstanbul", ["abc"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": [":abc", ["a:b:c", "İstanbul"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["hello world", ["İstanbulline1\nline2", ".leading"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["  padded  ", ["./x/**/*.json", "ΣΊΣΥΦΟΣ", "aa"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["src/a/b.tskey_name-1", ["a", "ünïcödé"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["日本語のテキスト", ["ünïcödé"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["  padded  ab", ["ünïcödé"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["tab\tseparateda..b", [".leading", "a..bab", "日本語のテキスト"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a😀b😀c", ["emoji 👍🏽 mix", "hello worldünïcödé"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ns:key.path", ["tab\tseparated"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["Hello World", ["ns:key.patha:b:c", "hello world"]], "ok": true}
+{"fn": "_host_matches_blocked", "args": ["", ["{name} has {count} items", "İstanbul", "line1\nline2"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["hello", ["a.b.c", "straße"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["key_name-1", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["  padded  ", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["abc  padded  ", ["ünïcödé", "  padded  ", "😀"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["src/a/b.ts", ["a..b", "é"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["😀abc", ["hello"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["  padded  ", ["a😀", "a:b:c", "ab"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["HELLO", ["  padded    padded  ", "key_name-1", "ab"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a..b", ["key_name-1", "helloa..b"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a😀b😀c", ["Hello World"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["line1\nline2tab\tseparated", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["Hello World", ["﻿bom", "a.b.c"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["", ["hello", "  padded  "]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a😀b😀cline1\nline2", ["Hello World", "emoji 👍🏽 mix", "a😀b😀c./x/**/*.json"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["HELLO  padded  ", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ünïcödéİstanbul", ["aa😀b😀c", ".leading", "hello world"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["./x/**/*.json", [".leading", "ünïcödé"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a😀b😀cé", [":"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["trailing.{name} has {count} items", ["src/a/b.ts"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["é", ["Hello World", "Hello World", "éa..b"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["hello world", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a", ["emoji 👍🏽 mix", ".leading", "a:b:c﻿bom"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ns:key.path", ["﻿bom", "﻿bom"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["héllo wörld", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["👍🏽 thumbs", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["日本語", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["é", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["İstanbul", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["ılık ırmak", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["👨‍👩‍👧 family", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a b", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a😀b", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a²b x½ y①", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["aⅠb Ⅻ", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a𐐀b 𝐀bc", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["कि ٣٤", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["./x/**/*.json", ["b", "a", "B", "é", "10", "9", "a"]], "ok": false}
+{"fn": "_addr_type", "args": ["127.0.0.1"], "ok": 1}
+{"fn": "_addr_type", "args": ["0.0.0.0"], "ok": 1}
+{"fn": "_addr_type", "args": ["255.255.255.255"], "ok": 1}
+{"fn": "_addr_type", "args": ["255.255.255.255 "], "ok": 3}
+{"fn": "_addr_type", "args": ["192.168.1.1"], "ok": 1}
+{"fn": "_addr_type", "args": ["10.0.0.1"], "ok": 1}
+{"fn": "_addr_type", "args": ["127.1"], "ok": 1}
+{"fn": "_addr_type", "args": ["127.0.1"], "ok": 1}
+{"fn": "_addr_type", "args": ["0177.0.0.1"], "ok": 1}
+{"fn": "_addr_type", "args": ["0x7f.0.0.1"], "ok": 1}
+{"fn": "_addr_type", "args": ["0x7f000001"], "ok": 1}
+{"fn": "_addr_type", "args": ["2130706433"], "ok": 1}
+{"fn": "_addr_type", "args": ["4294967295"], "ok": 3}
+{"fn": "_addr_type", "args": ["0xffffffff"], "ok": 3}
+{"fn": "_addr_type", "args": ["1.2.3.4 "], "ok": 1}
+{"fn": "_addr_type", "args": ["1.2.3.4\t"], "ok": 1}
+{"fn": "_addr_type", "args": ["1.2.3.4 foo"], "ok": 1}
+{"fn": "_addr_type", "args": [" 1.2.3.4"], "ok": 3}
+{"fn": "_addr_type", "args": ["08.0.0.1"], "ok": 3}
+{"fn": "_addr_type", "args": ["256.0.0.1"], "ok": 3}
+{"fn": "_addr_type", "args": ["1.2.3.4.5"], "ok": 3}
+{"fn": "_addr_type", "args": ["1.2.3."], "ok": 3}
+{"fn": "_addr_type", "args": [".1.2.3"], "ok": 3}
+{"fn": "_addr_type", "args": ["0x"], "ok": 3}
+{"fn": "_addr_type", "args": ["0x100.1"], "ok": 3}
+{"fn": "_addr_type", "args": ["::1"], "ok": 4}
+{"fn": "_addr_type", "args": ["::"], "ok": 4}
+{"fn": "_addr_type", "args": ["2001:db8::1"], "ok": 4}
+{"fn": "_addr_type", "args": ["fe80::1"], "ok": 4}
+{"fn": "_addr_type", "args": ["fe80::1%eth0"], "ok": 3}
+{"fn": "_addr_type", "args": ["::ffff:127.0.0.1"], "ok": 4}
+{"fn": "_addr_type", "args": ["0:0:0:0:0:0:0:1"], "ok": 4}
+{"fn": "_addr_type", "args": ["[::1]"], "ok": 3}
+{"fn": "_addr_type", "args": ["2001:db8::1 "], "ok": 3}
+{"fn": "_addr_type", "args": [" 2001:db8::1"], "ok": 3}
+{"fn": "_addr_type", "args": ["chatgpt.com"], "ok": 3}
+{"fn": "_addr_type", "args": ["auth.openai.com"], "ok": 3}
+{"fn": "_addr_type", "args": ["api.openai.com"], "ok": 3}
+{"fn": "_addr_type", "args": ["dl.google.com"], "ok": 3}
+{"fn": "_addr_type", "args": ["localhost"], "ok": 3}
+{"fn": "_addr_type", "args": ["12345.example.com"], "ok": 3}
+{"fn": "_addr_type", "args": [""], "ok": 3}
+{"fn": "_addr_type", "args": ["   "], "ok": 3}
+{"fn": "_addr_type", "args": ["bad\u0000host"], "error": "ValueError: embedded null character"}
+{"fn": "_host_matches_blocked", "args": [null, []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["   ", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": [".", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["...", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["gvt1.com", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["GVT1.COM.", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["rr8.gvt1.com", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a.b.c.dl.google.com..", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["notgvt1.com", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["my-dl.google.com", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["chatgpt.com", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["auth.openai.com", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["detectportal.firefox.com", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["sub.telemetry.mozilla.org", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["  PUSH.SERVICES.MOZILLA.COM. ", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["google.com", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["update.googleapis.com.evil.com", []], "ok": false}
+{"fn": "_host_matches_blocked", "args": [null, ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["   ", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": [".", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["...", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["gvt1.com", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": true}
+{"fn": "_host_matches_blocked", "args": ["GVT1.COM.", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": true}
+{"fn": "_host_matches_blocked", "args": ["rr8.gvt1.com", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": true}
+{"fn": "_host_matches_blocked", "args": ["a.b.c.dl.google.com..", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": true}
+{"fn": "_host_matches_blocked", "args": ["notgvt1.com", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["my-dl.google.com", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["chatgpt.com", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["auth.openai.com", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["detectportal.firefox.com", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["sub.telemetry.mozilla.org", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["  PUSH.SERVICES.MOZILLA.COM. ", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["google.com", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["update.googleapis.com.evil.com", ["gvt1.com", "dl.google.com", "update.googleapis.com", "edgedl.me.gvt1.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": [null, ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["   ", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": [".", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["...", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["gvt1.com", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["GVT1.COM.", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["rr8.gvt1.com", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a.b.c.dl.google.com..", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["notgvt1.com", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["my-dl.google.com", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["chatgpt.com", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["auth.openai.com", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["detectportal.firefox.com", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": true}
+{"fn": "_host_matches_blocked", "args": ["sub.telemetry.mozilla.org", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": true}
+{"fn": "_host_matches_blocked", "args": ["  PUSH.SERVICES.MOZILLA.COM. ", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": true}
+{"fn": "_host_matches_blocked", "args": ["google.com", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["update.googleapis.com.evil.com", ["safebrowsing.googleapis.com", "clients2.google.com", "optimizationguide-pa.googleapis.com", "telemetry.mozilla.org", "shavar.services.mozilla.com", "contile.services.mozilla.com", "detectportal.firefox.com", "push.services.mozilla.com"]], "ok": false}
+{"fn": "_host_matches_blocked", "args": [null, [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["   ", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": [".", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["...", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["gvt1.com", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["GVT1.COM.", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["rr8.gvt1.com", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["a.b.c.dl.google.com..", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["notgvt1.com", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["my-dl.google.com", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["chatgpt.com", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["auth.openai.com", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["detectportal.firefox.com", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["sub.telemetry.mozilla.org", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["  PUSH.SERVICES.MOZILLA.COM. ", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["google.com", [""]], "ok": false}
+{"fn": "_host_matches_blocked", "args": ["update.googleapis.com.evil.com", [""]], "ok": false}
