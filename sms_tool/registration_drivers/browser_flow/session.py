@@ -168,8 +168,8 @@ def _session_payload(
             if callable(select_page):
                 try:
                     select_page()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("browser flow session diagnostic ignored: %s", exc)
             remaining = deadline - time.monotonic()
             if remaining > 0:
                 time.sleep(min(1, remaining))
@@ -224,8 +224,8 @@ def _session_payload(
             if isinstance(state, dict):
                 details += ":host=" + str(state.get("current_host") or "")
                 details += ":session_cookie=" + ("present" if state.get("session_cookie_present") else "absent")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("browser flow session diagnostic ignored: %s", exc)
     if "chatgpt_context_unavailable" in last_error_marker:
         code = "browser_chatgpt_context_unavailable"
     elif last_status == 429:
@@ -247,12 +247,12 @@ def _browser_diagnostics(page: Any, driver: str) -> dict[str, Any]:
         parsed = urlsplit(str(page.url or ""))
         diagnostics["url_host"] = str(parsed.hostname or "")
         diagnostics["url_path"] = str(parsed.path or "")[:120]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("browser flow session diagnostic ignored: %s", exc)
     try:
         diagnostics["title"] = dom_fields._safe_text(page.title())[:120]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("browser flow session diagnostic ignored: %s", exc)
     # Record bounded DOM landmarks, never page content, cookies, or tokens.
     # These fields distinguish a slow SPA transition from a wrong page or
     # challenge when a selector-based state probe times out.
@@ -291,8 +291,8 @@ def _browser_diagnostics(page: Any, driver: str) -> dict[str, Any]:
                     "chat_path": bool(state.get("chat_path")),
                 }
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("browser flow session diagnostic ignored: %s", exc)
     return diagnostics
 
 

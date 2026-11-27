@@ -7,12 +7,16 @@ this seam instead of defining their own endpoint, headers, or classification.
 
 from __future__ import annotations
 
+import logging
 import json
 import re
 from contextlib import contextmanager
 from typing import Any, Generator
 from curl_cffi import requests as curl_requests
 from ..kernel.native_loader import load_native_module
+
+
+_LOGGER = logging.getLogger(__name__)
 
 _NATIVE_LIVENESS_PARSE = load_native_module(
     "liveness-parse-rs", "liveness_parse_rs", "RUST_ANYTHING_UNIT_LIVENESS_PARSE"
@@ -96,8 +100,8 @@ def browser_fetch_for_account(
         profile = select_browser_profile(geo, seed=seed, config=cfg)
         locale = str(profile.get("navigator_language") or locale)
         timezone_id = str(profile.get("timezone_iana") or timezone_id)
-    except Exception:
-        pass
+    except (ImportError, OSError, RuntimeError, ValueError, TypeError, KeyError) as exc:
+        _LOGGER.debug("browser profile lookup skipped: %s", exc)
     health_proxy = select_operation_proxy(
         account,
         operation="health_browser",
@@ -130,8 +134,8 @@ def browser_fetch_for_account(
         if device_id:
             try:
                 browser.add_device_cookie(device_id, chat_base, auth_base)
-            except Exception:
-                pass
+            except Exception as exc:
+                _LOGGER.debug("add_device_cookie skipped: %s", exc)
         page = browser.page
         # ``page`` is optional on the session object; without it the caller falls
         # back to the HTTP probe, which is exactly what the ``except`` below does.
@@ -144,8 +148,8 @@ def browser_fetch_for_account(
         if browser is not None and session is not None:
             try:
                 session.__exit__(None, None, None)
-            except Exception:
-                pass
+            except Exception as exc:
+                _LOGGER.debug("browser session cleanup skipped: %s", exc)
         browser = None
         session = None
         fetch_fn = None
@@ -156,8 +160,8 @@ def browser_fetch_for_account(
         if browser is not None and session is not None:
             try:
                 session.__exit__(None, None, None)
-            except Exception:
-                pass
+            except Exception as exc:
+                _LOGGER.debug("browser session cleanup skipped: %s", exc)
 
 
 def probe_account_liveness(
@@ -372,7 +376,7 @@ def _quota_status_label(payload: dict[str, Any], status_code: int, error_text: s
     if isinstance(body, str):
         try:
             body = json.loads(body)
-        except Exception:
+        except (json.JSONDecodeError, TypeError, ValueError):
             body = {}
     if isinstance(body, dict):
         text_candidates = [

@@ -309,7 +309,7 @@ def _playwright_proxy(proxy_url: str | None) -> Optional[dict]:
         if parsed.password:
             proxy["password"] = parsed.password
         return proxy
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
         return None
 
 
@@ -469,18 +469,18 @@ def _solve_hcaptcha(
             if page is not None:
                 try:
                     page.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("captcha solver cleanup/probe ignored: %s", exc)
             if browser is not None:
                 try:
                     browser.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("captcha solver cleanup/probe ignored: %s", exc)
             if playwright_ctx is not None:
                 try:
                     playwright_ctx.stop()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("captcha solver cleanup/probe ignored: %s", exc)
             httpd.shutdown()
             httpd.server_close()
 
@@ -585,18 +585,18 @@ def _solve_recaptcha(
             if page is not None:
                 try:
                     page.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("captcha solver cleanup/probe ignored: %s", exc)
             if browser is not None:
                 try:
                     browser.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("captcha solver cleanup/probe ignored: %s", exc)
             if playwright_ctx is not None:
                 try:
                     playwright_ctx.stop()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("captcha solver cleanup/probe ignored: %s", exc)
 
 
 # ──────────────────────────── exceptions ────────────────────────────
@@ -667,8 +667,8 @@ def solve_recaptcha_on_page(
                                 }
                             ]
                         )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("captcha solver cleanup/probe ignored: %s", exc)
 
         page = context.new_page()
 
@@ -707,8 +707,8 @@ def solve_recaptcha_on_page(
                 # List all frames
                 for f in page.frames:
                     log(f"[captcha] frame: {f.url[:100]}")
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("captcha solver cleanup/probe ignored: %s", exc)
             raise CaptchaError("reCAPTCHA iframe not found on page")
 
         log("[captcha] reCAPTCHA iframe found, clicking checkbox...")
@@ -741,8 +741,8 @@ def solve_recaptcha_on_page(
                 try:
                     page.screenshot(path="runtime/captcha_challenge.png")
                     log("[captcha] Screenshot saved: runtime/captcha_challenge.png")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("captcha solver cleanup/probe ignored: %s", exc)
                 # For image challenges, we need external help
                 # Wait a bit in case it auto-solves
                 time.sleep(5)
@@ -756,20 +756,20 @@ def solve_recaptcha_on_page(
         if page is not None:
             try:
                 page.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("captcha solver cleanup/probe ignored: %s", exc)
         if context is not None:
             try:
                 context.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("captcha solver cleanup/probe ignored: %s", exc)
         if browser is not None:
             try:
                 browser.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("captcha solver cleanup/probe ignored: %s", exc)
         if playwright_ctx is not None:
             try:
                 playwright_ctx.stop()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("captcha solver cleanup/probe ignored: %s", exc)

@@ -7,14 +7,19 @@ SMS verify → submit → extract auth tokens.
 
 from __future__ import annotations
 
-import contextlib
 import asyncio
+import contextlib
+import logging
 import re
+import sys
 import time
 from pathlib import Path
 from typing import Any
 
 from ..phone.sms_utils import NO_NUMBER_SOURCE_MESSAGE, _number_source_or_none
+
+
+_LOGGER = logging.getLogger(__name__)
 
 _DEBUG_DIR = "runtime/nd_pay_debug"
 
@@ -33,10 +38,10 @@ async def _debug_page(page, label: str):
         title = await page.evaluate("document.title")
         url = page.url
         content = await page.get_content()
-        print(f"[nd-pay:{label}] title={title} url={url[:80]} len={len(content)}")
+        _LOGGER.info("%s", f"[nd-pay:{label}] title={title} url={url[:80]} len={len(content)}")
         _debug_screenshot(page, label)
     except Exception as e:
-        print(f"[nd-pay:{label}] debug error: {e}")
+        _LOGGER.info("%s", f"[nd-pay:{label}] debug error: {e}")
 
 
 def run_nodriver_pay(
@@ -60,10 +65,11 @@ def run_nodriver_pay(
         # strategy looked selectable while never being able to run.
         # ASCII-only on purpose - CI stdout is cp1252 and non-Latin-1 prints
         # raise UnicodeEncodeError there.
-        print(
+        _LOGGER.info(
+            "%s",
             "[!] nodriver is not installed - the nodriver PayPal payment "
             "strategy is unavailable. Run: pip install nodriver "
-            "(listed in requirements.txt)"
+            "(listed in requirements.txt)",
         )
         return {"ok": False, "error": "nodriver not installed"}
 
@@ -145,28 +151,28 @@ async def _do_pay(
     deadline = time.time() + timeout
 
     # ── Step 1: Navigate ──
-    print("[nd-pay] Navigating to PayPal...")
+    _LOGGER.info("%s", "[nd-pay] Navigating to PayPal...")
     page = await browser.get(paypal_url)
     await asyncio.sleep(5)
 
     # ── Step 2: Handle CAPTCHA / Cloudflare ──
     content = await page.get_content()
     if "challenge" in content.lower() or "cloudflare" in content.lower():
-        print("[nd-pay] Cloudflare challenge, trying verify_cf...")
+        _LOGGER.info("%s", "[nd-pay] Cloudflare challenge, trying verify_cf...")
         try:
             await page.verify_cf()
             await asyncio.sleep(3)
         except Exception as e:
-            print(f"[nd-pay] verify_cf failed: {e}")
+            _LOGGER.info("%s", f"[nd-pay] verify_cf failed: {e}")
 
     title = await page.evaluate("document.title")
-    print(f"[nd-pay] Page: {title} | {page.url[:80]}")
+    _LOGGER.info("%s", f"[nd-pay] Page: {title} | {page.url[:80]}")
     await _debug_page(page, "01_initial")
 
     # If still on CAPTCHA page, wait for it to resolve
     content = await page.get_content()
     if "captcha" in content.lower() and "pay with paypal" not in content.lower():
-        print("[nd-pay] Waiting for CAPTCHA resolution...")
+        _LOGGER.info("%s", "[nd-pay] Waiting for CAPTCHA resolution...")
         for _ in range(30):
             await asyncio.sleep(2)
             content = await page.get_content()
@@ -174,7 +180,7 @@ async def _do_pay(
                 break
 
     # ── Step 3: Click "Create Account" ──
-    print("[nd-pay] Looking for Create Account button...")
+    _LOGGER.info("%s", "[nd-pay] Looking for Create Account button...")
     create_clicked = False
     with contextlib.suppress(Exception):
         # Try finding by text content
@@ -182,7 +188,7 @@ async def _do_pay(
         if el:
             await el.click()
             create_clicked = True
-            print("[nd-pay] Clicked 创建账户")
+            _LOGGER.info("%s", "[nd-pay] Clicked 创建账户")
 
     if not create_clicked:
         with contextlib.suppress(Exception):
@@ -190,7 +196,7 @@ async def _do_pay(
             if el:
                 await el.click()
                 create_clicked = True
-                print("[nd-pay] Clicked Create Account")
+                _LOGGER.info("%s", "[nd-pay] Clicked Create Account")
 
     if not create_clicked:
         with contextlib.suppress(Exception):
@@ -198,16 +204,16 @@ async def _do_pay(
             if el:
                 await el.click()
                 create_clicked = True
-                print("[nd-pay] Clicked Create an account")
+                _LOGGER.info("%s", "[nd-pay] Clicked Create an account")
 
     if not create_clicked:
-        print("[nd-pay] No Create Account button found, trying direct form fill")
+        _LOGGER.info("%s", "[nd-pay] No Create Account button found, trying direct form fill")
     else:
         await asyncio.sleep(3)
     await _debug_page(page, "02_after_create_account")
 
     # ── Step 4: Fill email ──
-    print(f"[nd-pay] Filling email: {alias_email}")
+    _LOGGER.info("%s", f"[nd-pay] Filling email: {alias_email}")
     await _fill_field(
         page, alias_email, selectors=["#email", "input[name='login_email']", "input[type='email']"], clear=True
     )
@@ -227,7 +233,7 @@ async def _do_pay(
     await _debug_page(page, "03_after_email_next")
 
     # ── Step 6: Fill password ──
-    print(f"[nd-pay] Filling password...")
+    _LOGGER.info("%s", f"[nd-pay] Filling password...")
     await _fill_field(
         page,
         password,
@@ -242,7 +248,7 @@ async def _do_pay(
     )
 
     # ── Step 7: Fill name ──
-    print(f"[nd-pay] Filling name: {first_name} {last_name}")
+    _LOGGER.info("%s", f"[nd-pay] Filling name: {first_name} {last_name}")
     await _fill_field(
         page,
         first_name,
@@ -258,7 +264,7 @@ async def _do_pay(
     await _debug_page(page, "04_after_password_name")
 
     # ── Step 8: Fill phone ──
-    print(f"[nd-pay] Filling phone: {phone}")
+    _LOGGER.info("%s", f"[nd-pay] Filling phone: {phone}")
     await _fill_field(
         page,
         phone,
@@ -272,7 +278,7 @@ async def _do_pay(
     )
 
     # ── Step 9: Fill card ──
-    print("[nd-pay] Filling card: [REDACTED]")
+    _LOGGER.info("%s", "[nd-pay] Filling card: [REDACTED]")
     await _fill_field(
         page,
         card["number"],
@@ -316,7 +322,7 @@ async def _do_pay(
     state = address.get("state", "")
     postal = address.get("postal_code", "")
 
-    print(f"[nd-pay] Filling address: {addr_line}, {city}, {state} {postal}")
+    _LOGGER.info("%s", f"[nd-pay] Filling address: {addr_line}, {city}, {state} {postal}")
     await _fill_field(
         page,
         addr_line,
@@ -334,7 +340,7 @@ async def _do_pay(
     await _debug_page(page, "06_after_address")
 
     # ── Step 11: Accept terms ──
-    print("[nd-pay] Accepting terms...")
+    _LOGGER.info("%s", "[nd-pay] Accepting terms...")
     with contextlib.suppress(Exception):
         checkbox = await page.select("input[type='checkbox']", timeout=3)
         if checkbox:
@@ -342,15 +348,15 @@ async def _do_pay(
             await asyncio.sleep(1)
 
     # ── Step 12: Handle SMS verification ──
-    print(f"[nd-pay] Handling SMS verification (phone: {phone})...")
+    _LOGGER.info("%s", f"[nd-pay] Handling SMS verification (phone: {phone})...")
     sms_code = await _handle_sms(page, phone, sms_cfg, deadline)
     if sms_code:
-        print(f"[nd-pay] SMS code: {sms_code}")
+        _LOGGER.info("%s", f"[nd-pay] SMS code: {sms_code}")
 
     await _debug_page(page, "07_after_sms")
 
     # ── Step 13: Submit payment ──
-    print("[nd-pay] Submitting payment...")
+    _LOGGER.info("%s", "[nd-pay] Submitting payment...")
     await _click_button(
         page,
         [
@@ -370,7 +376,7 @@ async def _do_pay(
     await asyncio.sleep(5)
 
     # ── Step 14: Wait for redirect ──
-    print("[nd-pay] Waiting for redirect...")
+    _LOGGER.info("%s", "[nd-pay] Waiting for redirect...")
     final_url = await _wait_for_redirect(page, deadline)
 
     # ── Step 5: Extract cookies and result ──
@@ -382,10 +388,10 @@ async def _do_pay(
             if hasattr(c, "name"):
                 cookies[c.name] = c.value
     except Exception as e:
-        print(f"[nd-pay] Cookie extraction failed: {e}")
+        _LOGGER.info("%s", f"[nd-pay] Cookie extraction failed: {e}")
 
-    print(f"[nd-pay] Final URL: {final_url[:80]}")
-    print(f"[nd-pay] Extracted {len(cookies)} cookies")
+    _LOGGER.info("%s", f"[nd-pay] Final URL: {final_url[:80]}")
+    _LOGGER.info("%s", f"[nd-pay] Extracted {len(cookies)} cookies")
 
     # Check if we got redirected back to Stripe/ChatGPT
     ok = "chatgpt.com" in final_url or "stripe.com" in final_url
@@ -461,7 +467,7 @@ async def _click_button(page, texts: list[str]):
             el = await page.find(text, timeout=3)
             if el:
                 await el.click()
-                print(f"[nd-pay] Clicked: {text}")
+                _LOGGER.info("%s", f"[nd-pay] Clicked: {text}")
                 return True
         except Exception:
             continue
@@ -472,7 +478,7 @@ async def _click_button(page, texts: list[str]):
             el = await page.select(sel, timeout=2)
             if el:
                 await el.click()
-                print(f"[nd-pay] Clicked submit button")
+                _LOGGER.info("%s", f"[nd-pay] Clicked submit button")
                 return True
         except Exception:
             continue
@@ -495,7 +501,9 @@ async def _handle_sms(page, phone: str, sms_cfg: dict, deadline: float) -> str |
         # every payment, including the majority that never ask for SMS.
         # Instead name the cause and carry on; if a gate *is* present, the
         # payment fails at submit and this line is the explanation.
-        print(f"[nd-pay] skipping SMS gate: {NO_NUMBER_SOURCE_MESSAGE}")
+        msg = f"[nd-pay] skipping SMS gate: {NO_NUMBER_SOURCE_MESSAGE}"
+        _LOGGER.info("%s", msg)
+        sys.stdout.write(msg + "\n")
         return None
 
     # Take baseline
@@ -525,7 +533,7 @@ async def _handle_sms(page, phone: str, sms_cfg: dict, deadline: float) -> str |
     sms_deadline = time.time() + sms_timeout
     code_pattern = re.compile(r"\b(\d{4,6})\b")
 
-    print(f"[nd-pay] Polling SMS (timeout={sms_timeout}s)...")
+    _LOGGER.info("%s", f"[nd-pay] Polling SMS (timeout={sms_timeout}s)...")
     while time.time() < sms_deadline and time.time() < deadline:
         with contextlib.suppress(Exception):
             r = _requests.get(api_url, timeout=10)

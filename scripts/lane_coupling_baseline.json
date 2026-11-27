@@ -1,16 +1,7 @@
 {
   "schema": "lane_coupling.v1",
   "registration_to_payment": [],
-  "payment_to_registration": [
-    [
-      "sms_tool.payment.wire",
-      "sms_tool.sentinel"
-    ],
-    [
-      "sms_tool.paypal.extract",
-      "sms_tool.sentinel"
-    ]
-  ],
+  "payment_to_registration": [],
   "payment_importers_outside_lane": [
     "sms_tool.accounts.account_promotion",
     "sms_tool.accounts.account_recovery",

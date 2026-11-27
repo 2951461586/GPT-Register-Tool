@@ -218,7 +218,7 @@ def _append_once(target: Path, email: str, line: str) -> str:
     failed registration into a crashed one.
     """
     lock_path = target.with_suffix(target.suffix + ".lock")
-    from ..cross_process_gate import GateTimeoutError, cross_process_write_lock
+    from ..kernel.cross_process_gate import GateTimeoutError, cross_process_write_lock
 
     try:
         target.parent.mkdir(parents=True, exist_ok=True)

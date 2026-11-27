@@ -7,7 +7,7 @@ import uuid
 
 from . import dom_fields, page_state
 
-from ...registration.humanize import delay as humanize_delay
+from ...kernel.humanize import delay as humanize_delay
 from ..base import BrowserRegistrationError
 from collections.abc import Mapping
 from datetime import date

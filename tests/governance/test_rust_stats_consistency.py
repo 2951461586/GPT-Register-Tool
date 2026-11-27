@@ -247,3 +247,52 @@ def test_no_production_module_duplicates_load_native_helper():
         if re.search(r"^def _load_native\w*\(", text, re.M):
             offenders.append(path.relative_to(ROOT).as_posix())
     assert offenders == [], f"duplicated _load_native_* helper(s): {offenders}"
+
+
+# --------------------------------------------------------------------------
+# scripts/rust_crates_guard.py unit tests
+# --------------------------------------------------------------------------
+
+
+def _load_rust_crates_guard():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("rust_crates_guard", ROOT / "scripts" / "rust_crates_guard.py")
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_rust_crates_guard_passes_on_live_repo():
+    guard = _load_rust_crates_guard()
+    crates, problems = guard.validate_crates()
+    assert crates, "expected rust/*-rs crates"
+    assert problems == [], f"rust_crates_guard reported problems: {problems}"
+
+
+def test_rust_crates_guard_catches_unsafe_and_missing_export(tmp_path):
+    guard = _load_rust_crates_guard()
+    unit_file = tmp_path / "sms_tool" / "demo.py"
+    unit_file.parent.mkdir(parents=True)
+    unit_file.write_text("def real_fn(x):\n    return x\n\n_alias_fn = real_fn\n", encoding="utf-8")
+
+    crate = tmp_path / "rust" / "demo-rs"
+    (crate / "src").mkdir(parents=True)
+    (crate / "Cargo.toml").write_text('[package]\nname = "demo-rs"\nversion = "0.1.0"\n', encoding="utf-8")
+    (crate / "Cargo.lock").write_text("version = 4\n", encoding="utf-8")
+    (crate / "cases.jsonl").write_text('{"fn":"real_fn","args":[1],"result":1}\n', encoding="utf-8")
+    (crate / "rust-anything.json").write_text(
+        json.dumps({"unit": "sms_tool/demo.py", "functions": ["real_fn", "_alias_fn", "missing_fn"]}),
+        encoding="utf-8",
+    )
+    (crate / "src" / "lib.rs").write_text(
+        "// unsafe in comment is fine\npub fn boom() { unsafe {} }\n",
+        encoding="utf-8",
+    )
+
+    crates, problems = guard.validate_crates(rust_dir=tmp_path / "rust", repo_root=tmp_path)
+    assert len(crates) == 1
+    assert any("missing_fn" in p for p in problems), problems
+    assert any("forbidden unsafe keyword" in p for p in problems), problems
+    assert not any("_alias_fn" in p for p in problems), problems

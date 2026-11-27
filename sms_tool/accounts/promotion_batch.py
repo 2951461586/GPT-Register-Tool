@@ -29,7 +29,7 @@ from typing import Any
 from .account_identity import account_identity
 from .account_liveness import browser_fetch_for_account
 from .account_promotion import check_account_promotion, promotion_status_code
-from ..batch_circuit_breaker import BatchCircuitBreaker
+from ..kernel.circuit_breaker import BatchCircuitBreaker
 from ..config import CFG
 from ..payment.promotion_states import PROMOTION_STATE_PROBE_FAILED
 

@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from .cross_process_gate import CrossProcessSemaphore, GateTimeoutError
+from .kernel.cross_process_gate import CrossProcessSemaphore, GateTimeoutError
 from .kernel.paths import runtime_file
 from .payment.contracts import PaymentResult
 from .kernel.sanitizer import sanitize_text

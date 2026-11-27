@@ -26,6 +26,7 @@ working unchanged.
 
 from __future__ import annotations
 
+import logging
 import time
 
 from . import sms_providers
@@ -98,6 +99,11 @@ from ..transport import endpoints
 
 #: Shared by both protocol families. Renamed off the vendor name when the second
 #: family landed: they are per-rental, not per-vendor.
+
+from .pool import emit as _emit
+
+_LOGGER = logging.getLogger(__name__)
+
 RENTAL_PHONE_IN_USE_MAX_ATTEMPTS = 10
 
 
@@ -108,7 +114,7 @@ def _wait_for_send_cooldown(slot: PhoneSlot):
     wait = cooldown - (int(time.time()) - int(slot.last_send_at))
     if wait <= 0:
         return
-    print(f"[*] Phone send cooldown: waiting {wait}s before reusing {normalize_phone(slot.phone)}")
+    _emit(_LOGGER, f"[*] Phone send cooldown: waiting {wait}s before reusing {normalize_phone(slot.phone)}")
     time.sleep(wait)
 
 
@@ -140,7 +146,7 @@ def _retire_phone_slot_for_batch(phone_pool: PhonePool, phone_slot: PhoneSlot, r
     if _is_rental_slot(phone_slot):
         _cancel_provider_activation(phone_slot)
     phone_slot.reuse_count = max(1, int(phone_slot.max_reuse_count or 1))
-    print(f"[!] Phone slot retired for this batch: {reason}")
+    _emit(_LOGGER, f"[!] Phone slot retired for this batch: {reason}")
     phone_pool.save_state()
 
 
@@ -174,7 +180,7 @@ def _send_phone_otp_with_retries(
         wait = max(retry_delay, int(phone_slot.send_cooldown_seconds or 0))
         if wait > 0:
             detail = result.get("error_code") or result.get("status_code", 0)
-            print(f"[*] Phone OTP send retry {attempt}/{attempts} after {wait}s ({detail})")
+            _emit(_LOGGER, f"[*] Phone OTP send retry {attempt}/{attempts} after {wait}s ({detail})")
             time.sleep(wait)
     return last_result
 
@@ -312,9 +318,10 @@ def _complete_phone_verification_locked(
                 attempts = max(attempts, _minimum_provider_attempts_for_retry(result))
         if attempt >= attempts or not should_retry:
             return result
-        print(
+        _emit(
+            _LOGGER,
             "[*] Phone verification retry with new provider number "
-            f"{attempt + 1}/{attempts}: {result.get('error', 'unknown')}"
+            f"{attempt + 1}/{attempts}: {result.get('error', 'unknown')}",
         )
         phone_pool.reset_exhausted_slots()
         attempt += 1
@@ -443,23 +450,23 @@ def _complete_phone_verification_once_locked(
             if apply_proxy_to_session is not None:
                 apply_proxy_to_session(session, selected_proxy)
             if selected_proxy:
-                print(f"[*] Phone proxy ready: region={proxy_result.get('region', '')} ip={proxy_result.get('ip', '')}")
+                reg, ip = proxy_result.get("region", ""), proxy_result.get("ip", "")
+                _emit(_LOGGER, f"[*] Phone proxy ready: region={reg} ip={ip}")
 
     if _is_rental_slot(phone_slot) and not _prepare_provider_for_send(phone_slot):
         return {"ok": False, "error": f"{phone_slot.provider}_prepare_failed", "phone": phone_slot.phone}
 
     phone = normalize_phone(phone_slot.phone)
-    print(f"[*] Phone verification: {phone} (reuse {phone_slot.reuse_count + 1}/{phone_slot.max_reuse_count})")
+    _emit(_LOGGER, f"[*] Phone verification: {phone} (reuse {phone_slot.reuse_count + 1}/{phone_slot.max_reuse_count})")
 
     send_result = _send_phone_otp_with_retries(
         session, did, current_url, phone_slot, phone, sentinel=sentinel, proxy=selected_proxy
     )
     phone_pool.save_state()
     if not send_result.get("ok"):
+        prov, hdl = phone_slot.provider, phone_slot.rental_handle
         if _is_rental_slot(phone_slot) and _phone_number_already_in_use(send_result):
-            print(
-                f"  [{phone_slot.provider}] phone already in use; cancelling rental {phone_slot.rental_handle} before retry"
-            )
+            _emit(_LOGGER, f"  [{prov}] phone already in use; cancelling rental {hdl} before retry")
             _cancel_provider_activation(phone_slot)
             phone_pool.save_state()
         elif _is_terminal_send_rejection(send_result):
@@ -477,14 +484,13 @@ def _complete_phone_verification_once_locked(
             "phone": phone,
         }
 
-    print(f"[*] Phone OTP sent to {phone}, polling for code...")
+    _emit(_LOGGER, f"[*] Phone OTP sent to {phone}, polling for code...")
     code = _sms_provider_adapter(phone_slot).wait_code()
 
     if not code:
         if _is_rental_slot(phone_slot):
-            print(
-                f"  [{phone_slot.provider}] SMS timeout; cancelling rental {phone_slot.rental_handle} so this run can buy a new number"
-            )
+            prov, hdl = phone_slot.provider, phone_slot.rental_handle
+            _emit(_LOGGER, f"  [{prov}] SMS timeout; cancelling rental {hdl} so this run can buy a new number")
             _cancel_provider_activation(phone_slot)
             phone_pool.save_state()
         return {
@@ -494,14 +500,13 @@ def _complete_phone_verification_once_locked(
             "message": f"SMS code not received within {phone_slot.sms_timeout}s",
         }
 
-    print(f"[*] SMS code received: {code}")
+    _emit(_LOGGER, f"[*] SMS code received: {code}")
     validate_result = validate_phone_otp(session, did, code, sentinel=sentinel, proxy=selected_proxy)
     if not validate_result.get("ok"):
         if _is_rental_slot(phone_slot):
             if _is_terminal_validate_rejection(validate_result):
-                print(
-                    f"  [{phone_slot.provider}] phone rejected by OpenAI; cancelling rental {phone_slot.rental_handle} so next round buys a new number"
-                )
+                prov, hdl = phone_slot.provider, phone_slot.rental_handle
+                _emit(_LOGGER, f"  [{prov}] phone rejected by OpenAI; cancelling rental {hdl} for next round")
             _cancel_provider_activation(phone_slot)
             phone_pool.save_state()
         return {
@@ -514,12 +519,10 @@ def _complete_phone_verification_once_locked(
     phone_slot.phone = phone
     phone_slot.last_sms_code = str(code)
     phone_pool.mark_used(phone_slot)
-    activation_id = phone_slot.activation_id
-    reuse_count = phone_slot.reuse_count
-    max_reuse_count = phone_slot.max_reuse_count
-    remaining = phone_slot.remaining
+    activation_id, reuse_count = phone_slot.activation_id, phone_slot.reuse_count
+    max_reuse_count, remaining = phone_slot.max_reuse_count, phone_slot.remaining
     if _is_rental_slot(phone_slot) and phone_slot.is_exhausted:
-        print(f"  [{phone_slot.provider}] rental {phone_slot.rental_handle} reached reuse limit; completing now")
+        _emit(_LOGGER, f"  [{phone_slot.provider}] rental {phone_slot.rental_handle} reached reuse limit; completing")
         _complete_provider_activation(phone_slot)
         phone_pool.save_state()
 
@@ -598,12 +601,12 @@ def create_phone_pool(
 
 
 def print_phone_pool_status(pool: PhonePool):
-    print(f"\n{'=' * 50}")
-    print("  Phone Pool Status")
-    print(f"{'=' * 50}")
-    print(f"  Total phones: {len(pool.phones)}")
-    print(f"  Available: {pool.available_count}")
-    print(f"  Total capacity: {pool.total_capacity}")
+    _emit(_LOGGER, f"\n{'=' * 50}")
+    _emit(_LOGGER, "  Phone Pool Status")
+    _emit(_LOGGER, f"{'=' * 50}")
+    _emit(_LOGGER, f"  Total phones: {len(pool.phones)}")
+    _emit(_LOGGER, f"  Available: {pool.available_count}")
+    _emit(_LOGGER, f"  Total capacity: {pool.total_capacity}")
     print()
     for index, phone in enumerate(pool.phones):
         status = "EXHAUSTED" if phone.is_exhausted else "available"
@@ -612,11 +615,12 @@ def print_phone_pool_status(pool: PhonePool):
         display = phone.phone or "(pending acquire)"
         service = f" service={phone.service}" if _is_rental_slot(phone) else ""
         country = f" country={phone.country}" if _is_rental_slot(phone) else ""
-        print(
+        _emit(
+            _LOGGER,
             f"  [{index}] {display}{provider}{service}{country} | "
-            f"reuse: {phone.reuse_count}/{phone.max_reuse_count} | {status}{current}"
+            f"reuse: {phone.reuse_count}/{phone.max_reuse_count} | {status}{current}",
         )
-    print(f"{'=' * 50}\n")
+    _emit(_LOGGER, f"{'=' * 50}\n")
 
 
 __all__ = [

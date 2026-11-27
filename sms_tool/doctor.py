@@ -417,7 +417,7 @@ def _probe_unread_config_keys() -> dict[str, str]:
     saying nothing.
     """
     try:
-        from .config_usage import cached_unread_config_keys
+        from .config.usage import cached_unread_config_keys
 
         unread = cached_unread_config_keys()
     except Exception as exc:  # pragma: no cover - advisory only
@@ -509,7 +509,7 @@ def run_doctor(
 
 def unread_config_keys_safe() -> list:
     try:
-        from .config_usage import cached_unread_config_keys
+        from .config.usage import cached_unread_config_keys
 
         return list(cached_unread_config_keys())
     except Exception:  # pragma: no cover - advisory only

@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .helpers import read_email_file, unique_emails
+from .helpers import safe_print, read_email_file, unique_emails
 from ..desktop.ipc import emit_result
 
 logger = logging.getLogger(__name__)
@@ -63,10 +63,10 @@ def import_registered_accounts(args: Any, emails: list[str]) -> None:
 
     emails = [str(email or "").strip() for email in emails if str(email or "").strip()]
     if not emails:
-        print("[!] No successful registered account to import into CPA/SUB2API")
+        safe_print("[!] No successful registered account to import into CPA/SUB2API")
         return
     result = import_account_sessions(args.import_target, emails, **import_sessions_kwargs(args))
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    safe_print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)
 
@@ -74,10 +74,10 @@ def import_registered_accounts(args: Any, emails: list[str]) -> None:
 def print_paypal_links(email: str, ctx: AccountCommandContext) -> None:
     rows = ctx.list_paypal_accounts(email=email or "")
     if not rows:
-        print("[*] No payment records found")
+        safe_print("[*] No payment records found")
         return
     for row in rows:
-        print(
+        safe_print(
             json.dumps(
                 {
                     "email": row.get("email", ""),
@@ -95,13 +95,13 @@ def print_paypal_links(email: str, ctx: AccountCommandContext) -> None:
 def open_paypal_link(email: str, ctx: AccountCommandContext) -> None:
     email = (email or "").strip()
     if not email:
-        print("[Error] --email is required with --open-paypal-link")
+        safe_print("[Error] --email is required with --open-paypal-link")
         return
     url = ctx.get_paypal_url(email)
     if not url:
-        print(f"[Error] no PayPal URL found for {email}")
+        safe_print(f"[Error] no PayPal URL found for {email}")
         return
-    print(url)
+    safe_print(url)
     webbrowser.open(url)
 
 
@@ -114,7 +114,7 @@ def refresh_session(args: Any) -> None:
         timeout=args.refresh_timeout,
         proxy=args.proxy,
     )
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    safe_print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def export_codex_json(args: Any, ctx: AccountCommandContext) -> None:
@@ -155,7 +155,7 @@ def export_codex_json(args: Any, ctx: AccountCommandContext) -> None:
             proxy=args.proxy,
             timeout=args.refresh_timeout,
         )
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    safe_print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)
 
@@ -196,7 +196,7 @@ def import_cpa(args: Any, ctx: AccountCommandContext) -> None:
             emails,
             **import_sessions_kwargs(args),
         )
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    safe_print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)
     try:
@@ -217,15 +217,13 @@ def import_cpa(args: Any, ctx: AccountCommandContext) -> None:
             timeout=max(5, int(args.refresh_timeout or 30)),
         )
         if quota_result.get("total", 0):
-            print("[*] CPA quota refreshed after import:")
-            print(json.dumps(quota_result, ensure_ascii=False, indent=2))
+            safe_print("[*] CPA quota refreshed after import:")
+            safe_print(json.dumps(quota_result, ensure_ascii=False, indent=2))
     except Exception as exc:
-        print(f"[*] CPA quota refresh after import skipped: {exc}")
+        safe_print(f"[*] CPA quota refresh after import skipped: {exc}")
 
 
 def _safe_print_fn():
-    from ..observability.diagnostics import safe_print
-
     return safe_print
 
 
@@ -294,7 +292,7 @@ def check_promotion(args: Any, ctx: AccountCommandContext) -> None:
     if bool(getattr(args, "desktop_ipc", False)):
         emit_result(result, enabled=True)
     else:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        safe_print(json.dumps(result, ensure_ascii=False, indent=2))
     logger.info(
         "promotion check finished: ok=%s success=%s/%s",
         bool(result.get("ok")),
@@ -456,7 +454,7 @@ def _print_promotion_summary(result):
             or (isinstance(item.get("probe"), dict) and bool(item["probe"].get("team_trial_eligible")))
         )
     team_suffix = f"，Team 5席试用 {team_eligible}" if team_eligible else ""
-    print(f"[*] 优惠检测完成：共 {len(rows)} 个账号，检测成功 {ok}，失败 {len(rows) - ok}{team_suffix}")
+    safe_print(f"[*] 优惠检测完成：共 {len(rows)} 个账号，检测成功 {ok}，失败 {len(rows) - ok}{team_suffix}")
     logger.info("promotion check finished: ok=%s/%s team_trial_eligible=%s", ok, len(rows), team_eligible)
     for item in rows:
         if item.get("ok"):
@@ -465,7 +463,7 @@ def _print_promotion_summary(result):
         _raw_probe: object = item.get("probe")
         probe: dict = _raw_probe if isinstance(_raw_probe, dict) else {}
         raw_reason = str(item.get("promotion_status") or probe.get("error") or item.get("error") or "failed")
-        print(f"[!] {email}: {_probe_reason_label(raw_reason)}")
+        sys.stdout.write(f"[!] {email}: {_probe_reason_label(raw_reason)}\n")
         logger.warning("promotion check failed for %s: %s", email, raw_reason)
 
 
@@ -485,7 +483,7 @@ def _print_quota_summary(result):
         if str((item.get("probe") or {}).get("status") or "").strip().lower() == "account_deactivated"
     )
     other_failed = len(rows) - ok - deactivated
-    print(f"[*] 测活完成：共 {len(rows)} 个账号，正常 {ok}，掉号 {deactivated}，其他失败 {other_failed}")
+    safe_print(f"[*] 测活完成：共 {len(rows)} 个账号，正常 {ok}，掉号 {deactivated}，其他失败 {other_failed}")
     logger.info("liveness check finished: ok=%s/%s deactivated=%s", ok, len(rows), deactivated)
     for item in rows:
         email = str(item.get("email") or "").strip()
@@ -495,7 +493,7 @@ def _print_quota_summary(result):
             # A silent 401 -> relogin -> 200 recovery is otherwise invisible in
             # the panel; surface it so operators know the token rotated.
             if relogin.get("ok"):
-                print(f"[+] {email}: 重登成功，令牌已刷新")
+                safe_print(f"[+] {email}: 重登成功，令牌已刷新")
                 logger.info("liveness relogin recovered %s", email)
             continue
         _raw_probe: object = item.get("probe")
@@ -507,7 +505,7 @@ def _print_quota_summary(result):
         note = _relogin_panel_note(relogin)
         dropped = "（已标记掉号：令牌吊销且无可恢复凭据）" if str(probe.get("dropped") or "") == "token_revoked" else ""
         line = f"{reason}{note}{dropped}"
-        print(f"[!] {email}: {line}")
+        safe_print(f"[!] {email}: {line}")
         logger.warning("liveness check failed for %s: %s", email, line)
 
 
@@ -595,7 +593,7 @@ def quota_usage(args: Any) -> None:
 
     email = (getattr(args, "email", None) or "").strip()
     if not email:
-        print(json.dumps({"ok": False, "error": "missing --email"}))
+        safe_print(json.dumps({"ok": False, "error": "missing --email"}))
         raise SystemExit(1)
 
     # The probe needs the merged payload, not the bare row: ``identity_context``
@@ -605,7 +603,7 @@ def quota_usage(args: Any) -> None:
     # disagreed with the batch scan about the same account and ate Cloudflare 401s.
     account = get_account_payload(email)
     if not account:
-        print(json.dumps({"ok": False, "error": "account_not_found", "email": email}))
+        safe_print(json.dumps({"ok": False, "error": "account_not_found", "email": email}))
         raise SystemExit(1)
 
     proxy = getattr(args, "proxy", None) or None
@@ -635,7 +633,7 @@ def convert_session_json(args: Any) -> None:
         target = Path(args.convert_output)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(output_text, encoding="utf-8")
-        print(
+        safe_print(
             json.dumps(
                 {
                     "ok": bool(result.get("converted")),
@@ -649,8 +647,8 @@ def convert_session_json(args: Any) -> None:
             )
         )
     else:
-        print(output_text)
+        safe_print(output_text)
         if result.get("skipped"):
-            print(json.dumps({"skipped": result.get("skipped")}, ensure_ascii=False, indent=2), file=sys.stderr)
+            safe_print(json.dumps({"skipped": result.get("skipped")}, ensure_ascii=False, indent=2), file=sys.stderr)
     if not result.get("converted"):
         raise SystemExit(3)

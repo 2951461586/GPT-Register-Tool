@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-from sms_tool import config_usage
+from sms_tool.config import usage as config_usage
 
 
 def _tree(tmp_path):

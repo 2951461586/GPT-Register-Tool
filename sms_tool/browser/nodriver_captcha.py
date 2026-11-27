@@ -7,9 +7,13 @@ solving so the reverse HTTP protocol can continue.
 
 from __future__ import annotations
 
+import logging
 import asyncio
 import time
 from typing import Any
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def solve_captcha_with_nodriver(
@@ -34,9 +38,10 @@ def solve_captcha_with_nodriver(
         # available while never being able to run on a fresh install.
         # ASCII-only on purpose - CI stdout is cp1252 and non-Latin-1 prints
         # raise UnicodeEncodeError there.
-        print(
+        _LOGGER.info(
+            "%s",
             "[!] nodriver is not installed - the PayPal CAPTCHA fallback is "
-            "unavailable. Run: pip install nodriver (listed in requirements.txt)"
+            "unavailable. Run: pip install nodriver (listed in requirements.txt)",
         )
         return {"ok": False, "error": "nodriver not installed (pip install nodriver)"}
 
@@ -71,7 +76,7 @@ async def _solve_async(
 
 async def _do_solve(browser: Any, page_url: str, timeout: int) -> dict[str, Any]:
     deadline = time.time() + timeout
-    print(f"[nodriver] Navigating to {page_url[:80]}...")
+    _LOGGER.info("%s", f"[nodriver] Navigating to {page_url[:80]}...")
 
     page = await browser.get(page_url)
     await asyncio.sleep(5)
@@ -79,31 +84,31 @@ async def _do_solve(browser: Any, page_url: str, timeout: int) -> dict[str, Any]
     # Check for Cloudflare challenge
     content = await page.get_content()
     if "challenge" in content.lower() or "cloudflare" in content.lower():
-        print("[nodriver] Cloudflare challenge detected, attempting verify_cf...")
+        _LOGGER.info("%s", "[nodriver] Cloudflare challenge detected, attempting verify_cf...")
         try:
             await page.verify_cf()
-            print("[nodriver] verify_cf completed")
+            _LOGGER.info("%s", "[nodriver] verify_cf completed")
             await asyncio.sleep(3)
         except Exception as e:
-            print(f"[nodriver] verify_cf failed: {e}")
+            _LOGGER.info("%s", f"[nodriver] verify_cf failed: {e}")
 
     # Re-check content
     content = await page.get_content()
     title = await page.evaluate("document.title")
-    print(f"[nodriver] Page title: {title}")
-    print(f"[nodriver] Page URL: {page.url}")
+    _LOGGER.info("%s", f"[nodriver] Page title: {title}")
+    _LOGGER.info("%s", f"[nodriver] Page URL: {page.url}")
 
     # Look for reCAPTCHA and try to solve
     captcha_found = False
     if "recaptcha" in content.lower() or "captcha" in content.lower():
-        print("[nodriver] CAPTCHA detected in page content")
+        _LOGGER.info("%s", "[nodriver] CAPTCHA detected in page content")
         captcha_found = True
 
         solved = await _try_solve_recaptcha(page, browser, deadline)
         if solved:
-            print("[nodriver] CAPTCHA solved!")
+            _LOGGER.info("%s", "[nodriver] CAPTCHA solved!")
         else:
-            print("[nodriver] CAPTCHA solve attempt finished")
+            _LOGGER.info("%s", "[nodriver] CAPTCHA solve attempt finished")
 
         # Wait for page to update
         await asyncio.sleep(5)
@@ -111,14 +116,14 @@ async def _do_solve(browser: Any, page_url: str, timeout: int) -> dict[str, Any]
     # Check final state
     final_url = page.url
     final_title = await page.evaluate("document.title")
-    print(f"[nodriver] Final URL: {final_url[:80]}")
-    print(f"[nodriver] Final title: {final_title}")
+    _LOGGER.info("%s", f"[nodriver] Final URL: {final_url[:80]}")
+    _LOGGER.info("%s", f"[nodriver] Final title: {final_title}")
 
     # Extract cookies using the browser's CookieJar API
     cookies = await _extract_cookies(browser)
     cookie_header = "; ".join(f"{k}={v}" for k, v in cookies.items())
 
-    print(f"[nodriver] Extracted {len(cookies)} cookies")
+    _LOGGER.info("%s", f"[nodriver] Extracted {len(cookies)} cookies")
 
     return {
         "ok": len(cookies) > 0,
@@ -140,7 +145,7 @@ async def _try_solve_recaptcha(page: Any, browser: Any, deadline: float) -> bool
             frame_url = frame.url or ""
             if "recaptcha" not in frame_url.lower():
                 continue
-            print(f"[nodriver] Found reCAPTCHA frame: {frame_url[:80]}")
+            _LOGGER.info("%s", f"[nodriver] Found reCAPTCHA frame: {frame_url[:80]}")
 
             # Try clicking the checkbox via CSS selector
             try:
@@ -150,11 +155,11 @@ async def _try_solve_recaptcha(page: Any, browser: Any, deadline: float) -> bool
                 )
                 if checkbox:
                     await checkbox.click()
-                    print("[nodriver] Clicked reCAPTCHA checkbox")
+                    _LOGGER.info("%s", "[nodriver] Clicked reCAPTCHA checkbox")
                     await asyncio.sleep(5)
                     return True
             except Exception as e:
-                print(f"[nodriver] Checkbox click via select failed: {e}")
+                _LOGGER.info("%s", f"[nodriver] Checkbox click via select failed: {e}")
 
             # Try via JS in the frame
             try:
@@ -165,19 +170,19 @@ async def _try_solve_recaptcha(page: Any, browser: Any, deadline: float) -> bool
                         return 'not_found';
                     })()
                 """)
-                print(f"[nodriver] JS checkbox click: {result}")
+                _LOGGER.info("%s", f"[nodriver] JS checkbox click: {result}")
                 if result == "clicked":
                     await asyncio.sleep(5)
                     return True
             except Exception as e:
-                print(f"[nodriver] JS checkbox click failed: {e}")
+                _LOGGER.info("%s", f"[nodriver] JS checkbox click failed: {e}")
     except Exception as e:
-        print(f"[nodriver] Frame inspection failed: {e}")
+        _LOGGER.info("%s", f"[nodriver] Frame inspection failed: {e}")
 
     # Method 2: Try verify_cf (Cloudflare-style bypass)
     try:
         await page.verify_cf()
-        print("[nodriver] verify_cf succeeded in reCAPTCHA handler")
+        _LOGGER.info("%s", "[nodriver] verify_cf succeeded in reCAPTCHA handler")
         return True
     except Exception:
         pass
@@ -195,13 +200,13 @@ async def _try_solve_recaptcha(page: Any, browser: Any, deadline: float) -> bool
                 el = await page.select(selector, timeout=3)
                 if el:
                     await el.click()
-                    print(f"[nodriver] Clicked {selector}")
+                    _LOGGER.info("%s", f"[nodriver] Clicked {selector}")
                     await asyncio.sleep(5)
                     return True
             except Exception:
                 continue
     except Exception as e:
-        print(f"[nodriver] Main page element search failed: {e}")
+        _LOGGER.info("%s", f"[nodriver] Main page element search failed: {e}")
 
     return False
 
@@ -217,9 +222,9 @@ async def _extract_cookies(browser: Any) -> dict[str, str]:
             value = getattr(c, "value", "") or (c[1] if isinstance(c, (tuple, list)) else "")
             if name:
                 cookies[name] = value
-        print(f"[nodriver] CookieJar returned {len(cookies)} cookies")
+        _LOGGER.info("%s", f"[nodriver] CookieJar returned {len(cookies)} cookies")
     except Exception as e:
-        print(f"[nodriver] CookieJar extraction failed: {e}")
+        _LOGGER.info("%s", f"[nodriver] CookieJar extraction failed: {e}")
 
         # Fallback: try via CDP directly on a tab
         try:
@@ -236,6 +241,6 @@ async def _extract_cookies(browser: Any) -> dict[str, str]:
                 except Exception:
                     continue
         except Exception as e2:
-            print(f"[nodriver] CDP fallback failed: {e2}")
+            _LOGGER.info("%s", f"[nodriver] CDP fallback failed: {e2}")
 
     return cookies

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import hashlib
 import json
 import os
@@ -26,6 +27,8 @@ from .bundle import sentinel_version
 from .runner import SentinelRunnerError, run_sentinel_sdk
 from .surface import random_probes
 
+
+_LOGGER = logging.getLogger(__name__)
 
 SENTINEL_REQ_URL = "https://sentinel.openai.com/backend-api/sentinel/req"
 #: Sentinel flow the ChatGPT ``payments/checkout`` create gate reads. The
@@ -181,7 +184,7 @@ def _root_reason(exc: BaseException, proxy: str | None = None) -> str:
         seen.add(id(deepest))
     try:
         text = " ".join(str(deepest).split())
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
         text = ""
     if text:
         text = redact_proxy_text(text, proxy)
@@ -545,7 +548,7 @@ def issue_sentinel_token(
         if owned_session:
             try:
                 active_session.close()
-            except Exception:
+            except (OSError, RuntimeError, AttributeError):
                 pass
     try:
         parsed = json.loads(token)
@@ -903,7 +906,7 @@ def issue_sentinel_bundle(
         if owned_session:
             try:
                 active_session.close()
-            except Exception:
+            except (OSError, RuntimeError, AttributeError):
                 pass
     username = issued.get("username_password_create")
     authorize = issued.get("authorize_continue")

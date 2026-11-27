@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from .config import CFG
-from .registration.humanize import humanize_config
+from .kernel.humanize import humanize_config
 
 _tls = threading.local()
 

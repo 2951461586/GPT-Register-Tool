@@ -2,11 +2,7 @@
   "modules": [
     "__init__.py",
     "__main__.py",
-    "account_seed.py",
-    "batch_circuit_breaker.py",
     "cli.py",
-    "config_usage.py",
-    "cross_process_gate.py",
     "doctor.py",
     "operation_journal.py",
     "storage.py",

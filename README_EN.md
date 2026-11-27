@@ -22,9 +22,15 @@
 
 ## Introduction
 
-GPT-Register-Tool combines a **WPF (.NET 10) desktop client, a Python 3.12+ core, and a native Rust acceleration layer** (`native/sentinel_vm/` in-process Rust Sentinel VM with **zero Node.js dependency**, plus 47 `rust-anything` PyO3 hot-path extensions covering redaction, `.env` parsing, OTP/SMS/SMSBower/NexSMS phone normalization, Sentinel SHA3-512 PoW solving, deterministic TLS extension permutation and auth fingerprint headers, reauthorize URL stripping and auth-flow step/SO-token/redirect predicates, CAPTCHA config/bridge HTML generation and browser profile token matching, proxy normalization/masking/retargeting/phone-proxy URL rewriting/egress keys and batch endpoint interleaving, edge-probe challenge classification, payment wire / PayPal DOM matching & qualification selection/state classification, Team trial / scan / liveness / Codex / OAuth / Agent Identity / identity JWT & safe-URL parsing, account email-core normalization, pay-link contract normalization, HTML/JS/API-path/URL credential stripping, browser static-asset filtering, HTTP callback/cookie & session-cookie reassembly, error & recovery classification, CPA/SUB2API parsing, and session conversion) for email OTP registration, account and Session management, Plus + GPT Team 5-seat trial promotion checks and native Team hosted checkout extraction, proxy governance, external paylink extraction server integration, and account export. Runtime data is stored locally by default and is not committed to Git.
+**GPT-Register-Tool** is a Windows desktop workbench built on **WPF (.NET 10), Python 3.12+, and native Rust** for end-to-end ChatGPT account automation and operations:
 
-Current release notes: [v2026.11.25](./docs/releases/release-v2026.11.25.md).
+- **Registration & OTP**: Dual-lane registration (built-in protocol + browser drivers), unified multi-provider email OTP and SMS verification, resumable checkpoints, and HTTP 200 AT verification.
+- **Account & Payment Workflows**: Liveness probing, layered 401 recovery, offline JWT inspection, Plus & GPT Team 5-seat trial detection, native Team hosted checkout extraction, unified external paylink-server integration, and Codex / CPA / SUB2API import-export.
+- **Native Performance & Local-First Data**: In-process Rust Sentinel VM (zero Node.js dependency) paired with [47 PyO3 hot-path extensions](docs/current/rust-acceleration.md); sharded configs, sessions, and runtime state stay local and Git-ignored.
+
+Current release notes: [v2026.11.25](./docs/releases/release-v2026.11.25.md)
+
+[![Buy me AI tokens](https://buymeatokens.com/api/badge/2951461586?style=flat)](https://buymeatokens.com/api/badge/2951461586?ref=badge)
 
 
 ## Sponsor
@@ -40,10 +46,6 @@ Dynamic and static IP resources are available with free testing through the [IPW
 [ProxyLane](https://proxylane.dev/?utm_source=gpt-register-tool&utm_medium=partnership&utm_campaign=gpt-register-tool_sponsor_202610&utm_content=github_readme) residential proxies cover 195 countries, with 95%+ of IPs rated low-risk by Scamalytics, and targeting by city, ISP, and ASN.<br>
 Built for account ↔ proxy-slot binding: append a session name and city to the username to keep the same residential IP for up to 72 hours, and stay in the same city even when the IP rotates.<br>
 Chinese interface, USDT payments supported, and 30% off your first purchase with code GPTREG30.
-
-### Support
-
-[![Buy Me AI Tokens](https://buymeatokens.com/api/badge/2951461586)](https://buymeatokens.com/2951461586)
 
 ## Highlights
 
@@ -83,7 +85,7 @@ flowchart TB
         direction LR
         CLI["sms_tool/cli.py (lazy dispatch)"]
         CMDS["commands/ · cli_parsers/"]
-        DIAG["doctor.py · config_usage.py"]
+        DIAG["doctor.py · config/usage.py"]
     end
 
     subgraph L3["③ Application Workflows"]
@@ -106,9 +108,9 @@ flowchart TB
 
     subgraph L5["⑤ Foundation Kernel & Domain Contracts (Innermost)"]
         direction LR
-        KERN["kernel/ (stdlib-only)<br/>paths · sanitizer · timeouts · flags"]
+        KERN["kernel/ (stdlib-only)<br/>paths · sanitizer · timeouts · flags<br/>circuit_breaker · cross_process_gate · humanize · native_loader"]
         INFRA["config/ · transport/ · proxy/ · geo/<br/>observability/"]
-        SEAMS["Immutable Contracts & Cross-Lane Primitives<br/>account_models · payment/wire & checkout_contract<br/>desktop/ipc · operation_journal · cross_process_gate"]
+        SEAMS["Immutable Contracts & Cross-Lane Primitives<br/>account_models · payment/wire & checkout_contract<br/>desktop/ipc · operation_journal · store/account_seed"]
         RUST["rust/ (47 PyO3 Hot-Path Crates · 92 Functions)<br/>sanitizer · env_loader · mail_otp · sentinel_pow · tls_fingerprint · auth_headers · auth_flow_steps · auth_wire · account_stages · captcha_config · profile_reclaim · proxy · phone_proxy · batch_proxy · edge_probe · html · sms · smsbower · nexsms · data_saver · http · session_builder · session · codex_jwt · codex_oauth · agent_identity · store · cpa · sub2api · accounts · lifecycle · liveness · team_trial · payment_wire · paypal_dom · pay_link · qualification"]
     end
 
@@ -132,18 +134,18 @@ Module ownership and responsibility per layer:
 | --- | --- | --- |
 | ① Surface (Desktop UI) | `SmsWorkbench/` (`Views` · `Dialogs` · `ViewModels` · `Services` · `Models` · `Interop` · `Localization` · `Themes` · `Assets/Fonts/`) | Generic Host / DI, role-folder namespace isolation, MVVM shell & XAML dialogs, window-independent Coordinators, framed chrome/canvas Light & Dark themes with embedded `Atkinson Hyperlegible Next` typography, collapsible log/queue drawer, tray & global hotkey, workspace backup/restore |
 | ① Surface (Contracts & Read Channel) | `SmsWorkbench.Contracts/`, `sms_tool/desktop/serve.py`, `sms_tool/desktop/read.py` | Window-independent CLI planning (`BackendCommandPlanner`), payment method catalog, log redaction, resident JSONL read-only snapshot server and `DesktopReadClient` wire contracts |
-| ② CLI / Command Adapters | `sms_tool/cli.py`, `sms_tool/commands/`, `sms_tool/cli_parsers/`, `sms_tool/doctor.py`, `sms_tool/config_usage.py` | Lazy command dispatch, declaration-only parser groups, exit-code translation and environment diagnostics; owns no provider wire logic or direct DB writes |
+| ② CLI / Command Adapters | `sms_tool/cli.py`, `sms_tool/commands/`, `sms_tool/cli_parsers/`, `sms_tool/doctor.py`, `sms_tool/config/usage.py` | Lazy command dispatch, declaration-only parser groups, exit-code translation and environment diagnostics; owns no provider wire logic or direct DB writes |
 | ③ Application Workflows (Registration & Auth) | `sms_tool/registration/` (`orchestrator.py` · `handlers.py` · `batch_runner.py` · `pulse.py`), `sms_tool/auth_flow/`, `sms_tool/registration_drivers/browser_flow/` | Entry dispatch with immutable `RegistrationOperations` binding, protocol stage ordering, target-success & pulse scheduling, resumable checkpoints, browser page state machine; protocol and browser lanes share one OTP / Session / AT 200 boundary |
 | ③ Application Workflows (Mailbox · Accounts · Payment) | `sms_tool/mailbox/`, `sms_tool/accounts/`, `sms_tool/codex/`, `sms_tool/importers/`, `sms_tool/payment/batch.py`, `sms_tool/payment/qualification_batch.py` | Mailbox routing/strategies/polling, existing-account liveness / layered 401 recovery / offline JWT inspection (`sms_tool/accounts/account_inspection.py`) / promotion & health batches / email change / terminal cleanup, Codex OAuth & CPA/SUB2API import-export, batch payment & qualification orchestration |
 | ④ Provider & Driver Adapters | `sms_tool/providers/`, `sms_tool/phone/`, `sms_tool/registration_drivers/`, `sms_tool/browser/`, `sms_tool/sentinel/`, `sms_tool/registration/sentinel_tokens.py` | Mailbox & SMS vendor clients and phone-slot reuse; browser drivers (playwright · camoufox · roxy · cloak), static-asset blocking (`sms_tool/registration_drivers/data_saver.py`), process/fingerprint pools; in-process native Rust Sentinel FFI (`sms_tool/sentinel/native_ffi.py`) issuance |
 | ④ Payment Lanes & Persistence | `sms_tool/pay_link/`, `sms_tool/paypal/`, `sms_tool/store/`, `sms_tool/session/` | Multi-method registry & unified external Paylink Extraction Server HTTP adapter (`sms_tool/pay_link/extract_server.py`, serving all 15 catalog methods), PayPal authorization execution; SQLite + Session JSON dual-index persistence (`sms_tool/storage.py` back-compat shell) and canonical session building/refresh |
-| ⑤ Foundation Kernel | `sms_tool/kernel/` | Zero-application-dependency stdlib-only core: paths, sanitizer, timeout constants, frozen-config boolean flags, failure vocabulary, error classification and shared transport helpers |
+| ⑤ Foundation Kernel | `sms_tool/kernel/` | Zero-application-dependency stdlib-only core: paths, sanitizer, timeout constants, frozen-config boolean flags, failure vocabulary, error classification, batch circuit breaker, cross-process file locks, humanize pacing, and shared native extension loader |
 | ⑤ Infrastructure Primitives | `sms_tool/config/`, `sms_tool/transport/`, `sms_tool/proxy/`, `sms_tool/geo/`, `sms_tool/observability/` | Sharded config loading & read-only freezing; `curl_cffi` / `wreq` dual transport backends, single endpoint authority (`sms_tool/transport/endpoints.py`) and fingerprint pool; single proxy parser authority (`sms_tool/proxy/entry.py`), lane routing, health and two-hop local bridge (`sms_tool/proxy/bridge.py`); single exit GeoIP/timezone authority and sanitized telemetry |
-| ⑤ Domain Contracts & Shared Seams | `sms_tool/accounts/account_models.py`, `sms_tool/payment/wire.py`, `sms_tool/payment/checkout_contract.py`, `sms_tool/payment/catalog.py`, `sms_tool/desktop/ipc.py`, `sms_tool/operation_journal.py`, `sms_tool/cross_process_gate.py` | Immutable cross-lane seams: typed account models, Checkout & payment wire kernel, method catalog, promotion/qualification states, sole `@@SMSWORKBENCH_V2@@` IPC writer, durable idempotency journal and cross-process file locks |
+| ⑤ Domain Contracts & Shared Seams | `sms_tool/accounts/account_models.py`, `sms_tool/payment/wire.py`, `sms_tool/payment/checkout_contract.py`, `sms_tool/payment/catalog.py`, `sms_tool/desktop/ipc.py`, `sms_tool/operation_journal.py`, `sms_tool/store/account_seed.py` | Immutable cross-lane seams: typed account models, Checkout & payment wire kernel, method catalog, promotion/qualification states, sole `@@SMSWORKBENCH_V2@@` IPC writer, durable idempotency journal, and account-seed lookup |
 
 - **External extraction server boundary**: Legacy in-repo protocol-payment extractors have been retired; all 15 catalog payment methods route through `sms_tool/pay_link/extract_server.py` (`protocol_payments.extract_link_server` / `EXTRACT_LINK_*` env vars).
 - **Native Rust acceleration & zero Node.js**: `native/sentinel_vm/` provides the in-process Sentinel VM FFI; 47 `rust-anything`-managed PyO3 crates under `rust/` accelerate 92 hot functions (14,124 recorded cases 100% matched, 0 `unsafe`; see [Rust acceleration](docs/current/rust-acceleration.md)).
-- **Enforced architecture gates**: Layer direction and namespace isolation are checked automatically in CI and pre-commit by `scripts/import_layer_ratchet.py`, `scripts/kernel_boundary_ratchet.py`, `scripts/root_module_ratchet.py`, `scripts/architecture_scan.py`, and `tests/SmsWorkbench.Tests/NamespaceArchitectureTests.cs`.
+- **Enforced architecture gates**: Layer direction (0 outward allow-list edges, 0 cross-lane coupling), 24 machine-validated boundary specs, 47 Rust PyO3 crate compilation checks, and namespace isolation are enforced automatically in CI and pre-commit by `scripts/import_layer_ratchet.py`, `scripts/kernel_boundary_ratchet.py`, `scripts/root_module_ratchet.py`, `scripts/lane_coupling_ratchet.py`, `scripts/spec_validate.py`, `scripts/rust_crates_guard.py`, `scripts/architecture_scan.py`, and `tests/SmsWorkbench.Tests/NamespaceArchitectureTests.cs`.
 
 See [architecture and boundaries](docs/architecture.md), [desktop UI architecture](docs/current/ui-architecture.md), [Rust acceleration](docs/current/rust-acceleration.md), and [directory map](docs/directory-map.md).
 

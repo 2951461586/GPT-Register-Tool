@@ -32,7 +32,7 @@ Use `random` when the value only needs to be *varied*, not *unguessable*:
 | `sms_tool/transport/auth_headers.py` `_auth_fingerprint` | profile pick | already `random.SystemRandom` |
 | `sms_tool/proxy/entry.py` `_random_session_id` | sticky proxy session id | **`secrets.choice`** — egress selection |
 | `sms_tool/utils.py` name/birthday/jitter helpers | fake persona, delays | `random` |
-| `sms_tool/registration/humanize.py`, `sms_tool/registration/warmup.py` | delay jitter | `random` |
+| `sms_tool/kernel/humanize.py`, `sms_tool/registration/warmup.py` | delay jitter | `random` |
 | `sms_tool/transport/fingerprint_pool.py` | weighted profile pick | `random.choices` |
 | `sms_tool/paypal/*` | click/typing cadence | `random` |
 

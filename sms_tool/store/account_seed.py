@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .storage import get_account_record
+from .accounts import get_account_record
 
 
 def load_account_seed(email: str = "", session_file: str = "") -> tuple[dict[str, Any], str]:
@@ -32,7 +32,7 @@ def load_account_seed(email: str = "", session_file: str = "") -> tuple[dict[str
             raw_data = json.loads(raw_json)
             if isinstance(raw_data, dict):
                 data = {**raw_data, **data}
-        except Exception:
+        except (json.JSONDecodeError, ValueError, TypeError):
             pass
 
     if record:
@@ -49,7 +49,7 @@ def load_account_seed(email: str = "", session_file: str = "") -> tuple[dict[str
 def read_json(path: Path) -> dict[str, Any]:
     try:
         return json.loads(path.read_text(encoding="utf-8-sig"))
-    except Exception:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError):
         return {}
 
 

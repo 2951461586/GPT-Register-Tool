@@ -6,7 +6,7 @@ import os
 import time
 from typing import Any
 
-from ..account_seed import extract_access_token, load_account_seed
+from ..store.account_seed import extract_access_token, load_account_seed
 from ..observability.token_telemetry import access_token_telemetry
 
 

@@ -20,14 +20,16 @@ from typing import Any
 from urllib.parse import parse_qsl, quote, urljoin, urlsplit
 
 
-from ..cross_process_gate import cross_process_write_lock
+from ..kernel.cross_process_gate import cross_process_write_lock
 from ..kernel.paths import runtime_file
-from ..proxy.entry import normalize_proxy_url, retarget_region
-
-from ..paypal.proxy import (
-    rotate_proxy_session as rotate_stage_proxy_session,
-)
+from ..proxy.entry import normalize_proxy_url, retarget_region, rotate_session
 from ..kernel.native_loader import load_native_module
+
+
+def rotate_stage_proxy_session(proxy: str, country: str = "") -> str:
+    """Rotate a stage proxy session directly through the single proxy authority."""
+    return rotate_session(normalize_proxy_url(proxy), country)
+
 
 # curl_cffi functional API (preferred for checkout to avoid Session cookie conflicts)
 try:

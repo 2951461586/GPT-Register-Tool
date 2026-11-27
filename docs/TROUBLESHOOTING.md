@@ -50,7 +50,7 @@
    池文件若没跟着回写，**下一次**刷新就是 `invalid_grant`，而邮箱是完全健康的。
    成功回写会记 `mailbox_refresh_token_writeback`（`sms_tool/mailbox/pool_writer.py:200`）。
 3. 确认 `MAILBOX_RT_WRITEBACK` 没被设成 `0`。
-4. 确认池文件**可写**。回写走跨进程字节锁（`sms_tool/cross_process_gate.py`），
+4. 确认池文件**可写**。回写走跨进程字节锁（`sms_tool/kernel/cross_process_gate.py`），
    拿不到锁会记 `_missed` 而不是抛异常 —— 锁超时看起来和「文件不可写」一样。
 5. 回写只改**锚定的那一行**：锚点值在文件里必须**唯一出现**、且该行的属主邮箱必须匹配，
    否则拒绝写入（记 `_missed`）。所以「池里有重复的 RT」会让回写静默失效。
@@ -311,10 +311,10 @@ CI 上**看不见**这个问题。
 
 1. `SmsWorkbench/Views/MainWindow.SmsProvider.cs:235/238` 会往**当前供应商**的 section 里写
    `service_name` 与 `country_name_zh`（纯展示用，两语言下都没有读取方）。
-2. `sms_tool/config_usage.py` 的判定是「**leaf 名是否作为独立字符串字面量**出现在
+2. `sms_tool/config/usage.py` 的判定是「**leaf 名是否作为独立字符串字面量**出现在
    `sms_tool/`」——`service_name` / `country_name_zh` 两个 leaf 都不出现，
    所以被判为死键；而 `country_name` / `service` / `endpoint` 是活叶子，可以随便写。
-3. `config_usage.SHARD_NAMES` **包含 `proxy.json`**，而 `phone_reuse.*` 正是落在
+3. `config.usage.SHARD_NAMES` **包含 `proxy.json`**，而 `phone_reuse.*` 正是落在
    `proxy.json` 里 ⇒ 桌面端写进去的键会被扫描器看到。
 
 `smsbower` 之所以不炸，只是因为 `EXPECTED_UNREAD` 里**恰好只钉了 `phone_reuse.smsbower.*`
@@ -328,7 +328,7 @@ self.assertIn(key.rsplit(".", 1)[-1], writes, "counter-example moved")
 ```
 
 它把「**C# 写这两个键**」钉成了「扫描范围只看 Python、不看 C#」这个决策的**前提**
-（`config_usage.py:29-49` 的 docstring 整段论证都建在这个反例上）。删掉 C# 那两行写入，
+（`sms_tool/config/usage.py:29-49` 的 docstring 整段论证都建在这个反例上）。删掉 C# 那两行写入，
 这条守卫会以 `counter-example moved` 失败，得连带重写模块 docstring 与测试 ——
 **属设计变更，不是修 typo。**
 

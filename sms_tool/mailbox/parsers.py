@@ -155,7 +155,7 @@ def _normalize_mailbox_email(email):
                 alias = suffix[: -len(domain)]
                 repaired = f"{local}+{alias}@{domain}"
                 if EMAIL_RE.match(repaired):
-                    print(f"[!] Repaired malformed mailbox email: {value} -> {repaired.lower()}")
+                    emit(_LOGGER, f"[!] Repaired malformed mailbox email: {value} -> {repaired.lower()}")
                     return repaired.lower()
     if EMAIL_RE.match(value):
         domain = value.rsplit("@", 1)[1]
@@ -189,7 +189,7 @@ def _parse_smailr_line(line, source_path, line_no):
     email = _normalize_mailbox_email(parts[0] if parts else "")
     mailbox_id = parts[1] if len(parts) >= 2 else ""
     if not email or not mailbox_id:
-        print(f"[!] Skip malformed Smailr mailbox line {source_path}:{line_no}")
+        emit(_LOGGER, f"[!] Skip malformed Smailr mailbox line {source_path}:{line_no}")
         return None
     return MailboxAccount(
         email=email,
@@ -207,7 +207,7 @@ def _parse_cfworker_line(line, source_path, line_no):
     email = line.split("://", 1)[1].strip() if "://" in line else line
     email = _normalize_mailbox_email(email)
     if not email:
-        print(f"[!] Skip malformed CFWorker email {source_path}:{line_no}")
+        emit(_LOGGER, f"[!] Skip malformed CFWorker email {source_path}:{line_no}")
         return None
     return MailboxAccount(email=email.lower(), source=str(source_path), provider="cfworker")
 
@@ -223,7 +223,7 @@ def _parse_remail_line(line, source_path, line_no):
     # provider can use that token first and recover the current order identity
     # through the API Key when necessary, so keep this compatibility form.
     if not email or not service_token:
-        print(f"[!] Skip malformed ReMail mailbox line {source_path}:{line_no}")
+        emit(_LOGGER, f"[!] Skip malformed ReMail mailbox line {source_path}:{line_no}")
         return None
     return MailboxAccount(
         email=email.lower(),
@@ -239,7 +239,7 @@ def _parse_icloud_url_line(line, source_path, line_no):
     email, url = mailbox_icloud_url.split_icloud_url_line(line)
     email = _normalize_mailbox_email(email)
     if not email or not url:
-        print(f"[!] Skip malformed iCloud OTP URL line {source_path}:{line_no}")
+        emit(_LOGGER, f"[!] Skip malformed iCloud OTP URL line {source_path}:{line_no}")
         return None
     return MailboxAccount(
         email=email,
@@ -256,7 +256,7 @@ def _parse_gmail_line(line, source_path, line_no):
         parts = [part.strip() for part in payload.split("----")]
         email = _normalize_mailbox_email(parts[0] if parts else "")
         if not email:
-            print(f"[!] Skip malformed Gmail email {source_path}:{line_no}")
+            emit(_LOGGER, f"[!] Skip malformed Gmail email {source_path}:{line_no}")
             return None
         if len(parts) >= 4:
             client_id = parts[1]
@@ -264,7 +264,7 @@ def _parse_gmail_line(line, source_path, line_no):
             refresh_token = parts[3]
             access_token = parts[4] if len(parts) >= 5 else ""
             if not client_id or not client_secret or not refresh_token:
-                print(f"[!] Skip malformed Gmail OAuth mailbox line {source_path}:{line_no}")
+                emit(_LOGGER, f"[!] Skip malformed Gmail OAuth mailbox line {source_path}:{line_no}")
                 return None
             refresh_token = _screen_refresh_token(
                 refresh_token,
@@ -289,7 +289,7 @@ def _parse_gmail_line(line, source_path, line_no):
             login_password = parts[1]
             app_password = parts[2]
             if not app_password:
-                print(f"[!] Skip malformed Gmail app-password mailbox line {source_path}:{line_no}")
+                emit(_LOGGER, f"[!] Skip malformed Gmail app-password mailbox line {source_path}:{line_no}")
                 return None
             return MailboxAccount(
                 email=email.lower(),
@@ -302,7 +302,7 @@ def _parse_gmail_line(line, source_path, line_no):
         if len(parts) == 2:
             app_password = parts[1]
             if not app_password:
-                print(f"[!] Skip malformed Gmail app-password mailbox line {source_path}:{line_no}")
+                emit(_LOGGER, f"[!] Skip malformed Gmail app-password mailbox line {source_path}:{line_no}")
                 return None
             return MailboxAccount(
                 email=email.lower(),
@@ -311,19 +311,19 @@ def _parse_gmail_line(line, source_path, line_no):
                 provider="gmail",
                 auth_mode="app_password",
             )
-        print(f"[!] Skip malformed Gmail mailbox line {source_path}:{line_no}")
+        emit(_LOGGER, f"[!] Skip malformed Gmail mailbox line {source_path}:{line_no}")
         return None
 
     parts = [part.strip() for part in payload.split("---")]
     if len(parts) < 2:
-        print(f"[!] Skip malformed Gmail mailbox line {source_path}:{line_no}")
+        emit(_LOGGER, f"[!] Skip malformed Gmail mailbox line {source_path}:{line_no}")
         return None
     email = _normalize_mailbox_email(parts[0])
     app_password = parts[1]
     sender_name = parts[2] if len(parts) >= 3 else ""
     if not email or not app_password:
         if not email:
-            print(f"[!] Skip malformed Gmail email {source_path}:{line_no}")
+            emit(_LOGGER, f"[!] Skip malformed Gmail email {source_path}:{line_no}")
         return None
     return MailboxAccount(
         email=email.lower(),
@@ -358,14 +358,14 @@ def parse_mailbox_pool_line(line, source_path: str | Path = "", line_no=0):
     if "----" in line:
         parts = line.split("----", 3)
         if len(parts) < 4:
-            print(f"[!] Skip malformed chatai line {source_path}:{line_no}")
+            emit(_LOGGER, f"[!] Skip malformed chatai line {source_path}:{line_no}")
             return None
         email = _normalize_mailbox_email(parts[0].strip())
         password = parts[1].strip()
         client_id, refresh_token = _split_chatai_client_refresh(parts[2], parts[3])
         if not email or not refresh_token:
             if not email:
-                print(f"[!] Skip malformed chatai email {source_path}:{line_no}")
+                emit(_LOGGER, f"[!] Skip malformed chatai email {source_path}:{line_no}")
             return None
         refresh_token = _screen_refresh_token(
             refresh_token,
@@ -386,14 +386,14 @@ def parse_mailbox_pool_line(line, source_path: str | Path = "", line_no=0):
         )
     parts = line.split("---", 4)
     if len(parts) < 3:
-        print(f"[!] Skip malformed mailbox line {source_path}:{line_no}")
+        emit(_LOGGER, f"[!] Skip malformed mailbox line {source_path}:{line_no}")
         return None
     email, password, refresh_token = (part.strip() for part in parts[:3])
     email = _normalize_mailbox_email(email)
     access_token = parts[3].strip() if len(parts) >= 4 else ""
     if not email or not refresh_token:
         if not email:
-            print(f"[!] Skip malformed mailbox email {source_path}:{line_no}")
+            emit(_LOGGER, f"[!] Skip malformed mailbox email {source_path}:{line_no}")
         return None
     refresh_token = _screen_refresh_token(
         refresh_token,
@@ -449,12 +449,12 @@ def _parse_mailbox_password_file(path):
         if not line or line.startswith("#"):
             continue
         if ":" not in line:
-            print(f"[!] Skip malformed mailbox line {password_path}:{line_no}")
+            emit(_LOGGER, f"[!] Skip malformed mailbox line {password_path}:{line_no}")
             continue
         email, password = (part.strip() for part in line.split(":", 1))
         email = _normalize_mailbox_email(email)
         if not email:
-            print(f"[!] Skip malformed mailbox email {password_path}:{line_no}")
+            emit(_LOGGER, f"[!] Skip malformed mailbox email {password_path}:{line_no}")
             continue
         provider = "gmail" if email.endswith(("@gmail.com", "@googlemail.com")) else "graph"
         records.append(

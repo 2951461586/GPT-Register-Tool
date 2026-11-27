@@ -15,7 +15,7 @@ from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from typing import Any
 
-from .helpers import read_email_file, unique_emails
+from .helpers import safe_print, read_email_file, unique_emails
 from ..kernel.sanitizer import account_reference, sanitize_text
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,13 @@ def _emit_one_click_event(
         return
 
 
+def _result_persisted(result: dict[str, Any]) -> bool:
+    persistence = result.get("persistence")
+    if isinstance(persistence, dict):
+        return bool(persistence.get("persisted", result.get("persisted", True)))
+    return bool(result.get("persisted", True))
+
+
 @dataclass(frozen=True)
 class OneClickCommandContext:
     """Legacy CLI hooks required by one-click command orchestration."""
@@ -84,7 +91,7 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
             emails = [str(seed.get("email") or "").strip()]
     emails = unique_emails(emails)
     if not emails:
-        print("[Error] --email, --email-file, or --session-file is required with --one-click-sms")
+        safe_print("[Error] --email, --email-file, or --session-file is required with --one-click-sms")
         raise SystemExit(2)
 
     explicit_mailboxes = {}
@@ -102,19 +109,20 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
         source_override=args.phone_source,
     )
     if not phone_pool.phones:
-        print(
+        safe_print(
             "[Error] --one-click-sms requires a phone pool. Configure the selected provider's key, e.g. phone_reuse.smsbower.api_key / SMSBOWER_API_KEY."
         )
         raise SystemExit(2)
     phone_pool.reset_exhausted_slots()
     print_phone_pool_status(phone_pool)
     if phone_pool.total_capacity <= 0:
-        print("[Error] --one-click-sms requires at least one available phone slot; current phone pool is exhausted.")
+        safe_print(
+            "[Error] --one-click-sms requires at least one available phone slot; current phone pool is exhausted."
+        )
         raise SystemExit(2)
 
     workers = max(1, min(int(args.workers or 1), 4, len(emails)))
-    batch_id = uuid.uuid4().hex
-    run_id = batch_id
+    batch_id = run_id = uuid.uuid4().hex
     _emit_one_click_event(
         run_id=run_id,
         batch_id=batch_id,
@@ -122,11 +130,11 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
         total=len(emails),
         detail="一键接码开始",
     )
-    print(f"[*] One-click SMS RT refresh: {len(emails)} account(s), workers={workers}")
+    safe_print(f"[*] One-click SMS RT refresh: {len(emails)} account(s), workers={workers}")
     logger.info("one-click SMS RT refresh started: accounts=%d workers=%d", len(emails), workers)
 
     def _run_one(index, email):
-        print(f"\n[{index + 1}/{len(emails)}] One-click SMS: {email}")
+        safe_print(f"\n[{index + 1}/{len(emails)}] One-click SMS: {email}")
         account_run_id = f"{batch_id}:{account_reference(email)}"
         stage = "session_load"
         try:
@@ -186,11 +194,7 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
             )
             return index, result, True
 
-        persisted = bool(
-            result.get("persistence", {}).get("persisted", result.get("persisted", True))
-            if isinstance(result.get("persistence"), dict)
-            else result.get("persisted", True)
-        )
+        persisted = _result_persisted(result)
         fatal = False
         if result.get("ok"):
             result["batch_status"] = "success"
@@ -202,7 +206,7 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
             else:
                 output_line = f"[FAIL] {email}: OAuth completed, local save failed"
                 logger.warning("one-click SMS local save failed: account=%s", account_reference(email))
-            print(output_line)
+            safe_print(output_line)
             _emit_one_click_event(
                 run_id=account_run_id,
                 batch_id=batch_id,
@@ -217,7 +221,7 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
             result["batch_status"] = "failed"
             error = sanitize_text(result.get("error") or "unknown")[:160]
             result["error"] = error
-            print(f"[FAIL] {email}: {error}")
+            safe_print(f"[FAIL] {email}: {error}")
             logger.warning("one-click SMS %s failed: %s", account_reference(email), error)
             try:
                 result["persistence"] = ctx.persist_failure(data, json_path, email, result)
@@ -345,7 +349,7 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
         total=len(emails),
         batch_terminal=True,
     )
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    safe_print(json.dumps(summary, ensure_ascii=False, indent=2))
     if not batch_ok:
         raise SystemExit(3)
 
@@ -367,7 +371,7 @@ def one_click_scan(args: Any) -> None:
         emails = [str(row.get("email") or "").strip() for row in list_paypal_accounts()]
     emails = unique_emails(emails)
     if not emails:
-        print("[Error] no account email was found for --one-click-scan")
+        safe_print("[Error] no account email was found for --one-click-scan")
         raise SystemExit(2)
 
     summary = scan_accounts(

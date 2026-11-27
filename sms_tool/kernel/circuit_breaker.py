@@ -25,7 +25,7 @@ from typing import Any
 
 import threading
 
-from .registration.policy import RETRYABLE_CLASSES
+from .failure_registry import RETRYABLE_CLASSES
 
 # Consecutive environment failures tolerated before the batch parks itself.
 # Matches the reference implementation's "3 consecutive network/env errors".

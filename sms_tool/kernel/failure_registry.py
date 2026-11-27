@@ -521,6 +521,7 @@ def failure_class(code: str) -> FailureClass:
 
 # Future-batch eligibility is not same-account immediate retry. Keep the old
 # exported set as a compatibility view while new code uses the precise name.
+RETRYABLE_CLASSES = frozenset(cls.code for cls in FAILURE_CLASSES if cls.attempt_retryable)
 FUTURE_BATCH_CLASSES = frozenset(cls.code for cls in FAILURE_CLASSES if cls.retain_for_future_batch)
 BATCH_RETRY_CLASSES = FUTURE_BATCH_CLASSES
 BATCH_DROPPED_CLASSES = frozenset(cls.code for cls in FAILURE_CLASSES if cls.batch_dropped)
@@ -564,6 +565,7 @@ __all__ = [
     "PASSWORDLESS_SIGNUP_MESSAGE_MARKER",
     "is_passwordless_signup_mismatch",
     "failure_class",
+    "RETRYABLE_CLASSES",
     "FUTURE_BATCH_CLASSES",
     "BATCH_RETRY_CLASSES",
     "BATCH_DROPPED_CLASSES",

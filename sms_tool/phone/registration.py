@@ -1,3 +1,5 @@
+import logging
+
 """Phone-number (SMS OTP) ChatGPT registration orchestration."""
 
 import json
@@ -28,6 +30,11 @@ from ..utils import (
     tock,
 )
 from ..transport import endpoints
+
+
+from .pool import emit as _emit
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _provider_selection(phone_reuse_cfg: Mapping, api_key_override=None) -> tuple[str, dict, str, str]:
@@ -91,10 +98,11 @@ def run_phone_register(
         return _failure_result(f"phone_proxy_unavailable: {detail}")
     proxy = proxy_result.get("proxy") or ""
 
-    print(f"[*] ChatGPT Phone Registration Started (country={country})")
+    _emit(_LOGGER, f"[*] ChatGPT Phone Registration Started (country={country})")
     if proxy:
-        print(
-            f"[*] Phone registration proxy ready: region={proxy_result.get('region', '')} ip={proxy_result.get('ip', '')}"
+        _emit(
+            _LOGGER,
+            f"[*] Phone registration proxy ready: region={proxy_result.get('region', '')} ip={proxy_result.get('ip', '')}",
         )
 
     # Step 0: Acquire phone number from the selected provider
@@ -110,18 +118,15 @@ def run_phone_register(
         return _failure_result(f"{provider}_get_number_failed: {e}")
     phone = normalize_phone(activation.phone)
     handle = rental_handle_for(provider, activation)
-    print(f"[*] Phone: {phone}  rental={handle}")
+    _emit(_LOGGER, f"[*] Phone: {phone}  rental={handle}")
     tock()
 
     # Step 1: Establish the device identity. Flow tokens are minted immediately
     # before the protocol operations that consume them.
     if sentinel_data:
-        print("[*] Using provided sentinel tokens")
+        _emit(_LOGGER, "[*] Using provided sentinel tokens")
     else:
-        sentinel_data = {
-            "oai_did": str(uuid.uuid4()),
-            "sentinel_source": "node_sdk_runner",
-        }
+        sentinel_data = {"oai_did": str(uuid.uuid4()), "sentinel_source": "node_sdk_runner"}
 
     # Step 2: Generate credentials
     explicit_password = bool(str(password or "").strip())
@@ -135,7 +140,7 @@ def run_phone_register(
     # 密码是敏感凭据，绝不打印明文到 stdout（日志会被采集/分享）。
     # 跟 run_email 的 passwordless 分支保持一致的脱敏标记。
     _phone_display = f"{phone[:3]}***{phone[-3:]}" if phone and len(phone) >= 6 else "(none)"
-    print(f"[*] Phone: {_phone_display}  Password: [generated]  Name: {full_name}  Birth: {birthdate}")
+    _emit(_LOGGER, f"[*] Phone: {_phone_display}  Password: [generated]  Name: {full_name}  Birth: {birthdate}")
 
     # Init session
     session = curl_requests.Session()
@@ -210,7 +215,7 @@ def run_phone_register(
         )
         tock()
         redirect_path = r.url.split("auth.openai.com")[-1]
-        print(f"  Redirect: {redirect_path}")
+        _emit(_LOGGER, f"  Redirect: {redirect_path}")
 
         if _is_existing_login_redirect(r.url):
             sms_client.cancel(handle)
@@ -253,8 +258,8 @@ def run_phone_register(
             reg_data = r.json()
         except (ValueError, TypeError):
             reg_data = {"_raw": r.text[:300]}
-        print(f"  Status: {r.status_code}")
-        print(f"  Response: {json.dumps(reg_data, ensure_ascii=False)[:300]}")
+        _emit(_LOGGER, f"  Status: {r.status_code}")
+        _emit(_LOGGER, f"  Response: {json.dumps(reg_data, ensure_ascii=False)[:300]}")
 
         if r.status_code != 200:
             err_code = reg_data.get("error", {}).get("code", "")
@@ -264,7 +269,7 @@ def run_phone_register(
 
         # Step 4: Wait for SMS code from SMSBower
         tick("4-Wait SMS code")
-        print(f"[*] Waiting for SMS code on {phone}...")
+        _emit(_LOGGER, f"[*] Waiting for SMS code on {phone}...")
         code_result = sms_client.wait_for_code(handle, timeout=180, poll_interval=5)
         tock()
 
@@ -275,7 +280,7 @@ def run_phone_register(
             return _failure_result("sms_code_timeout", email=phone)
 
         sms_code = code_result
-        print(f"[*] SMS code received: {sms_code}")
+        _emit(_LOGGER, f"[*] SMS code received: {sms_code}")
 
         # Step 5: Validate phone OTP
         tick("5-Validate phone OTP")
@@ -301,8 +306,8 @@ def run_phone_register(
             validate_data = validate_resp.json()
         except (ValueError, TypeError):
             validate_data = {"_raw": validate_resp.text[:300]}
-        print(f"  Status: {validate_resp.status_code}")
-        print(f"  Response: {json.dumps(validate_data, ensure_ascii=False)[:300]}")
+        _emit(_LOGGER, f"  Status: {validate_resp.status_code}")
+        _emit(_LOGGER, f"  Response: {json.dumps(validate_data, ensure_ascii=False)[:300]}")
 
         if validate_resp.status_code != 200:
             err_msg = validate_data.get("error", {}).get("message", str(validate_data))
@@ -358,8 +363,8 @@ def run_phone_register(
             create_data = create_resp.json()
         except (ValueError, TypeError):
             create_data = {"_raw": create_resp.text[:300]}
-        print(f"  Status: {create_resp.status_code}")
-        print(f"  Response: {json.dumps(create_data, ensure_ascii=False)[:300]}")
+        _emit(_LOGGER, f"  Status: {create_resp.status_code}")
+        _emit(_LOGGER, f"  Response: {json.dumps(create_data, ensure_ascii=False)[:300]}")
 
         if create_resp.status_code != 200:
             err_msg = create_data.get("error", {}).get("message", str(create_data))
@@ -394,13 +399,13 @@ def run_phone_register(
                 break
             time.sleep(1)
     except Exception as e:
-        print(f"  Auth session error: {e}")
+        _emit(_LOGGER, f"  Auth session error: {e}")
     tock()
 
     if not access_token:
         return _failure_result("auth_session_no_token", email=phone, password=password)
 
-    print("[*] Access token obtained")
+    _emit(_LOGGER, "[*] Access token obtained")
 
     # Step 8: (Optional) Codex OAuth
     refresh_token = ""
@@ -421,9 +426,9 @@ def run_phone_register(
             )
             refresh_token = (oauth_result.get("tokens") or {}).get("refresh_token") or ""
             if refresh_token:
-                print("[*] Refresh token obtained")
+                _emit(_LOGGER, "[*] Refresh token obtained")
         except Exception as e:
-            print(f"  Codex OAuth error: {e}")
+            _emit(_LOGGER, f"  Codex OAuth error: {e}")
         tock()
 
     print_timings()

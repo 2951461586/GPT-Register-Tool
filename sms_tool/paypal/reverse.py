@@ -9,10 +9,10 @@ Uses curl_cffi for Chrome TLS fingerprint impersonation.
 
 from __future__ import annotations
 
+import logging
 import contextlib
 import re
 import time
-from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qs, urljoin, urlparse
 from ..transport import endpoints
@@ -28,6 +28,26 @@ from ..config import CFG
 from .fingerprints import PAYPAL_CHROME_FULL_VERSION as _CHROME_FULL_VERSION
 from .fingerprints import PAYPAL_CHROME_VERSION as _CHROME_VERSION
 from .fingerprints import PAYPAL_USER_AGENT as _USER_AGENT
+from .reverse_protocol import (
+    ReversePayResult,
+    _BLOCK_PATTERNS,
+    _CAPTCHA_PATTERNS,
+    _NeedBrowserFallback,
+    build_reverse_session_headers,
+    cookie_dict as _protocol_cookie_dict,
+    extract_challenge_form,
+    extract_csrf_token,
+    extract_form_action as _protocol_extract_form_action,
+    extract_hidden_fields as _protocol_extract_hidden_fields,
+    extract_input_fields as _protocol_extract_input_fields,
+    extract_select_fields as _protocol_extract_select_fields,
+    extract_token as _protocol_extract_token,
+    find_form_by_fields as _protocol_find_form_by_fields,
+    find_signup_form as _protocol_find_signup_form,
+    find_submit_form as _protocol_find_submit_form,
+    get_attr as _protocol_get_attr,
+    is_js_only_page as _protocol_is_js_only_page,
+)
 from ..phone.sms_utils import (
     NO_NUMBER_SOURCE_MESSAGE,
     _extract_sms_code,
@@ -36,63 +56,10 @@ from ..phone.sms_utils import (
 )
 
 
-# ──────────────────────────── data types ────────────────────────────
-
-
-@dataclass
-class ReversePayResult:
-    ok: bool
-    email: str = ""
-    error: str = ""
-    failed_step: str = ""
-    access_token: str = ""
-    oauth_refresh_token: str = ""
-    refresh_token_status: str = ""
-    paypal_status: str = ""
-    redirect_url: str = ""
-
-    def to_dict(self) -> dict[str, Any]:
-        d: dict[str, Any] = {"ok": self.ok, "email": self.email}
-        if self.ok:
-            d.update(
-                {
-                    "access_token": self.access_token,
-                    "oauth_refresh_token": self.oauth_refresh_token,
-                    "refresh_token_status": self.refresh_token_status,
-                    "paypal_status": self.paypal_status,
-                    "redirect_url": self.redirect_url,
-                }
-            )
-        else:
-            d.update({"error": self.error, "failed_step": self.failed_step})
-        return d
-
-
-# ──────────────────────────── constants ────────────────────────────
-
-# Patterns indicating JS-only rendering or CAPTCHA
-_CAPTCHA_PATTERNS = [
-    re.compile(r"data-app=[\"']?authchallenge_response", re.I),
-    re.compile(r"id=[\"']?captcha-standalone", re.I),
-    re.compile(r"data-enable-ads-captcha=[\"']?true", re.I),
-    re.compile(r"adsddcaptcha", re.I),
-    re.compile(r"ngrlCaptcha", re.I),
-    re.compile(r"g-recaptcha", re.I),
-    re.compile(r"recaptcha", re.I),
-    re.compile(r"are you a human", re.I),
-    re.compile(r"verify you are human", re.I),
-]
-
-_BLOCK_PATTERNS = [
-    re.compile(r"unusual activity", re.I),
-    re.compile(r"temporarily locked", re.I),
-    re.compile(r"try again later", re.I),
-    re.compile(r"access denied", re.I),
-    re.compile(r"unable to process", re.I),
-]
-
-
 # ──────────────────────────── client ────────────────────────────
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class PayPalReverseClient:
@@ -167,7 +134,7 @@ class PayPalReverseClient:
         # 3. Handle SMS verification
         code = self._handle_sms()
         if code:
-            print(f"[re] SMS code: {code}")
+            _LOGGER.info("%s", f"[re] SMS code: {code}")
 
         # 4. Fill card and billing
         self._fill_card_and_billing()
@@ -193,26 +160,7 @@ class PayPalReverseClient:
             # curl_cffi's ``ProxySpec`` is an invariant TypedDict; the plain
             # mapping is what every call site passes and accepts at runtime.
             s.proxies = {"http": self.proxy, "https": self.proxy}  # pyright: ignore[reportAttributeAccessIssue]
-        s.headers.update(
-            {
-                "User-Agent": _USER_AGENT,
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Connection": "keep-alive",
-                "Upgrade-Insecure-Requests": "1",
-                "Cache-Control": "max-age=0",
-                "Priority": "u=0, i",
-                "sec-ch-ua": f'"Google Chrome";v="{_CHROME_VERSION}", "Chromium";v="{_CHROME_VERSION}", "Not(A:Brand";v="24"',
-                "sec-ch-ua-full-version-list": f'"Google Chrome";v="{_CHROME_FULL_VERSION}", "Chromium";v="{_CHROME_FULL_VERSION}", "Not(A:Brand";v="24.0.0.0"',
-                "sec-ch-ua-mobile": "?0",
-                "sec-ch-ua-platform": '"Windows"',
-                "Sec-Fetch-Dest": "document",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "none",
-                "Sec-Fetch-User": "?1",
-            }
-        )
+        s.headers.update(build_reverse_session_headers(_CHROME_VERSION, _CHROME_FULL_VERSION, _USER_AGENT))
         return s
 
     def _parse_redirect_url(self):
@@ -235,7 +183,7 @@ class PayPalReverseClient:
 
         # Case 2: Stripe redirect URL — follow it to get the real PayPal URL
         if "stripe.com" in parsed.netloc:
-            print("[re] Following Stripe redirect to PayPal...")
+            _LOGGER.info("%s", "[re] Following Stripe redirect to PayPal...")
             r = self._safe_request("GET", self.redirect_url, allow_redirects=False)
             location = r.headers.get("Location") or r.headers.get("location", "")
             if location:
@@ -246,11 +194,11 @@ class PayPalReverseClient:
                 self._ba_token = (params.get("ba_token") or [""])[0]
                 self._cmd = (params.get("cmd") or [""])[0]
                 if self._pp_token or self._ba_token:
-                    print("[re] PayPal approval token captured")
+                    _LOGGER.info("%s", "[re] PayPal approval token captured")
                     return
                 # Maybe it redirected again
                 if "paypal.com" in parsed.netloc:
-                    print(f"[re] Redirected to PayPal: {location[:80]}")
+                    _LOGGER.info("%s", f"[re] Redirected to PayPal: {location[:80]}")
                     return
 
         # Case 3: Try following a chain of redirects
@@ -267,7 +215,7 @@ class PayPalReverseClient:
                 return
             # If we landed on a PayPal page, that's fine even without explicit tokens
             if "paypal.com" in parsed.netloc:
-                print(f"[re] Landed on PayPal: {final_url[:80]}")
+                _LOGGER.info("%s", f"[re] Landed on PayPal: {final_url[:80]}")
                 return
 
         raise _NeedBrowserFallback("parse_url", "could not resolve PayPal URL from redirect chain")
@@ -300,11 +248,11 @@ class PayPalReverseClient:
             self._current_html = r.text
             self._current_url = str(r.url)
             self._update_csrf(r)
-            print(f"[re] Reloaded page after nodriver CAPTCHA bypass: {self._current_url[:80]}")
+            _LOGGER.info("%s", f"[re] Reloaded page after nodriver CAPTCHA bypass: {self._current_url[:80]}")
 
         # If PayPal redirected to login/signup page, follow
         if "login" in self._current_url.lower() or "signup" in self._current_url.lower():
-            print(f"[*] Redirected to: {self._current_url[:80]}")
+            _LOGGER.info("%s", f"[*] Redirected to: {self._current_url[:80]}")
 
     # ──────────────── account creation ────────────────
 
@@ -321,7 +269,7 @@ class PayPalReverseClient:
             except _NeedBrowserFallback:
                 raise
             except Exception as e:
-                print(f"[re] Step {step_name} failed: {e}")
+                _LOGGER.info("%s", f"[re] Step {step_name} failed: {e}")
                 raise _NeedBrowserFallback(step_name, str(e))
 
     def _step_email(self):
@@ -427,7 +375,7 @@ class PayPalReverseClient:
         if not api_url:
             raise _NeedBrowserFallback("sms", NO_NUMBER_SOURCE_MESSAGE)
 
-        print("[re] SMS verification required, polling for code...")
+        _LOGGER.info("%s", "[re] SMS verification required, polling for code...")
         baseline = _sms_baseline(api_url)
 
         # Poll for code
@@ -506,7 +454,7 @@ class PayPalReverseClient:
             ]
         )
         if not form:
-            print("[re] No card form found, may already be filled")
+            _LOGGER.info("%s", "[re] No card form found, may already be filled")
             return
 
         action, fields = form
@@ -583,7 +531,7 @@ class PayPalReverseClient:
         self._current_html = r.text
         self._update_csrf(r)
         self._check_blocked(self._current_html, "card")
-        print("[re] Card and billing filled")
+        _LOGGER.info("%s", "[re] Card and billing filled")
 
     # ──────────────── payment submission ────────────────
 
@@ -614,13 +562,13 @@ class PayPalReverseClient:
             self._current_html = r.text
             self._update_csrf(r)
             self._check_blocked(self._current_html, "submit")
-            print("[re] Payment submitted")
+            _LOGGER.info("%s", "[re] Payment submitted")
         else:
             # Try POST to current URL as fallback
             r = self._safe_request("POST", self._current_url)
             self._current_url = str(r.url)
             self._current_html = r.text
-            print("[re] Payment submitted (direct POST)")
+            _LOGGER.info("%s", "[re] Payment submitted (direct POST)")
 
     # ──────────────── auth token extraction ────────────────
 
@@ -629,7 +577,7 @@ class PayPalReverseClient:
         # Follow redirect chain: PayPal → Stripe → ChatGPT
         r = self._follow_redirects(self._current_url, max_hops=10)
         final_url = str(r.url)
-        print(f"[*] Final redirect: {final_url[:80]}")
+        _LOGGER.info("%s", f"[*] Final redirect: {final_url[:80]}")
 
         # Strategy 1: Extract from response cookies
         access_token = ""
@@ -696,155 +644,42 @@ class PayPalReverseClient:
                 if self._extract_token(body, "accessToken", "access_token"):
                     return body
         except Exception as e:
-            print(f"[re] Auth session poll failed: {e}")
+            _LOGGER.info("%s", f"[re] Auth session poll failed: {e}")
         return None
 
     @staticmethod
     def _extract_token(data: object, *keys: str) -> str:
-        if not isinstance(data, dict):
-            return ""
-        for key in keys:
-            value = data.get(key)
-            if isinstance(value, str) and value:
-                return value
-        session = data.get("session")
-        if isinstance(session, dict):
-            for key in keys:
-                value = session.get(key)
-                if isinstance(value, str) and value:
-                    return value
-        return ""
+        return _protocol_extract_token(data, *keys)
 
     # ──────────────── HTML parsing helpers ────────────────
 
     def _find_signup_form(self) -> tuple[str, dict] | None:
-        """Find the main signup/login form on the page."""
-        return self._find_form_by_fields(
-            [
-                "email",
-                "login_email",
-                "signup_email",
-                "login_emailcopy",
-            ]
-        )
+        return _protocol_find_signup_form(self._current_html, self._current_url)
 
     def _find_submit_form(self) -> tuple[str, dict] | None:
-        """Find a form with a submit button containing agree/pay text."""
-        html = self._current_html
-        # Look for form with submit button
-        form_pattern = re.compile(
-            r"<form[^>]*>(.*?)</form>",
-            re.DOTALL | re.IGNORECASE,
-        )
-        for match in form_pattern.finditer(html):
-            form_html = match.group(0)
-            # Check for submit button with relevant text
-            if re.search(
-                r"(?:agree|pay\s*now|continue|submit|confirm|authorize)",
-                form_html,
-                re.I,
-            ):
-                action = self._extract_form_action(form_html)
-                fields = self._extract_hidden_fields(form_html)
-                return action, fields
-        return None
+        return _protocol_find_submit_form(self._current_html, self._current_url)
 
     def _find_form_by_fields(self, field_names: list[str]) -> tuple[str, dict] | None:
-        """Find a form containing any of the specified field names."""
-        html = self._current_html
-        form_pattern = re.compile(
-            r"<form[^>]*>(.*?)</form>",
-            re.DOTALL | re.IGNORECASE,
-        )
-        for match in form_pattern.finditer(html):
-            form_html = match.group(0)
-            form_lower = form_html.lower()
-            for name in field_names:
-                if name.lower() in form_lower:
-                    action = self._extract_form_action(form_html)
-                    fields = self._extract_hidden_fields(form_html)
-                    # Also extract input fields
-                    fields.update(self._extract_input_fields(form_html))
-                    fields.update(self._extract_select_fields(form_html))
-                    return action, fields
-        return None
+        return _protocol_find_form_by_fields(self._current_html, self._current_url, field_names)
 
     def _extract_form_action(self, form_html: str) -> str:
-        """Extract the action URL from a form tag."""
-        m = re.search(r'<form[^>]*action=["\']([^"\']*)["\']', form_html, re.I)
-        if m:
-            action = m.group(1)
-            if action.startswith("/"):
-                parsed = urlparse(self._current_url)
-                return f"{parsed.scheme}://{parsed.netloc}{action}"
-            if action.startswith("http"):
-                return action
-        return self._current_url
+        return _protocol_extract_form_action(form_html, self._current_url)
 
     def _extract_hidden_fields(self, form_html: str) -> dict:
-        """Extract hidden input fields from a form."""
-        fields = {}
-        pattern = re.compile(
-            r'<input[^>]*type=["\']hidden["\'][^>]*>',
-            re.IGNORECASE,
-        )
-        for match in pattern.finditer(form_html):
-            tag = match.group(0)
-            name = self._get_attr(tag, "name")
-            value = self._get_attr(tag, "value")
-            if name:
-                fields[name] = value
-        return fields
+        return _protocol_extract_hidden_fields(form_html)
 
     def _extract_input_fields(self, form_html: str) -> dict:
-        """Extract all input fields from a form."""
-        fields = {}
-        pattern = re.compile(
-            r"<input[^>]*>",
-            re.IGNORECASE,
-        )
-        for match in pattern.finditer(form_html):
-            tag = match.group(0)
-            name = self._get_attr(tag, "name")
-            value = self._get_attr(tag, "value")
-            input_type = self._get_attr(tag, "type").lower()
-            if name and input_type not in ("submit", "button", "image"):
-                fields[name] = value
-        return fields
+        return _protocol_extract_input_fields(form_html)
 
     def _extract_select_fields(self, form_html: str) -> dict:
-        """Extract select field names with their selected/default option values."""
-        fields = {}
-        pattern = re.compile(r"<select[^>]*>.*?</select>", re.IGNORECASE | re.DOTALL)
-        for match in pattern.finditer(form_html):
-            tag = match.group(0)
-            name = self._get_attr(tag, "name")
-            if not name:
-                continue
-            selected = re.search(r'<option[^>]*selected[^>]*value=["\']([^"\']*)["\']', tag, re.I)
-            if selected:
-                fields[name] = selected.group(1)
-                continue
-            first = re.search(r'<option[^>]*value=["\']([^"\']*)["\']', tag, re.I)
-            fields[name] = first.group(1) if first else ""
-        return fields
+        return _protocol_extract_select_fields(form_html)
 
     @staticmethod
     def _get_attr(tag: str, attr: str) -> str:
-        """Get an attribute value from an HTML tag."""
-        m = re.search(rf'{attr}=["\']([^"\']*)["\']', tag, re.I)
-        return m.group(1) if m else ""
+        return _protocol_get_attr(tag, attr)
 
     def _is_js_only_page(self) -> bool:
-        """Check if the page is JS-only (no parseable forms)."""
-        html = self._current_html
-        # If there's very little HTML content, it's likely JS-rendered
-        if len(html) < 500:
-            return True
-        # Check for React/Vue/Angular mount points with no content
-        if re.search(r'<div id="(app|root|__next)"[^>]*>\s*</div>', html):
-            return True
-        return False
+        return _protocol_is_js_only_page(self._current_html)
 
     def _check_blocked(self, html: str, step: str):
         """Check for CAPTCHA or block pages.
@@ -854,7 +689,7 @@ class PayPalReverseClient:
         """
         # Skip CAPTCHA check if nodriver already solved it
         if self._captcha_solved_by_nodriver:
-            print(f"[re] CAPTCHA already solved by nodriver, skipping check at {step}")
+            _LOGGER.info("%s", f"[re] CAPTCHA already solved by nodriver, skipping check at {step}")
             return
 
         for pattern in _CAPTCHA_PATTERNS:
@@ -868,9 +703,9 @@ class PayPalReverseClient:
                     self._update_csrf(r)
                     # If nodriver flag is set, trust it and continue
                     if self._captcha_solved_by_nodriver:
-                        print(f"[re] CAPTCHA bypassed via nodriver at {step} step")
+                        _LOGGER.info("%s", f"[re] CAPTCHA bypassed via nodriver at {step} step")
                         return
-                    print(f"[re] nodriver cookies insufficient at {step}, falling back")
+                    _LOGGER.info("%s", f"[re] nodriver cookies insufficient at {step}, falling back")
                 elif token:
                     # Submit token to challenge endpoint and re-request
                     self._submit_captcha_challenge(html, token)
@@ -881,77 +716,36 @@ class PayPalReverseClient:
                     self._update_csrf(r)
                     still_blocked = any(p.search(self._current_html) for p in _CAPTCHA_PATTERNS)
                     if not still_blocked:
-                        print(f"[re] CAPTCHA solved at {step} step, page reloaded")
+                        _LOGGER.info("%s", f"[re] CAPTCHA solved at {step} step, page reloaded")
                         return
-                    print(f"[re] CAPTCHA persists at {step} after solve, falling back")
+                    _LOGGER.info("%s", f"[re] CAPTCHA persists at {step} after solve, falling back")
                 raise _NeedBrowserFallback(step, f"CAPTCHA detected at {step} step")
         for pattern in _BLOCK_PATTERNS:
             if pattern.search(html):
                 raise _NeedBrowserFallback(step, f"page blocked at {step} step")
 
     def _submit_captcha_challenge(self, html: str, token: str):
-        """Submit solved CAPTCHA token to PayPal's challenge endpoint.
-
-        PayPal's ADS CAPTCHA expects the token to be POSTed to the challenge
-        form action URL (typically /auth/createchallenge/.../challenge).
-        """
-        # Extract challenge form action
-        action_match = re.search(
-            r'<form[^>]*name=["\']?challenge["\']?[^>]*action=["\']([^"\']+)["\']',
-            html,
-            re.I,
-        )
-        if not action_match:
-            # Try alternative patterns
-            action_match = re.search(
-                r'action=["\']([^"\']*(?:challenge|auth)[^"\']*)["\']',
-                html,
-                re.I,
-            )
-        if not action_match:
-            print("[re] No challenge form action found, skipping challenge submit")
+        """Submit solved CAPTCHA token to PayPal's challenge endpoint."""
+        extracted = extract_challenge_form(html, self._current_url)
+        if extracted is None:
+            _LOGGER.info("%s", "[re] No challenge form action found, skipping challenge submit")
             return
-
-        action = action_match.group(1)
-        if action.startswith("/"):
-            parsed = urlparse(self._current_url)
-            action = f"{parsed.scheme}://{parsed.netloc}{action}"
-
-        # Extract hidden fields from the challenge form
-        form_match = re.search(
-            r'<form[^>]*name=["\']?challenge["\']?[^>]*>(.*?)</form>',
-            html,
-            re.DOTALL | re.I,
-        )
-        fields = {}
-        if form_match:
-            form_html = form_match.group(1)
-            for m in re.finditer(r'<input[^>]*type=["\']hidden["\'][^>]*>', form_html, re.I):
-                tag = m.group(0)
-                name = self._get_attr(tag, "name")
-                value = self._get_attr(tag, "value")
-                if name:
-                    fields[name] = value
-
-        # Add CAPTCHA response token
+        action, fields = extracted
         fields["g-recaptcha-response"] = token
         fields["h-captcha-response"] = token
         if self._captcha_ekey:
             fields["recaptcha-ekey"] = self._captcha_ekey
-
         headers = {
             "Referer": self._current_url,
             "Origin": urlparse(self._current_url).scheme + "://" + urlparse(self._current_url).netloc,
             "Content-Type": "application/x-www-form-urlencoded",
             "X-Requested-With": "XMLHttpRequest",
         }
-
         try:
             r = self._safe_request("POST", action, data=fields, headers=headers)
-            # Update cookies from challenge response
-            print(f"[re] Challenge submit: {r.status_code} {str(r.url)[:60]}")
+            _LOGGER.info("%s", f"[re] Challenge submit: {r.status_code} {str(r.url)[:60]}")
         except Exception as e:
-            print(f"[re] Challenge submit failed: {e}")
+            _LOGGER.info("%s", f"[re] Challenge submit failed: {e}")
 
     def _try_solve_captcha(self, html: str, step: str) -> str | None:
         """Attempt to solve CAPTCHA automatically. Returns token or None.
@@ -970,7 +764,7 @@ class PayPalReverseClient:
                 solve_recaptcha_on_page,
             )
         except ImportError:
-            print("[re] captcha_solver module not available")
+            _LOGGER.info("%s", "[re] captcha_solver module not available")
             return None
 
         config = extract_captcha_config(html)
@@ -979,11 +773,11 @@ class PayPalReverseClient:
 
         if not site_key:
             if re.search(r"captcha", html, re.I) and _PAYPAL_RECAPTCHA_SITE_KEY:
-                print(f"[re] CAPTCHA at {step}, using PayPal reCAPTCHA fallback key")
+                _LOGGER.info("%s", f"[re] CAPTCHA at {step}, using PayPal reCAPTCHA fallback key")
                 captcha_type = "recaptcha"
                 site_key = _PAYPAL_RECAPTCHA_SITE_KEY
             else:
-                print(f"[re] CAPTCHA detected at {step} but no site_key found")
+                _LOGGER.info("%s", f"[re] CAPTCHA detected at {step} but no site_key found")
                 return None
 
         # Step 1: Try basic bridge solver
@@ -996,7 +790,7 @@ class PayPalReverseClient:
                     headless=True,
                     timeout_ms=90000,
                     locale="en-US",
-                    log=lambda msg: print(msg),
+                    log=lambda msg: _LOGGER.info("%s", msg),
                 )
             else:
                 token, ekey = _solve_recaptcha(
@@ -1005,19 +799,19 @@ class PayPalReverseClient:
                     headless=True,
                     timeout_ms=90000,
                     locale="en-US",
-                    log=lambda msg: print(msg),
+                    log=lambda msg: _LOGGER.info("%s", msg),
                 )
             if token:
                 self._captcha_token = token
                 self._captcha_ekey = ekey
                 return token
         except CaptchaError as e:
-            print(f"[re] Basic solver failed at {step}: {e}")
+            _LOGGER.info("%s", f"[re] Basic solver failed at {step}: {e}")
         except Exception as e:
-            print(f"[re] Basic solver error at {step}: {e}")
+            _LOGGER.info("%s", f"[re] Basic solver error at {step}: {e}")
 
         # Step 2: Browser fallback - load real page and solve reCAPTCHA v2
-        print(f"[re] Trying browser fallback for CAPTCHA at {step}...")
+        _LOGGER.info("%s", f"[re] Trying browser fallback for CAPTCHA at {step}...")
         try:
             # Collect cookies from the HTTP session
             session_cookies = {}
@@ -1035,19 +829,19 @@ class PayPalReverseClient:
                 headless=True,
                 timeout_ms=120000,
                 locale="en-US",
-                log=lambda msg: print(msg),
+                log=lambda msg: _LOGGER.info("%s", msg),
             )
             if token:
                 self._captcha_token = token
                 self._captcha_ekey = ekey
                 return token
         except CaptchaError as e:
-            print(f"[re] Browser fallback failed at {step}: {e}")
+            _LOGGER.info("%s", f"[re] Browser fallback failed at {step}: {e}")
         except Exception as e:
-            print(f"[re] Browser fallback error at {step}: {e}")
+            _LOGGER.info("%s", f"[re] Browser fallback error at {step}: {e}")
 
         # Step 3: nodriver fallback (undetected Chrome)
-        print(f"[re] Trying nodriver for CAPTCHA at {step}...")
+        _LOGGER.info("%s", f"[re] Trying nodriver for CAPTCHA at {step}...")
         try:
             from ..browser.nodriver_captcha import solve_captcha_with_nodriver
 
@@ -1061,55 +855,34 @@ class PayPalReverseClient:
                 # Import nodriver cookies into HTTP session
                 for name, value in nd_result["cookies"].items():
                     self._session.cookies.set(name, value, domain=".paypal.com")
-                print(f"[re] Imported {len(nd_result['cookies'])} nodriver cookies")
+                _LOGGER.info("%s", f"[re] Imported {len(nd_result['cookies'])} nodriver cookies")
                 self._nodriver_cookies = nd_result["cookies"]
 
                 # If nodriver navigated past CAPTCHA, use its final URL
                 final_url = nd_result.get("final_url", "")
                 if final_url and "paypal.com" in final_url:
                     self._current_url = final_url
-                    print(f"[re] Using nodriver final URL: {final_url[:80]}")
+                    _LOGGER.info("%s", f"[re] Using nodriver final URL: {final_url[:80]}")
 
                 # Mark CAPTCHA as solved so _check_blocked skips re-check
                 self._captcha_solved_by_nodriver = True
                 return "__nodriver_cookies__"
         except Exception as e:
-            print(f"[re] nodriver fallback failed at {step}: {e}")
+            _LOGGER.info("%s", f"[re] nodriver fallback failed at {step}: {e}")
 
         return None
 
     def _update_csrf(self, response: Any):
         """Extract CSRF token from response."""
-        html = response.text if hasattr(response, "text") else ""
-        # Meta tag
-        m = re.search(r'<meta[^>]*name=["\']csrf[_-]?token["\'][^>]*content=["\']([^"\']*)["\']', html, re.I)
-        if m:
-            self._csrf_token = m.group(1)
-            return
-        # Hidden input
-        m = re.search(r'<input[^>]*name=["\']_token["\'][^>]*value=["\']([^"\']*)["\']', html, re.I)
-        if m:
-            self._csrf_token = m.group(1)
-            return
-        # Set-Cookie header
-        for name, value in self._cookie_dict(response).items():
-            if "csrf" in name.lower() or "xsrftoken" in name.lower():
-                self._csrf_token = value
-                return
+        token = extract_csrf_token(response)
+        if token:
+            self._csrf_token = token
 
     # ──────────────── cookie helpers ────────────────────────────
 
     @staticmethod
     def _cookie_dict(response: Any) -> dict[str, str]:
-        """Return {name: value} from response cookies, compatible with requests and curl_cffi.
-
-        requests.RequestsCookieJar has get_dict() returning {str: str}.
-        curl_cffi.Cookies inherits from dict, so dict() gives {str: str} directly.
-        """
-        jar = response.cookies
-        if hasattr(jar, "get_dict"):
-            return jar.get_dict()
-        return dict(jar)
+        return _protocol_cookie_dict(response)
 
     # ──────────────── HTTP helpers ────────────────
 
@@ -1153,18 +926,6 @@ class PayPalReverseClient:
             return r
         except Exception as e:
             raise _NeedBrowserFallback("request", f"{method} {url[:60]} failed: {e}")
-
-
-# ──────────────────────────── exception ────────────────────────────
-
-
-class _NeedBrowserFallback(Exception):
-    """Raised when the reverse-engineered flow cannot continue."""
-
-    def __init__(self, step: str, detail: str):
-        self.step = step
-        self.detail = detail
-        super().__init__(f"[{step}] {detail}")
 
 
 # ──────────────────────────── public helper ────────────────────────────

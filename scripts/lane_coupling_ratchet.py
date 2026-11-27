@@ -60,11 +60,13 @@ PKG = "sms_tool"
 EXCLUDED_DIRS = {"__pycache__", "_vendor"}
 
 #: Second path component (``sms_tool.<this>``) -> registration lane.
+#: Note: ``sms_tool.sentinel`` is shared Layer-4 anti-bot infrastructure consumed
+#: by both registration and payment lanes (not registration workflow); the
+#: registration-specific token wrapper lives under ``registration.sentinel_tokens``.
 REGISTRATION_PREFIXES = (
     "registration",
     "auth_",
     "mailbox",
-    "sentinel",
     "phone_",
     "otp_strategy",
     "sms_provider",

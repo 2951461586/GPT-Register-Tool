@@ -274,12 +274,19 @@ def test_shipped_budget_history_is_well_formed_and_cited():
 
 
 def test_the_shipped_budget_history_matches_a_cap_that_actually_moved():
-    """Every recorded raise must be reflected in the cap it describes."""
+    """No cap may exceed the latest reviewed ceiling recorded in budget_history.
+
+    Tightening a cap below a historical raise (debt reduction) is allowed;
+    raising it above the last recorded ``to`` without a new reviewed entry is not.
+    """
     policy = ratchet.load_baseline().get("policy", {})
+    latest_by_axis: dict[str, dict[str, object]] = {}
     for entry in policy.get("budget_history", []):
-        assert policy[entry["axis"]] == entry["to"], "%s records %s -> %s but the cap is %s" % (
+        latest_by_axis[entry["axis"]] = entry
+    for axis, entry in latest_by_axis.items():
+        assert policy[axis] <= entry["to"], "%s records %s -> %s but the cap is %s" % (
             entry["date"],
             entry["from"],
             entry["to"],
-            policy[entry["axis"]],
+            policy[axis],
         )

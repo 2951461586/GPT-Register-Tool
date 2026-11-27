@@ -2,7 +2,7 @@
 
 import unittest
 
-from sms_tool.batch_circuit_breaker import (
+from sms_tool.kernel.circuit_breaker import (
     DEFAULT_THRESHOLD,
     ENVIRONMENT_FAILURE_CLASSES,
     BatchCircuitBreaker,

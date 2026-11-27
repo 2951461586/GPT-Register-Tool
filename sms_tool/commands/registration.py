@@ -29,7 +29,7 @@ from ..registration.preflight import CLOUDFLARE_CHALLENGE_MARKER
 from ..registration.protocol_helpers import _safe_float, _safe_int
 from ..registration.funnel import combine_registration_funnels, summarize_registration_funnel
 from ..kernel.sanitizer import mask_account, sanitize_log_text
-from ..observability.diagnostics import safe_print
+from .helpers import safe_print
 
 logger = logging.getLogger(__name__)
 

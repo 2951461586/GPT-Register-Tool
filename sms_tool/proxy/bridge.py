@@ -167,11 +167,11 @@ async def _close_writer(w: asyncio.StreamWriter) -> None:
     """Best-effort close; Windows raises if the peer already reset the socket."""
     try:
         w.close()
-    except Exception:
+    except (OSError, RuntimeError, AttributeError):
         return
     try:
         await w.wait_closed()
-    except Exception:
+    except (OSError, RuntimeError, AttributeError):
         pass
 
 
@@ -396,7 +396,7 @@ class LocalProxyBridge:
         if loop is not None:
             try:
                 loop.call_soon_threadsafe(loop.stop)
-            except Exception:  # pragma: no cover - defensive
+            except (OSError, RuntimeError):  # pragma: no cover - defensive
                 pass
         if self._thread is not None:
             self._thread.join(timeout=3)
@@ -429,7 +429,7 @@ class LocalProxyBridge:
         finally:
             try:
                 loop.close()
-            except Exception:  # pragma: no cover - defensive
+            except (OSError, RuntimeError):  # pragma: no cover - defensive
                 pass
 
     @staticmethod
@@ -462,7 +462,7 @@ class LocalProxyBridge:
             try:
                 writer.close()
                 await writer.wait_closed()
-            except Exception:
+            except (OSError, RuntimeError, AttributeError):
                 pass
 
     async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -560,7 +560,7 @@ class LocalProxyBridge:
             try:
                 up_w.close()
                 await up_w.wait_closed()
-            except Exception:
+            except (OSError, RuntimeError, AttributeError):
                 pass
 
     # ── upstream connection ────────────────────────────────────────────────

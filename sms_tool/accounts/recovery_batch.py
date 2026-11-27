@@ -409,14 +409,14 @@ def _run_optional_401_relogin(
                     if email:
                         try:
                             _clear_promotion_marker_after_probe(email)
-                        except Exception:
-                            pass
+                        except (OSError, RuntimeError, ValueError, TypeError) as exc:
+                            logger.debug("post-relogin cleanup skipped: %s", exc)
                         try:
                             clear_relogin_failure(email)
                             if probe.get("ok"):
                                 RegistrationRetryGuard(cfg).record(email, success=True)
-                        except Exception:
-                            pass
+                        except (OSError, RuntimeError, ValueError, TypeError) as exc:
+                            logger.debug("post-relogin cleanup skipped: %s", exc)
                 elif relogin:
                     record_relogin_failure(email, relogin)
                 mailbox_auth_invalid = str(relogin.get("error") or "") == "mailbox_auth_invalid"
@@ -452,8 +452,8 @@ def _apply_post_probe_drop_and_timeout(
         try:
             if persist_token_revoked_drop(account):
                 probe = {**probe, "dropped": "token_revoked"}
-        except Exception:
-            pass
+        except (OSError, RuntimeError, ValueError, TypeError) as exc:
+            logger.debug("persist token_revoked drop failed: %s", exc)
     if (
         time.monotonic() >= effective_deadline
         and not probe.get("ok")
@@ -686,10 +686,10 @@ def _clear_promotion_marker_after_probe(email: str) -> None:
         # Older injected test doubles only accept the original email argument.
         try:
             clear_stale_promotion_at_marker(email)
-        except Exception:
-            pass
-    except Exception:
-        pass
+        except (OSError, RuntimeError, ValueError, TypeError) as exc:
+            logger.debug("clear promotion marker fallback failed: %s", exc)
+    except (OSError, RuntimeError, ValueError, TypeError) as exc:
+        logger.debug("clear promotion marker failed: %s", exc)
 
 
 def _refresh_mailbox_quarantine_state() -> None:
@@ -698,8 +698,8 @@ def _refresh_mailbox_quarantine_state() -> None:
         from ..mailbox.router import load_mailbox_pool
 
         load_mailbox_pool()
-    except Exception:
-        pass
+    except (OSError, RuntimeError, ValueError, TypeError) as exc:
+        logger.debug("refresh mailbox quarantine state skipped: %s", exc)
 
 
 def _emit_account_batch_event(
@@ -725,8 +725,8 @@ def _emit_account_batch_event(
                 "detail": detail,
             }
         )
-    except Exception:
-        pass
+    except (ImportError, OSError, RuntimeError, ValueError, TypeError) as exc:
+        logger.debug("account batch event emit skipped: %s", exc)
 
 
 def inspect_accounts(

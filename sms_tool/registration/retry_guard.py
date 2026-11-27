@@ -11,7 +11,7 @@ from pathlib import Path
 
 from ..kernel.failure_registry import PASSWORD_CLAIMED_MARKER
 from ..kernel.paths import runtime_file
-from ..cross_process_gate import cross_process_write_lock
+from ..kernel.cross_process_gate import cross_process_write_lock
 from .policy import RETRYABLE_CLASSES, registration_retry_decision
 from ..kernel.sanitizer import sanitize_text
 from typing import Any, cast

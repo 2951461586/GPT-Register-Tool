@@ -23,7 +23,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from sms_tool import config_usage
+from sms_tool.config import usage as config_usage
 
 # Frozen 2026-09-02. See the module docstring for how to update it.
 EXPECTED_UNREAD = {

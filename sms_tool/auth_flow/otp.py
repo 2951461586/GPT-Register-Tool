@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 import json
 import time
 
 from ..kernel.transport import TRANSPORT_ERRORS
 from . import deps, steps, totp
 from ..registration.protocol_helpers import _safe_int
+
+
+from .signup import _emit_operator_line
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _otp_challenge_established(body):
@@ -144,10 +150,10 @@ def _send_existing_login_otp(
             # ``body`` is whatever the vendor sent (bytes, a cycle, a non-serializable
             # object); falling back to the raw text keeps the operator line intact.
             body_preview = (response.text or "")[:200]
-        print(f"  Existing account OTP send: {endpoint} {response.status_code} {body_preview}")
+        _emit_operator_line(_LOGGER, f"  Existing account OTP send: {endpoint} {response.status_code} {body_preview}")
         if response.status_code in (200, 202, 204):
             if _otp_challenge_established(body):
-                print(f"  Existing account OTP challenge established by {endpoint}")
+                _emit_operator_line(_LOGGER, f"  Existing account OTP challenge established by {endpoint}")
                 return True, response
             if acknowledged_response is None:
                 acknowledged_response = response
@@ -159,9 +165,10 @@ def _send_existing_login_otp(
             # carries it 18/18.  Stop here and let the caller continue on the
             # acknowledgement rather than paying a second dispatch to learn
             # nothing.
-            print(
+            _emit_operator_line(
+                _LOGGER,
                 f"  Existing account OTP {endpoint} acknowledged without a challenge; "
-                f"not trying the other endpoint (would dispatch a second code)"
+                f"not trying the other endpoint (would dispatch a second code)",
             )
             break
         # 409 may mean "OTP already sent recently" — treat as success but
@@ -178,7 +185,9 @@ def _send_existing_login_otp(
     # No endpoint carried a challenge.  Fall back to the first bare
     # acknowledgement so this can never be worse than the previous behaviour.
     if acknowledged_response is not None:
-        print("  Existing account OTP: no endpoint returned a challenge payload; continuing with acknowledgement")
+        _emit_operator_line(
+            _LOGGER, "  Existing account OTP: no endpoint returned a challenge payload; continuing with acknowledgement"
+        )
         return True, acknowledged_response
     # All endpoints exhausted; return last response so caller can decide
     if last_response is not None:
@@ -281,7 +290,7 @@ def _existing_login_otp(
         except Exception as exc:  # broad-except: compat
             # A diagnostic dump: it exists so a 401 can be told apart from a plain
             # wrong-code rejection. Its own failure must never fail the stage.
-            print(f"  Existing account otp-validate dump warning: {exc}")
+            _emit_operator_line(_LOGGER, f"  Existing account otp-validate dump warning: {exc}")
         # 🔴 2026-09-16: ``identity_provider_mismatch`` is deliberately **not**
         # checked here.  It is a real server verdict, but not one this endpoint
         # can produce: its message reads *"You tried signing in as \"…\" **using
@@ -327,14 +336,10 @@ def _existing_login_otp(
         # ``keys=['WARNING_BANNER']``.  Measured 2026-09-14: 5/5 landings on
         # ``/about-you``, 0 sessions.  Report it as a failure so the caller
         # stops instead of polling a known-dead state.
-        print(f"  Existing account OTP continue: profile step, not a login landing ({final_url[:80]})")
-        return (
-            {
-                "ok": False,
-                "error": f"existing_login_landed_on_profile_step:{final_url[:120]}",
-            },
-            None,
+        _emit_operator_line(
+            _LOGGER, f"  Existing account OTP continue: profile step, not a login landing ({final_url[:80]})"
         )
+        return ({"ok": False, "error": f"existing_login_landed_on_profile_step:{final_url[:120]}"}, None)
     try:
         deps._follow_continue_url(
             session,
@@ -344,5 +349,5 @@ def _existing_login_otp(
             label="Existing account OTP continue",
         )
     except TRANSPORT_ERRORS as e:
-        print(f"  Existing account OTP continue transport warning: {e}")
+        _emit_operator_line(_LOGGER, f"  Existing account OTP continue transport warning: {e}")
     return ({"ok": True}, None)

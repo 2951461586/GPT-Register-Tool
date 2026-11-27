@@ -7,12 +7,13 @@ CloakBrowser fallback), and finally persists the outcome to the session file.
 
 from __future__ import annotations
 
+import logging
 import contextlib
 import time
 from typing import Any, Callable
 
-from ..account_seed import extract_access_token as _extract_access_token
-from ..account_seed import load_account_seed as _load_seed
+from ..store.account_seed import extract_access_token as _extract_access_token
+from ..store.account_seed import load_account_seed as _load_seed
 from ..config import CFG
 from .fingerprints import PAYPAL_USER_AGENT as _USER_AGENT
 from ..utils import generate_password, random_name
@@ -24,6 +25,9 @@ from .config_picker import (
 from .errors import _PayPalStepError
 from .flow_steps import _run_browser_steps
 from .session import _inject_navigator_overrides, _screenshot
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def auto_pay(
@@ -77,7 +81,7 @@ def auto_pay(
                 "email": target_email,
                 "error": "paypal_link_missing: pass approval_url or store a paypal.url first",
             }
-        print("[*] No PayPal URL found, generating via injected link factory...")
+        _LOGGER.info("%s", "[*] No PayPal URL found, generating via injected link factory...")
         paypal = link_factory(access_token)
         if not paypal.get("ok") or not paypal.get("url"):
             return {
@@ -88,7 +92,7 @@ def auto_pay(
         paypal_url = paypal["url"]
         data["paypal"] = paypal
 
-    print(f"[*] PayPal URL: {paypal_url[:80]}...")
+    _LOGGER.info("%s", f"[*] PayPal URL: {paypal_url[:80]}...")
 
     # 3. Pick card + address + phone
     card, address = _pick_card_and_address(cfg)
@@ -104,7 +108,9 @@ def auto_pay(
     password = generate_password()
     alias_email = _generate_alias_email(target_email)
 
-    print(f"[*] Card: [REDACTED]  Name: {first_name} {last_name}  Email: {alias_email}  Phone: {phone or '(none)'}")
+    _LOGGER.info(
+        "%s", f"[*] Card: [REDACTED]  Name: {first_name} {last_name}  Email: {alias_email}  Phone: {phone or '(none)'}"
+    )
 
     # 4. Try reverse protocol first
     use_reverse = cfg.get("reverse_engineering", True)
@@ -131,7 +137,7 @@ def auto_pay(
     # 5. Browser fallback (unless reverse_only or reverse succeeded)
     if not result.get("ok") and not reverse_only:
         if use_reverse:
-            print(f"[*] Reverse protocol failed ({result.get('error', '')}), trying nodriver...")
+            _LOGGER.info("%s", f"[*] Reverse protocol failed ({result.get('error', '')}), trying nodriver...")
         # 5a. Try nodriver first (undetected Chrome)
         result = _try_nodriver_pay(
             paypal_url=paypal_url,
@@ -148,7 +154,7 @@ def auto_pay(
         )
         # 5b. Fall back to Camoufox/CloakBrowser if nodriver fails
         if not result.get("ok"):
-            print(f"[*] nodriver failed ({result.get('error', '')}), falling back to browser")
+            _LOGGER.info("%s", f"[*] nodriver failed ({result.get('error', '')}), falling back to browser")
             result = _try_browser_pay(
                 paypal_url=paypal_url,
                 card=card,
@@ -167,24 +173,29 @@ def auto_pay(
 
     # 6. Save results
     if result.get("ok"):
-        result.setdefault("email", target_email)
-        result.setdefault("paypal_status", "completed")
-        data["access_token"] = result.get("access_token", "")
-        data["oauth_refresh_token"] = result.get("oauth_refresh_token", "")
-        data["refresh_token_status"] = result.get("refresh_token_status", "")
-        data["paypal_status"] = result.get("paypal_status", "")
-        data["paypal_completed_at"] = int(time.time())
-        data["success"] = True
-        saved_path = _save_paypal_result(data, json_path)
-        result["json_path"] = saved_path
-        print(f"[*] Payment completed. Session saved: {saved_path}")
+        saved_path = _record_paypal_success(data, result, target_email=target_email, json_path=json_path)
+        _LOGGER.info("%s", f"[*] Payment completed. Session saved: {saved_path}")
     else:
         data["paypal_status"] = result.get("error", "payment_failed").split(":")[0]
         data["success"] = False
         _save_paypal_result(data, json_path)
-        print(f"[!] Payment failed: {result.get('error', '')}")
+        _LOGGER.info("%s", f"[!] Payment failed: {result.get('error', '')}")
 
     return result
+
+
+def _record_paypal_success(data: dict[str, Any], result: dict[str, Any], *, target_email: str, json_path: str) -> str:
+    result.setdefault("email", target_email)
+    result.setdefault("paypal_status", "completed")
+    data["access_token"] = result.get("access_token", "")
+    data["oauth_refresh_token"] = result.get("oauth_refresh_token", "")
+    data["refresh_token_status"] = result.get("refresh_token_status", "")
+    data["paypal_status"] = result.get("paypal_status", "")
+    data["paypal_completed_at"] = int(time.time())
+    data["success"] = True
+    saved_path = _save_paypal_result(data, json_path)
+    result["json_path"] = saved_path
+    return saved_path
 
 
 def _try_reverse_pay(
@@ -233,7 +244,7 @@ def _try_reverse_pay(
         "human_verification_timeout": int(cfg.get("human_verification_timeout", 300)),
     }
 
-    print("[*] Attempting reverse protocol...")
+    _LOGGER.info("%s", "[*] Attempting reverse protocol...")
     result = reverse_pay(
         redirect_url=paypal_url,
         card=card,
@@ -254,9 +265,9 @@ def _try_reverse_pay(
         result.setdefault("alias_email", alias_email)
         result.setdefault("card_last4", card["number"][-4:])
         result.setdefault("password", password)
-        print("[*] Reverse protocol succeeded!")
+        _LOGGER.info("%s", "[*] Reverse protocol succeeded!")
     else:
-        print(f"[!] Reverse protocol failed: {result.get('error', '')}")
+        _LOGGER.info("%s", f"[!] Reverse protocol failed: {result.get('error', '')}")
 
     return result
 
@@ -297,7 +308,7 @@ def _try_nodriver_pay(
 
     nd_proxy, close_bridge = proxy_for_browser(proxy)
 
-    print("[*] Attempting nodriver payment flow...")
+    _LOGGER.info("%s", "[*] Attempting nodriver payment flow...")
     try:
         result = run_nodriver_pay(
             paypal_url=paypal_url,
@@ -320,9 +331,9 @@ def _try_nodriver_pay(
         result.setdefault("alias_email", alias_email)
         result.setdefault("card_last4", card["number"][-4:])
         result.setdefault("password", password)
-        print("[*] nodriver payment succeeded!")
+        _LOGGER.info("%s", "[*] nodriver payment succeeded!")
     else:
-        print(f"[!] nodriver payment failed: {result.get('error', '')}")
+        _LOGGER.info("%s", f"[!] nodriver payment failed: {result.get('error', '')}")
 
     return result
 
@@ -377,7 +388,7 @@ def _try_browser_pay(
 
             del Camoufox, Screen
         except ImportError:
-            print("[*] Camoufox not installed, falling back to CloakBrowser")
+            _LOGGER.info("%s", "[*] Camoufox not installed, falling back to CloakBrowser")
             use_camoufox = False
 
     try:
@@ -441,7 +452,7 @@ def _try_browser_pay_camoufox(
     from browserforge.fingerprints import Screen
     from camoufox.sync_api import Camoufox
 
-    print("[*] Starting Camoufox anti-detect browser automation...")
+    _LOGGER.info("%s", "[*] Starting Camoufox anti-detect browser automation...")
     result: dict[str, Any] = {"ok": False, "email": alias_email}
 
     # Build proxy config for Camoufox
@@ -533,7 +544,7 @@ def _try_browser_pay_cloakbrowser(
     except ImportError:
         return {"ok": False, "error": "browser_not_installed: pip install camoufox[geoip] browserforge or cloakbrowser"}
 
-    print("[*] Starting CloakBrowser automation (fallback)...")
+    _LOGGER.info("%s", "[*] Starting CloakBrowser automation (fallback)...")
     result: dict[str, Any] = {"ok": False, "email": alias_email}
 
     browser = launch(

@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from ...kernel.sanitizer import sanitize_text
 from ..base import BrowserRegistrationError
 from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlsplit
+
+
+_LOGGER = logging.getLogger(__name__)
 
 EMAIL_SELECTORS = (
     "input[type='email']",
@@ -146,8 +150,8 @@ def _click_continue(page) -> None:
         # pi-lens-ignore: no-identity-operator-on-literals
         if submitted is True:
             return
-    except Exception:
-        pass
+    except Exception as exc:
+        _LOGGER.debug("dom probe ignored: %s", exc)
 
 
 def _click_passwordless_otp(page) -> bool:
@@ -305,8 +309,8 @@ def _browser_heartbeat(browser: Any, page: Any) -> Any:
     if callable(select_page):
         try:
             page = select_page() or page
-        except Exception:
-            pass
+        except Exception as exc:
+            _LOGGER.debug("dom probe ignored: %s", exc)
     if page is None:
         raise BrowserRegistrationError("browser_session_context_closed", "page_missing")
     try:
@@ -324,8 +328,8 @@ def _browser_heartbeat(browser: Any, page: Any) -> Any:
             try:
                 getattr(replacement, "evaluate")("() => ({host: location.hostname, ready: document.readyState})")
                 return replacement
-            except Exception:
-                pass
+            except Exception as probe_exc:
+                _LOGGER.debug("dom probe ignored: %s", probe_exc)
         raise BrowserRegistrationError("browser_session_context_closed", type(exc).__name__) from exc
     return page
 

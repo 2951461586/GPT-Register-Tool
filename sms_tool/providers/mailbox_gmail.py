@@ -106,7 +106,7 @@ def refresh_gmail_access_token(mailbox, cfg, proxy=None, scope_override=None):
     )
     try:
         body = response.json()
-    except Exception:
+    except (ValueError, TypeError):
         body = {"raw": response.text[:500]}
     if response.status_code != 200:
         raise RuntimeError(f"gmail token refresh failed: {body}")
@@ -186,7 +186,7 @@ def fetch_gmail_imap_messages(
     finally:
         try:
             mail.logout()
-        except Exception:
+        except (OSError, RuntimeError, imaplib.IMAP4.error):
             pass
     if messages:
         print(f"[gmail imap] fetched {len(messages)} message(s)")
@@ -254,7 +254,7 @@ def send_gmail_message(
     finally:
         try:
             server.quit()
-        except Exception:
+        except (OSError, RuntimeError, smtplib.SMTPException):
             pass
     return {
         "ok": True,
@@ -413,7 +413,7 @@ def _create_socks5_socket(host, port, proxy, timeout=30, remote_dns=True):
     except Exception:
         try:
             sock.close()
-        except Exception:
+        except OSError:
             pass
         raise
 
@@ -462,7 +462,7 @@ def _create_http_connect_socket(host, port, proxy, timeout=30):
     except Exception:
         try:
             sock.close()
-        except Exception:
+        except OSError:
             pass
         raise
 

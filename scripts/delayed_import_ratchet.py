@@ -141,7 +141,7 @@ PROVIDER_PREFIXES: tuple[str, ...] = (
     "sms_tool.browser.nodriver_captcha",
     "sms_tool.registration.chatgpt_bootstrap",
     "sms_tool.transport.page_truth",
-    "sms_tool.registration.humanize",
+    "sms_tool.kernel.humanize",
 )
 
 CLI_SEAM_PREFIXES: tuple[str, ...] = ("sms_tool/cli.py", "sms_tool/commands/", "sms_tool/cli_parsers/")

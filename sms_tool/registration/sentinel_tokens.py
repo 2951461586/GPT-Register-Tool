@@ -94,10 +94,10 @@ def _get_cached_sentinel(force_fresh=False):
                 age = time.time() - cache.get("ts", 0)
                 ttl = int((CFG.get("timeouts") or {}).get("token_cache_ttl", 600) or 600)
                 if age < ttl and cache.get("sentinel_token"):
-                    print(f"[*] Using cached sentinel token (age: {age:.0f}s)")
+                    _emit(_LOGGER, f"[*] Using cached sentinel token (age: {age:.0f}s)")
                     return cache
             except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-                print(f"  [!] Sentinel cache read failed: {exc}")
+                _emit(_LOGGER, f"  [!] Sentinel cache read failed: {exc}")
     return None
 
 
@@ -115,7 +115,7 @@ def _save_sentinel_cache(data):
             # hand, and the next call simply misses the cache and re-fetches.
             _emit(_LOGGER, "  [!] Sentinel cache write failed: %s", exc)
             return
-    print(f"[*] Sentinel token cached")
+    _emit(_LOGGER, f"[*] Sentinel token cached")
 
 
 def cookie_jar_header(cookies):
@@ -246,10 +246,10 @@ def _build_sentinel_pow_token(flow_data, did, flow):
     pow_info = flow_data.get("proofofwork", {}) if isinstance(flow_data, dict) else {}
     t = ""
     if pow_info.get("required") and pow_info.get("seed") and pow_info.get("difficulty"):
-        print(f"  [*] Solving sentinel PoW flow={flow} difficulty={pow_info['difficulty']}...")
+        _emit(_LOGGER, f"  [*] Solving sentinel PoW flow={flow} difficulty={pow_info['difficulty']}...")
         t = _solve_pow(str(pow_info["seed"]), str(pow_info["difficulty"]))
         if not t:
-            print(f"  [!] PoW solve failed for flow={flow}, proceeding without it")
+            _emit(_LOGGER, f"  [!] PoW solve failed for flow={flow}, proceeding without it")
     return json.dumps(
         {
             "p": flow_data.get("p", ""),
@@ -307,7 +307,7 @@ def extract_sentinel_http(proxy=None, persist=True, device_id=None):
             )
             return resp.json()
         except Exception as e:
-            print(f"  [!] HTTP sentinel fetch failed for flow={flow}: {_redact_proxy_text(e, proxy)}")
+            _emit(_LOGGER, f"  [!] HTTP sentinel fetch failed for flow={flow}: {_redact_proxy_text(e, proxy)}")
             return None
 
     for flow in flows:
@@ -331,10 +331,10 @@ def extract_sentinel_http(proxy=None, persist=True, device_id=None):
     oauth = results.get("oauth_create_account", {})
 
     if not upc.get("token"):
-        print("  [!] HTTP sentinel: no token in username_password_create response")
+        _emit(_LOGGER, "  [!] HTTP sentinel: no token in username_password_create response")
         return None
     if not authorize.get("token") or not authorize.get("so"):
-        print("  [!] HTTP sentinel: no token in authorize_continue response")
+        _emit(_LOGGER, "  [!] HTTP sentinel: no token in authorize_continue response")
         return None
 
     # Build sentinel_token (same structure as browser path)
@@ -376,7 +376,7 @@ def extract_sentinel_http(proxy=None, persist=True, device_id=None):
         session.cookies.set("oai-did", did, domain=".openai.com")
         cookie_str = "; ".join(item for item in (f"oai-did={did}", cookie_str) if item)
     except Exception as e:
-        print(f"  [!] Auth prime request failed: {_redact_proxy_text(e, proxy)}")
+        _emit(_LOGGER, f"  [!] Auth prime request failed: {_redact_proxy_text(e, proxy)}")
         cookie_str = f"oai-did={did}"
 
     result = {
@@ -529,12 +529,12 @@ def _extract_sentinel_quickjs(proxy=None, persist=True, device_id=None):
             proxy=proxy,
         )
     except Exception as exc:
-        print(f"  [!] Sentinel Node runner unavailable: {_redact_proxy_text(exc, proxy)}")
+        _emit(_LOGGER, f"  [!] Sentinel Node runner unavailable: {_redact_proxy_text(exc, proxy)}")
         return None
     try:
         assert_sentinel_device_id(result, did)
     except ValueError as exc:
-        print(f"  [!] Sentinel Node runner identity mismatch: {exc}")
+        _emit(_LOGGER, f"  [!] Sentinel Node runner identity mismatch: {exc}")
         return None
     if persist:
         _save_sentinel_cache(result)
@@ -550,7 +550,7 @@ _sentinel_cache_fill_lock = threading.Lock()
 def _extract_sentinel_uncached(proxy=None, persist=True, browser_headless: bool | None = None, device_id=None):
     mode = _sentinel_mode()
     if mode == "http" and not _http_fallback_enabled():
-        print("[!] Sentinel HTTP PoW mode is disabled; real SDK extraction is required")
+        _emit(_LOGGER, "[!] Sentinel HTTP PoW mode is disabled; real SDK extraction is required")
         return None
     providers = [mode] if mode != "auto" else ["quickjs"]
     attempted = 0
@@ -563,16 +563,16 @@ def _extract_sentinel_uncached(proxy=None, persist=True, browser_headless: bool 
         attempted += 1
         started = time.perf_counter()
         if provider == "quickjs":
-            print("[*] Extracting sentinel tokens via QuickJS SDK...")
+            _emit(_LOGGER, "[*] Extracting sentinel tokens via QuickJS SDK...")
             result = _extract_sentinel_quickjs(proxy, persist=persist, device_id=device_id)
         elif provider == "http":
-            print("[*] Extracting sentinel tokens via HTTP protocol...")
+            _emit(_LOGGER, "[*] Extracting sentinel tokens via HTTP protocol...")
             if device_id:
                 result = extract_sentinel_http(proxy, persist=persist, device_id=device_id)
             else:
                 result = extract_sentinel_http(proxy, persist=persist)
         else:
-            print("[*] Falling back to browser Sentinel extraction...")
+            _emit(_LOGGER, "[*] Falling back to browser Sentinel extraction...")
             browser_proxy = (
                 proxy.replace("socks5h://", "socks5://") if proxy and proxy.startswith("socks5h://") else proxy
             )
@@ -588,7 +588,7 @@ def _extract_sentinel_uncached(proxy=None, persist=True, browser_headless: bool 
             result.setdefault("sentinel_source", provider)
             return result
     if mode != "auto":
-        print(f"[!] Sentinel {mode} mode failed and fallback is disabled")
+        _emit(_LOGGER, f"[!] Sentinel {mode} mode failed and fallback is disabled")
     return None
 
 
@@ -634,7 +634,7 @@ def _extract_sentinel_cloakbrowser(browser_proxy, persist=True, headless=True, d
     try:
         from cloakbrowser import launch
     except ImportError:
-        print("[Error] pip install cloakbrowser")
+        _emit(_LOGGER, "[Error] pip install cloakbrowser")
         return None
 
     browser = launch(headless=bool(headless), humanize=True, proxy=browser_proxy)
@@ -655,19 +655,19 @@ def _extract_sentinel_cloakbrowser(browser_proxy, persist=True, headless=True, d
     except Exception as e:
         err_msg = str(e)
         if any(marker in err_msg for marker in ("ERR_PROXY", "ERR_TUNNEL", "ERR_CONNECTION")):
-            print(f"  [Error] Proxy connection failed: {_redact_proxy_url(browser_proxy)}")
-            print(f"  [Error] Please check if your proxy (Clash/V2Ray etc.) is running on the correct port.")
+            _emit(_LOGGER, f"  [Error] Proxy connection failed: {_redact_proxy_url(browser_proxy)}")
+            _emit(_LOGGER, f"  [Error] Please check if your proxy (Clash/V2Ray etc.) is running on the correct port.")
             browser.close()
             return None
         try:
             page.goto(page_url, wait_until="commit", timeout=120000)
         except Exception as e2:
-            print(f"  [Error] Page navigation failed: {_redact_proxy_text(e2, browser_proxy)}")
+            _emit(_LOGGER, f"  [Error] Page navigation failed: {_redact_proxy_text(e2, browser_proxy)}")
             browser.close()
             return None
 
     if "error" in page.url:
-        print(f"  [Error] Auth page returned error: {page.url[:200]}")
+        _emit(_LOGGER, f"  [Error] Auth page returned error: {page.url[:200]}")
         browser.close()
         return None
 
@@ -682,14 +682,14 @@ def _extract_sentinel_cloakbrowser(browser_proxy, persist=True, headless=True, d
             continue
         if title and "just a moment" not in title.lower():
             if cf_waited > 5:
-                print(f"  Cloudflare challenge resolved after {cf_waited}s")
+                _emit(_LOGGER, f"  Cloudflare challenge resolved after {cf_waited}s")
             break
         if cf_waited > 0 and cf_waited % 30 == 0:
-            print(f"  Waiting for Cloudflare challenge... ({cf_waited}s)")
+            _emit(_LOGGER, f"  Waiting for Cloudflare challenge... ({cf_waited}s)")
         cf_waited += 1
         time.sleep(1)
     else:
-        print("  [Error] Cloudflare challenge did not resolve in 180s")
+        _emit(_LOGGER, "  [Error] Cloudflare challenge did not resolve in 180s")
         browser.close()
         return None
 
@@ -706,10 +706,10 @@ def _extract_sentinel_cloakbrowser(browser_proxy, persist=True, headless=True, d
             pass
         time.sleep(1)
     if not sdk_loaded:
-        print("  SentinelSDK not loaded after 180s! Check proxy connectivity to auth.openai.com")
+        _emit(_LOGGER, "  SentinelSDK not loaded after 180s! Check proxy connectivity to auth.openai.com")
         browser.close()
         return None
-    print("  SentinelSDK loaded")
+    _emit(_LOGGER, "  SentinelSDK loaded")
 
     if device_id:
         try:
@@ -718,7 +718,7 @@ def _extract_sentinel_cloakbrowser(browser_proxy, persist=True, headless=True, d
                 str(device_id),
             )
         except Exception as exc:
-            print(f"  [!] Failed to apply persisted device id: {_redact_proxy_text(exc, browser_proxy)}")
+            _emit(_LOGGER, f"  [!] Failed to apply persisted device id: {_redact_proxy_text(exc, browser_proxy)}")
             browser.close()
             return None
     result = _collect_sentinel_tokens(page, ctx, persist=persist)

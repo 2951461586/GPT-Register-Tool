@@ -10,8 +10,13 @@ from ..transport.http_utils import (
     absolute_url,
     cookie_header as _cookie_header,
     cookie_presence,
+    create_account_continue_url,
+    is_user_already_exists,
     json_or_raw,
 )
+
+_create_account_continue_url = create_account_continue_url
+_is_user_already_exists = is_user_already_exists
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,25 +47,6 @@ def _email_otp_send_url(reg_data):
     if not isinstance(reg_data, dict):
         return ""
     return str(reg_data.get("continue_url") or "").strip()
-
-
-def _create_account_continue_url(create_data):
-    if not isinstance(create_data, dict):
-        return ""
-    continue_url = str(create_data.get("continue_url") or "").strip()
-    if continue_url:
-        return continue_url
-    _error_raw: object = create_data.get("error")
-    error: dict = _error_raw if isinstance(_error_raw, dict) else {}
-    return str(error.get("redirect_uri") or error.get("redirect_url") or "").strip()
-
-
-def _is_user_already_exists(create_data):
-    if not isinstance(create_data, dict):
-        return False
-    _error_raw: object = create_data.get("error")
-    error: dict = _error_raw if isinstance(_error_raw, dict) else {}
-    return str(error.get("code") or "").strip() == "user_already_exists"
 
 
 def _validate_email_otp(

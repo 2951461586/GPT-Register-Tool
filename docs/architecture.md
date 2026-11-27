@@ -59,10 +59,10 @@ assigns each module one of five layers (1 surface, 2 command adapter, 3
 application workflow, 4 adapter, 5 foundation & domain contract) and
 `scripts/import_layer_ratchet.py` fails on any module-scope import that points
 outward (`source layer > target layer`), including same-directory edges such as
-a package `__init__` re-exporting a higher-layer submodule. Two edges are
-allow-listed there with a written reason; everything else must move the shared
-helper down or invert the call. A module the manifest does not claim fails the
-check, so coverage cannot silently rot.
+a package `__init__` re-exporting a higher-layer submodule. Zero outward edges
+are allow-listed in `scripts/layer_manifest.json`; any future tension must move
+the shared helper down or invert the call. A module the manifest does not claim
+fails the check, so coverage cannot silently rot.
 
 Operation proxy precedence is explicit input, optional saved registration
 affinity, then the operation pool and its documented fallback. The ordered
@@ -208,13 +208,13 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 533 |
-| Directory pairs | 135 |
-| Mutual pairs / minority-direction edges | 16 / 29 |
-| Delayed cross-directory edges | 321 |
-| Delayed imports in the package | 461 (baseline 461) |
-| Functions at or above 150 lines | 32 (frozen, `scripts/function_length_ratchet.py`) |
-| Claimed tracked `sms_tool` modules | 295 of 295 (0 unclaimed, 38 directory-map groups) |
+| Module-level cross-directory edges | 528 |
+| Directory pairs | 133 |
+| Mutual pairs / minority-direction edges | 14 / 26 |
+| Delayed cross-directory edges | 319 |
+| Delayed imports in the package | 459 (baseline 459) |
+| Functions at or above 150 lines | 31 (frozen, `scripts/function_length_ratchet.py`) |
+| Claimed tracked `sms_tool` modules | 303 of 303 (0 unclaimed, 38 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->
 
 `tests/config/test_pilens_scope_config.py` pins the scope and the formatting
@@ -239,6 +239,24 @@ foreground commands.
 (`scripts/root_module_ratchet.py` + `scripts/root_module_baseline.json`): "one
 more file" adds no edge on day one, only a place where the next edge can be born,
 so a new root module needs a decision recorded here before the baseline grows.
+
+**2026-11-27 — Root trim to 7 modules, zero allow-listed inward edges, and monolith splits.**
+Four remaining domain/kernel modules left the `sms_tool/` root (`batch_circuit_breaker.py` →
+`kernel/circuit_breaker.py`, `cross_process_gate.py` → `kernel/cross_process_gate.py`,
+`account_seed.py` → `store/account_seed.py`, `config_usage.py` → `config/usage.py`),
+and `registration/humanize.py` moved into `kernel/humanize.py`, shrinking the frozen root
+set from 11 to 7 (`__init__.py`, `__main__.py`, `cli.py`, `doctor.py`,
+`operation_journal.py`, `storage.py`, `utils.py`). `scripts/layer_manifest.json` now holds
+**0** allow-listed outward edges (`sms_tool/paypal/__init__.py` became a PEP 562 lazy facade
+and `registration_drivers/playwright.py` moved to layer 3), `lane_coupling_ratchet` holds
+**0** cross-lane edges in both directions (`registration -> payment: 0`,
+`payment -> registration: 0`), and the top eight >1,000-line Python monoliths were split
+into cohesive sibling helpers (`codex/oauth_helpers.py`, `accounts/recovery_state.py`,
+`transport/fingerprint_profiles.py`, `registration/batch_helpers.py`,
+`providers/mailbox_remail_state.py`, `commands/cli_dispatch.py`,
+`paypal/reverse_protocol.py`, `payment/batch_report.py`). All 25 active boundary rules
+now have machine-validated specs under `docs/specs/` (24 specs), and
+`scripts/rust_crates_guard.py --cargo-check` verifies all 47 `rust/*-rs/` PyO3 crates in CI.
 
 **2026-11-21 — Domain relocation to 11 root modules.** The remaining 36 domain
 modules at the `sms_tool/` root were relocated into domain subpackages

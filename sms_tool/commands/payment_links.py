@@ -6,6 +6,8 @@ All payment-link generation routes through ``sms_tool.payment.link_manager``
 
 from __future__ import annotations
 
+from .helpers import safe_print
+
 import json
 import time
 from collections.abc import Callable, Mapping
@@ -49,7 +51,7 @@ def generate_ba_link(args: Any, ctx: PaymentLinkCommandContext) -> None:
     """Generate PayPal payment link from Access Token via the unified extraction server."""
     at = (getattr(args, "at", None) or "").strip()
     if not at:
-        print(json.dumps({"ok": False, "error": "missing --at (Access Token)"}))
+        safe_print(json.dumps({"ok": False, "error": "missing --at (Access Token)"}))
         raise SystemExit(1)
 
     _paypal_raw = ctx.runtime_config.get("paypal")
@@ -91,7 +93,7 @@ def generate_ba_link(args: Any, ctx: PaymentLinkCommandContext) -> None:
         stage_proxy_countries=ctx.stage_country_overrides(args),
     )
 
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    safe_print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)
 
@@ -100,7 +102,7 @@ def generate_upi_qr(args: Any, ctx: PaymentLinkCommandContext) -> None:
     """Generate UPI payment link / QR from Access Token via the unified extraction server."""
     at = (getattr(args, "at", None) or "").strip()
     if not at:
-        print(json.dumps({"ok": False, "error": "missing --at (Access Token)"}))
+        safe_print(json.dumps({"ok": False, "error": "missing --at (Access Token)"}))
         raise SystemExit(1)
 
     _upi_raw = ctx.runtime_config.get("upi")
@@ -147,7 +149,7 @@ def generate_upi_qr(args: Any, ctx: PaymentLinkCommandContext) -> None:
         require_zero=require_zero,
     )
 
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    safe_print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)
 
@@ -159,12 +161,12 @@ def auto_pay(args: Any) -> None:
     email = (args.email or "").strip()
     session_file = (args.session_file or "").strip()
     if not email and not session_file:
-        print("[Error] --email or --session-file is required with --auto-pay")
+        safe_print("[Error] --email or --session-file is required with --auto-pay")
         return
 
     reverse_only = getattr(args, "auto_pay_reverse_only", False)
     mode = "reverse-only" if reverse_only else "reverse+browser"
-    print(f"[*] Starting auto-pay ({mode}) for: {email or session_file}")
+    safe_print(f"[*] Starting auto-pay ({mode}) for: {email or session_file}")
     result = run_auto_pay(
         email=email,
         session_file=session_file,
@@ -177,18 +179,18 @@ def auto_pay(args: Any) -> None:
     )
 
     if result.get("ok"):
-        print("\n[*] Auto-pay completed successfully!")
-        print(f"    Email: {result.get('email', '')}")
-        print(f"    Alias: {result.get('alias_email', '')}")
-        print("    Card: [REDACTED]")
-        print(f"    Status: {result.get('paypal_status', '')}")
-        print(f"    Session: {result.get('json_path', '')}")
+        safe_print("\n[*] Auto-pay completed successfully!")
+        safe_print(f"    Email: {result.get('email', '')}")
+        safe_print(f"    Alias: {result.get('alias_email', '')}")
+        safe_print("    Card: [REDACTED]")
+        safe_print(f"    Status: {result.get('paypal_status', '')}")
+        safe_print(f"    Session: {result.get('json_path', '')}")
     else:
-        print(f"\n[!] Auto-pay failed: {result.get('error', 'unknown error')}")
+        safe_print(f"\n[!] Auto-pay failed: {result.get('error', 'unknown error')}")
         if result.get("failed_step"):
-            print(f"    Failed step: {result['failed_step']}")
+            safe_print(f"    Failed step: {result['failed_step']}")
 
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    safe_print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def batch_auto_pay(args: Any) -> None:
@@ -209,18 +211,18 @@ def batch_auto_pay(args: Any) -> None:
         pending = pending[:limit]
 
     if not pending:
-        print("[*] No pending accounts found for auto-pay")
+        safe_print("[*] No pending accounts found for auto-pay")
         return
 
     total = len(pending)
-    print(f"[*] Batch auto-pay: {total} account(s) to process")
-    print("=" * 60)
+    safe_print(f"[*] Batch auto-pay: {total} account(s) to process")
+    safe_print("=" * 60)
 
     results = []
     for i, row in enumerate(pending, 1):
         email = row.get("email", "")
-        print(f"[{i}/{total}] Processing: {email}")
-        print("-" * 40)
+        safe_print(f"[{i}/{total}] Processing: {email}")
+        safe_print("-" * 40)
 
         result = run_auto_pay(
             email=email,
@@ -233,27 +235,27 @@ def batch_auto_pay(args: Any) -> None:
         results.append(result)
 
         if result.get("ok"):
-            print(f"[OK] {email} - Payment completed")
+            safe_print(f"[OK] {email} - Payment completed")
         else:
-            print(f"[FAIL] {email} - {result.get('error', 'unknown')}")
+            safe_print(f"[FAIL] {email} - {result.get('error', 'unknown')}")
 
         if i < total:
             time.sleep(5)
 
-    print("" + "=" * 60)
-    print("Batch Auto-Pay Summary:")
-    print("=" * 60)
+    safe_print("" + "=" * 60)
+    safe_print("Batch Auto-Pay Summary:")
+    safe_print("=" * 60)
     ok_count = sum(1 for r in results if r.get("ok"))
     fail_count = total - ok_count
-    print(f"  Total: {total}")
-    print(f"  Success: {ok_count}")
-    print(f"  Failed: {fail_count}")
+    safe_print(f"  Total: {total}")
+    safe_print(f"  Success: {ok_count}")
+    safe_print(f"  Failed: {fail_count}")
 
     if fail_count > 0:
-        print("Failed accounts:")
+        safe_print("Failed accounts:")
         for r in results:
             if not r.get("ok"):
-                print(f"  - {r.get('email', 'unknown')}: {r.get('error', 'unknown')}")
+                safe_print(f"  - {r.get('email', 'unknown')}: {r.get('error', 'unknown')}")
 
 
 def list_paypal_ba_queue(args: Any) -> None:

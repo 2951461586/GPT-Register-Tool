@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import logging
 import time
 
 from . import dom_fields
 
-from ...registration.humanize import delay as humanize_delay
+from ...kernel.humanize import delay as humanize_delay
 from ..base import BrowserRegistrationError
 from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlsplit
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _raise_if_registration_cancelled() -> None:
@@ -70,8 +74,8 @@ def _ensure_signup_page_ready(page, *, timeout_seconds: int = 45, config: Mappin
             field = page.locator(selector).first
             if field.is_visible() and field.is_editable():
                 return
-        except Exception:
-            pass
+        except Exception as exc:
+            _LOGGER.debug("browser page state probe ignored: %s", exc)
         # P3: randomize the settle interval so every account in a batch does
         # not share one identical timing signature.
         _settle = humanize_delay("page_settle", config=config, sleep=False)
@@ -88,8 +92,8 @@ def _ensure_signup_page_ready(page, *, timeout_seconds: int = 45, config: Mappin
             raise BrowserRegistrationError("browser_email_field_not_editable")
     except BrowserRegistrationError:
         raise
-    except Exception:
-        pass
+    except Exception as exc:
+        _LOGGER.debug("browser page state probe ignored: %s", exc)
     raise BrowserRegistrationError("browser_email_field_missing")
 
 
@@ -226,8 +230,8 @@ def _wait_for_registration_state(
                 page = dom_fields._browser_heartbeat(browser, page)
             except BrowserRegistrationError:
                 raise
-            except Exception:
-                pass
+            except Exception as exc:
+                _LOGGER.debug("browser page state probe ignored: %s", exc)
         if wait_for_otp_transition:
             # OTP controls can remain mounted for a short period after the
             # SPA has already routed. Prefer the destination URL/controls
@@ -267,8 +271,8 @@ def _wait_for_registration_state(
                     )
                     if profile_field is not None:
                         return "profile"
-            except Exception:
-                pass
+            except Exception as exc:
+                _LOGGER.debug("browser page state probe ignored: %s", exc)
         quick = _quick_auth_state(page)
         if quick in {"challenge", "login_password", "password", "profile", "authenticated"}:
             return quick
@@ -279,8 +283,8 @@ def _wait_for_registration_state(
         try:
             if dom_fields._unexpected_identity_provider(str(page.url or "")):
                 return "identity_provider"
-        except Exception:
-            pass
+        except Exception as exc:
+            _LOGGER.debug("browser page state probe ignored: %s", exc)
         if dom_fields._first_visible(page, ("input[type='password']", "input[name='password']")) is not None:
             return "password"
         if dom_fields._otp_fields(page) is not None and not wait_for_otp_transition:
@@ -307,8 +311,8 @@ def _wait_for_registration_state(
             host = (parsed.hostname or "").lower()
             if (host == "chatgpt.com" or host.endswith(".chatgpt.com")) and "/auth/" not in parsed.path.lower():
                 return "authenticated"
-        except Exception:
-            pass
+        except Exception as exc:
+            _LOGGER.debug("browser page state probe ignored: %s", exc)
         _pause = humanize_delay("state_probe", config=config, sleep=False)
         try:
             page.wait_for_timeout(int(_pause * 1000))
@@ -396,8 +400,8 @@ def _post_otp_registration_state(
             quick = _quick_auth_state(page)
             if quick == "profile":
                 return quick
-    except Exception:
-        pass
+    except Exception as exc:
+        _LOGGER.debug("browser page state probe ignored: %s", exc)
     return "unknown"
 
 

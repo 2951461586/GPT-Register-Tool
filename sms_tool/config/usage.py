@@ -60,10 +60,10 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, NamedTuple
 
-from .config import CFG
-from .kernel.paths import config_dir, runtime_file
+from . import CFG
+from ..kernel.paths import config_dir, runtime_file
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 #: Config shards that make up the runtime configuration.
 SHARD_NAMES = ("config.json", "proxy.json", "runtime.json", "payment.json")

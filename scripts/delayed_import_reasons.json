@@ -24,6 +24,14 @@
       "reason": "deferred",
       "why": "Proxy authority consolidation (2026-11-24): replaces the retired phone_proxy delayed import with proxy.entry.infer_proxy_country inside the helper so importing browser.fingerprint_pool does not grow browser -> proxy at module scope."
     },
+    "sms_tool/codex/oauth_helpers.py -> sms_tool.mailbox.quarantine": {
+      "reason": "deferred",
+      "why": "Relocated from codex/oauth.py during monolith split: quarantine check only runs when rehydrating a mailbox for email-OTP recovery."
+    },
+    "sms_tool/codex/oauth_helpers.py -> sms_tool.mailbox.router": {
+      "reason": "deferred",
+      "why": "Relocated from codex/oauth.py during monolith split: mailbox pool lookup runs only on fallback rehydration paths to avoid pulling pool I/O at import time."
+    },
     "sms_tool/config/schema.py -> sms_tool.payment.catalog": {
       "reason": "deferred",
       "why": "validate_config imports the catalog inside the function so sms_tool.config (imported by ~64 modules) does not pull the payment lane in at module scope"
@@ -40,11 +48,15 @@
       "reason": "deferred",
       "why": "Proxy-pool admin (2026-10-26): `--desktop-read proxy-pool` calls proxy.admin.list_pool. The account read path is the desktop's hot start path, so the proxy admin stack (registry/health/screening) is imported inside read_proxy_pool instead of at module scope."
     },
+    "sms_tool/doctor.py -> sms_tool.config.usage": {
+      "reason": "deferred",
+      "why": "doctor only scans unread config keys during the full config diagnostic, avoiding AST scanning setup on lightweight probes (relocated from root sms_tool/config_usage.py)."
+    },
     "sms_tool/doctor.py -> sms_tool.transport.auth_headers": {
       "reason": "deferred",
       "why": "curl_cffi capability probe (2026-11-19): the accepted version bracket now lives in auth_headers (CURL_CFFI_MIN/MINOR), so doctor reads it instead of repeating the literals that drifted. Deferred because doctor's own import surface is deliberately light."
     },
-    "sms_tool/mailbox/reclaim.py -> sms_tool.cross_process_gate": {
+    "sms_tool/mailbox/reclaim.py -> sms_tool.kernel.cross_process_gate": {
       "reason": "deferred",
       "why": "The reclaim ledger append must hold the same cross-process write lock as the pool writer, but cross_process_gate is a root module and scripts/import_layer_ratchet.py freezes mailbox->root edges at module scope. The import is function-local so the cost lands in this baseline instead of widening the architecture ceiling."
     },
@@ -96,10 +108,6 @@
       "reason": "deferred",
       "why": "支付资格 (2026-10-26, payment lane): the qualification probe is reached only by the batch/CLI. Its config/phone_proxy/proxy.routing imports are function-local so a payment-module import does not pull the proxy transport stack in, and so the frozen import-layer pairs stay flat. The egress candidate order is resolved per account inside the probe."
     },
-    "sms_tool/payment/qualification_batch.py -> sms_tool.batch_circuit_breaker": {
-      "reason": "deferred",
-      "why": "支付资格 batch (2026-10-26): the whole-batch breaker is constructed inside _breaker(); deferring keeps payment -> sms_tool flat and matches the allow-listed direction documented in layer_manifest.json."
-    },
     "sms_tool/payment/qualification_batch.py -> sms_tool.config": {
       "reason": "deferred",
       "why": "支付资格 batch (2026-10-26): _runtime_config() resolves CFG at call time so the payment lane does not add a module-level payment -> sms_tool edge for a value only used by the runner/preflight."
@@ -107,6 +115,10 @@
     "sms_tool/payment/qualification_batch.py -> sms_tool.desktop.ipc": {
       "reason": "deferred",
       "why": "支付资格 batch (2026-10-26, payment lane): mirrors promotion_batch's deferred imports (account store, persistence marker, progress sink, egress routing). Deferring them keeps a desktop read-only start from loading the account store through this module. Progress events are the only IPC use and emit_event is already env-gated."
+    },
+    "sms_tool/payment/qualification_batch.py -> sms_tool.kernel.circuit_breaker": {
+      "reason": "deferred",
+      "why": "支付资格 batch (relocated 2026-11-27 from batch_circuit_breaker to kernel/circuit_breaker): _breaker() resolves BatchCircuitBreaker at call time to keep qualification_batch module-scope imports minimal."
     },
     "sms_tool/payment/qualification_batch.py -> sms_tool.proxy.edge_probe": {
       "reason": "deferred",
@@ -199,6 +211,18 @@
     "sms_tool/proxy/screening.py -> sms_tool.geo.resolver": {
       "reason": "deferred",
       "why": "P0 proxy screening (2026-10-26): the dual-pass intel probe needs geo.resolver on every call, but scripts/import_layer_ratchet.py has no proxy -> geo module-level edge and the transport layer must not pull the geo probe stack in at import time. The import runs inside probe_once()/secondary_endpoints(), so only the screen command and the batch runner pay for it."
+    },
+    "sms_tool/registration/batch_helpers.py -> sms_tool.desktop.ipc": {
+      "reason": "deferred",
+      "why": "Relocated from registration/batch_runner.py during monolith split: desktop IPC skipped-mailbox notification is optional and only imported when mailboxes are skipped."
+    },
+    "sms_tool/registration/batch_helpers.py -> sms_tool.registration.cancel": {
+      "reason": "deferred",
+      "why": "Relocated from registration/batch_runner.py during monolith split: cancel_scope/cancellable_sleep are only imported when batch dispatch or retry sleep actually executes."
+    },
+    "sms_tool/registration/batch_helpers.py -> sms_tool.registration.pulse": {
+      "reason": "deferred",
+      "why": "Relocated from registration/batch_runner.py during monolith split: pulse batch scheduler is only imported when multi-worker batch execution runs."
     },
     "sms_tool/registration/batch_runner.py -> sms_tool.proxy.asn_registry": {
       "reason": "deferred",

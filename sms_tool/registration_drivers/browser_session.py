@@ -192,8 +192,8 @@ class PlaywrightBrowserSession:
                 shutdown = getattr(item, "stop", None) if item is self._playwright else getattr(item, "close", None)
                 if callable(shutdown):
                     shutdown()
-            except Exception:
-                pass
+            except Exception as exc:
+                _LOGGER.debug("browser session probe/cleanup ignored: %s", exc)
         self.page = None
         self.context = None
         self.browser = None
@@ -217,8 +217,8 @@ class PlaywrightBrowserSession:
         if self.context is not None:
             try:
                 self.context.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                _LOGGER.debug("browser session probe/cleanup ignored: %s", exc)
         self.page = None
         self.context = None
         self.stealth_status = {"playwright_stealth": False}
@@ -324,8 +324,8 @@ class PlaywrightBrowserSession:
         self.page = max(reversed(candidates), key=score)
         try:
             self.page.bring_to_front()
-        except Exception:
-            pass
+        except Exception as exc:
+            _LOGGER.debug("browser session probe/cleanup ignored: %s", exc)
         return self.page
 
     @staticmethod
@@ -353,8 +353,8 @@ class PlaywrightBrowserSession:
             try:
                 if self._is_chatgpt_url(str(self.page.url or "")):
                     return True
-            except Exception:
-                pass
+            except Exception as exc:
+                _LOGGER.debug("browser session probe/cleanup ignored: %s", exc)
             if self.switch_to_chatgpt_page():
                 return True
             if time.monotonic() >= deadline:
@@ -365,8 +365,8 @@ class PlaywrightBrowserSession:
         except Exception:
             try:
                 self.page.evaluate("window.stop()")
-            except Exception:
-                pass
+            except Exception as exc:
+                _LOGGER.debug("browser session probe/cleanup ignored: %s", exc)
         try:
             return self._is_chatgpt_url(str(self.page.url or ""))
         except Exception:

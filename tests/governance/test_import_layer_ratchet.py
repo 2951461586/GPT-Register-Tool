@@ -515,10 +515,17 @@ def test_summary_facts_are_pinned():
         # routed `paypal/extract.py`'s `CHATGPT_TIMEOUT` directly to `kernel.timeouts`
         # (+1 inward edge), while clearing all 92 F401 unused imports removed 3 stale
         # cross-dir edges including one mutual directory pair (`payment <-> paypal`).
-        "total_module_edges": 533,
-        "ordered_pairs": 135,
-        "mutual_pairs": 16,
-        "minority_edges": 29,
+        # 2026-11-27 (P2.1–P2.3 layering, root trim 11->7, monolith splits):
+        # 533 -> 528 edges (-5), ordered_pairs 135 -> 133 (-2), mutual_pairs 16 -> 14 (-2),
+        # minority_edges 29 -> 26 (-3), delayed_cross_dir_edges 321 -> 318 (-3).
+        # Relocated batch_circuit_breaker/cross_process_gate/humanize into kernel/,
+        # account_seed into store/, config_usage into config/; converted paypal/__init__.py
+        # to a PEP 562 lazy facade (layer_manifest allow 3 -> 0); split the top 8 >1000L
+        # Python monoliths into sibling modules with zero cross-dir edge inflation.
+        "total_module_edges": 528,
+        "ordered_pairs": 133,
+        "mutual_pairs": 14,
+        "minority_edges": 26,
         # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
         # took over the mailbox_pool_writer and desktop_ipc imports as delayed
         # ones. Before that, 190 -> 188 when store/connection.py stopped
@@ -634,7 +641,9 @@ def test_summary_facts_are_pinned():
         # cycle-break / DI edges (all recorded in delayed_import_reasons.json).
         # 2026-11-24 (Legacy payment extractor retirement): 352 -> 321 (-31)
         # after removing legacy UPI/PayPal-link/wallet packages and regional adapters.
-        "delayed_cross_dir_edges": 321,
+        # 2026-11-27 (P2.1–P2.3): 321 -> 319 (-2) after root-module relocations and
+        # monolith splits eliminated redundant cross-dir delayed imports.
+        "delayed_cross_dir_edges": 319,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
         # `pay_link` re-exports type-only (the module is not a package, so the

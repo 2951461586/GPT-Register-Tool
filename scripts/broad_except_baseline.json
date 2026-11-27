@@ -1,10 +1,6 @@
 {
   "_comment": "Broad-except gate state (see scripts/broad_except_ratchet.py). 'files' is frozen debt with a hard ceiling in 'policy'; 'whitelist' is the reviewed set where a broad handler is the design. A file absent from both has an allowance of 0.",
   "files": {
-    "sms_tool/account_seed.py": {
-      "broad": 2,
-      "silent": 1
-    },
     "sms_tool/accounts/account_2fa.py": {
       "broad": 4,
       "silent": 0
@@ -30,16 +26,16 @@
       "silent": 0
     },
     "sms_tool/accounts/account_liveness.py": {
-      "broad": 9,
-      "silent": 4
+      "broad": 7,
+      "silent": 0
     },
     "sms_tool/accounts/account_promotion.py": {
       "broad": 6,
       "silent": 0
     },
     "sms_tool/accounts/account_recovery.py": {
-      "broad": 10,
-      "silent": 5
+      "broad": 5,
+      "silent": 0
     },
     "sms_tool/accounts/account_scan.py": {
       "broad": 4,
@@ -50,8 +46,8 @@
       "silent": 2
     },
     "sms_tool/accounts/recovery_batch.py": {
-      "broad": 8,
-      "silent": 7
+      "broad": 1,
+      "silent": 0
     },
     "sms_tool/accounts/wham_usage.py": {
       "broad": 1,
@@ -78,8 +74,8 @@
       "silent": 0
     },
     "sms_tool/browser/captcha_solver.py": {
-      "broad": 16,
-      "silent": 13
+      "broad": 15,
+      "silent": 0
     },
     "sms_tool/browser/fingerprint_pool.py": {
       "broad": 2,
@@ -106,7 +102,11 @@
       "silent": 0
     },
     "sms_tool/codex/oauth.py": {
-      "broad": 17,
+      "broad": 4,
+      "silent": 0
+    },
+    "sms_tool/codex/oauth_helpers.py": {
+      "broad": 9,
       "silent": 0
     },
     "sms_tool/codex/sentinel.py": {
@@ -346,8 +346,8 @@
       "silent": 0
     },
     "sms_tool/providers/mailbox_gmail.py": {
-      "broad": 8,
-      "silent": 4
+      "broad": 3,
+      "silent": 0
     },
     "sms_tool/providers/mailbox_graph.py": {
       "broad": 1,
@@ -358,7 +358,7 @@
       "silent": 0
     },
     "sms_tool/providers/mailbox_remail.py": {
-      "broad": 16,
+      "broad": 12,
       "silent": 1
     },
     "sms_tool/providers/mailbox_smailr.py": {
@@ -386,8 +386,8 @@
       "silent": 1
     },
     "sms_tool/proxy/bridge.py": {
-      "broad": 13,
-      "silent": 6
+      "broad": 7,
+      "silent": 1
     },
     "sms_tool/proxy/edge_probe.py": {
       "broad": 6,
@@ -417,9 +417,13 @@
       "broad": 5,
       "silent": 0
     },
+    "sms_tool/registration/batch_helpers.py": {
+      "broad": 2,
+      "silent": 0
+    },
     "sms_tool/registration/batch_runner.py": {
-      "broad": 19,
-      "silent": 7
+      "broad": 9,
+      "silent": 0
     },
     "sms_tool/registration/bootstrap_stages.py": {
       "broad": 1,
@@ -494,7 +498,7 @@
       "silent": 1
     },
     "sms_tool/registration/state.py": {
-      "broad": 3,
+      "broad": 1,
       "silent": 0
     },
     "sms_tool/registration/warmup.py": {
@@ -503,7 +507,7 @@
     },
     "sms_tool/registration_drivers/browser_flow/dom_fields.py": {
       "broad": 15,
-      "silent": 4
+      "silent": 1
     },
     "sms_tool/registration_drivers/browser_flow/flow_steps.py": {
       "broad": 5,
@@ -519,19 +523,19 @@
     },
     "sms_tool/registration_drivers/browser_flow/page_state.py": {
       "broad": 14,
-      "silent": 7
+      "silent": 0
     },
     "sms_tool/registration_drivers/browser_flow/session.py": {
       "broad": 9,
-      "silent": 5
+      "silent": 0
     },
     "sms_tool/registration_drivers/browser_session.py": {
       "broad": 14,
-      "silent": 5
+      "silent": 0
     },
     "sms_tool/registration_drivers/external_sessions/managed.py": {
       "broad": 17,
-      "silent": 9
+      "silent": 0
     },
     "sms_tool/registration_drivers/external_sessions/probe.py": {
       "broad": 1,
@@ -546,8 +550,8 @@
       "silent": 0
     },
     "sms_tool/sentinel/client.py": {
-      "broad": 9,
-      "silent": 4
+      "broad": 6,
+      "silent": 2
     },
     "sms_tool/session/converter.py": {
       "broad": 6,
@@ -558,8 +562,8 @@
       "silent": 2
     },
     "sms_tool/store/accounts.py": {
-      "broad": 7,
-      "silent": 3
+      "broad": 6,
+      "silent": 2
     },
     "sms_tool/store/markers.py": {
       "broad": 10,
@@ -616,12 +620,12 @@
         "reason": "The protocol lane is where a swallowed exception is indistinguishable from a protocol failure: it lands in the funnel as 'unknown' while the batch keeps spending mailboxes. Silent handlers are 0 here and the broad count may only shrink."
       }
     },
-    "max_broad": 739,
-    "max_silent": 158
+    "max_broad": 689,
+    "max_silent": 77
   },
   "totals": {
-    "broad": 739,
-    "silent": 155
+    "broad": 689,
+    "silent": 77
   },
   "whitelist": {
     "sms_tool/browser/pool.py": {
@@ -650,9 +654,9 @@
       "silent": 4
     },
     "sms_tool/registration/batch_runner.py": {
-      "broad": 19,
+      "broad": 9,
       "reason": "Batch worker isolation, environment-ledger observation channel, IPC progress sink, and browser-pool teardown: a secondary sink or worker callback failure must not abort the remaining batch.",
-      "silent": 7
+      "silent": 0
     },
     "sms_tool/registration/chatgpt_bootstrap.py": {
       "broad": 6,

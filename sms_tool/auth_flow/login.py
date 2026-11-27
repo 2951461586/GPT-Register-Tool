@@ -9,6 +9,8 @@ from urllib.parse import quote, urlencode
 from . import deps, otp, password_step, sentinel_flow, steps
 from ..kernel.transport import TRANSPORT_ERRORS
 
+from .signup import _emit_operator_line
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -48,7 +50,7 @@ def _fetch_session_csrf_token(session, chat_base, base_headers, did, session_log
     except TRANSPORT_ERRORS as exc:
         # The try body is one priming GET. A defect (a bad header, a broken helper)
         # must surface instead of being printed as a transport warning.
-        print(f"  Existing account prime transport warning: {exc}")
+        _emit_operator_line(_LOGGER, f"  Existing account prime transport warning: {exc}")
     try:
         response = deps.request_with_retry(
             session,
@@ -68,12 +70,12 @@ def _fetch_session_csrf_token(session, chat_base, base_headers, did, session_log
             return ""
         return str(body.get("csrfToken") or "").strip()
     except Exception as exc:  # broad-except: compat
-        print(f"  Existing account csrf transport warning: {exc}")
+        _emit_operator_line(_LOGGER, f"  Existing account csrf transport warning: {exc}")
         return ""
 
 
 def _existing_login_signin(session, username, did, session_logging_id, auth_base, chat_base, base_headers, csrf_token):
-    print("  Existing account login: probing the login method before spending an email code")
+    _emit_operator_line(_LOGGER, "  Existing account login: probing the login method before spending an email code")
     # The caller may hand us a token minted on a *different* session: one of
     # registration_handlers' two call sites builds a brand new ``login_session``
     # and still passes the main session's ``s.csrf_token``.  Mint the token on
@@ -139,7 +141,7 @@ def _existing_login_signin(session, username, did, session_logging_id, auth_base
         impersonate=deps.auth_impersonate(),
     )
     current_url = str(authorize_resp.url or "")
-    print(f"  Existing account authorize: {authorize_resp.status_code} {current_url}")
+    _emit_operator_line(_LOGGER, f"  Existing account authorize: {authorize_resp.status_code} {current_url}")
 
     current_lower = current_url.lower()
     if "chatgpt.com" in current_lower and (
@@ -195,7 +197,7 @@ def _existing_login_continue(session, username, did, auth_base, base_headers, pr
         # Only the POST is dropped -- the sentinel is still minted so the OTP
         # send and TOTP steps keep using a token fresher than the caller's.
         fresh_data, fresh_token, fresh_so = sentinel_flow._authorize_continue_sentinel(session, did, proxy=proxy)
-        print("  Existing account continue: skipped (already at email-verification)")
+        _emit_operator_line(_LOGGER, "  Existing account continue: skipped (already at email-verification)")
     else:
         fresh_data, fresh_token, fresh_so = sentinel_flow._authorize_continue_sentinel(session, did, proxy=proxy)
         # ``screen_hint`` is a plain string while the username entry is an
@@ -254,9 +256,9 @@ def _existing_login_continue(session, username, did, auth_base, base_headers, pr
             # POST is the original path and a transport error still propagates.
             if not on_verified_page:
                 raise
-            print(f"  Existing account continue transport warning: {exc}")
+            _emit_operator_line(_LOGGER, f"  Existing account continue transport warning: {exc}")
         if continue_resp is not None:
-            print(f"  Existing account continue: {continue_resp.status_code}")
+            _emit_operator_line(_LOGGER, f"  Existing account continue: {continue_resp.status_code}")
             continue_body = deps._json_or_raw(continue_resp, limit=1000)
             if isinstance(continue_body, dict):
                 continue_payload = continue_body
@@ -285,14 +287,15 @@ def _existing_login_continue(session, username, did, auth_base, base_headers, pr
                         )
                         current_url = str(getattr(follow_resp, "url", "") or next_url)
                     except Exception as e:
-                        print(f"  Existing account continue follow transport warning: {e}")
+                        _emit_operator_line(_LOGGER, f"  Existing account continue follow transport warning: {e}")
             elif on_verified_page:
                 # A refusal here is not new information -- the old behaviour
                 # never asked, so it must not become a new failure mode.  Keep
                 # the skip and let the probe report why it could not answer.
-                print(
+                _emit_operator_line(
+                    _LOGGER,
                     "  Existing account continue refused on the verified page: "
-                    f"{continue_resp.status_code} (keeping the skip)"
+                    f"{continue_resp.status_code} (keeping the skip)",
                 )
             elif continue_resp.status_code not in (409, 400):
                 return ({"ok": False, "error": f"existing_login_continue_failed:{continue_resp.status_code}"}, None)
@@ -341,9 +344,10 @@ def _existing_login_probe(
         payload=continue_payload,
         continue_url=continue_next_url,
     )
-    print(
+    _emit_operator_line(
+        _LOGGER,
         f"  Existing account login method probe: password_step={probe['password_step']} "
-        f"({probe['signal'] or 'no_signal'}; source={probe.get('source') or 'none'})"
+        f"({probe['signal'] or 'no_signal'}; source={probe.get('source') or 'none'})",
     )
     # pi-lens-ignore: no-identity-operator-on-literals
     if probe["password_step"] is False:

@@ -17,13 +17,13 @@ the *gate* (per-pair, only-down); this file is the *view*.
 
 | Measure | Value |
 | --- | ---: |
-| Modules | 295 |
-| Module-level import edges | 958 |
+| Modules | 303 |
+| Module-level import edges | 962 |
 | Delayed (function-local) edges | 309 |
-| Type-only (`if TYPE_CHECKING`) edges | 58 |
+| Type-only (`if TYPE_CHECKING`) edges | 65 |
 | Strongly connected components (size > 1) | 0 |
 | Modules inside a cycle | 0 |
-| Mutually dependent directory pairs | 16 |
+| Mutually dependent directory pairs | 14 |
 
 ## Cycles
 
@@ -35,17 +35,15 @@ None.
 | --- |
 | `sms_tool` ↔ `sms_tool/desktop` |
 | `sms_tool` ↔ `sms_tool/payment` |
-| `sms_tool` ↔ `sms_tool/registration` |
 | `sms_tool` ↔ `sms_tool/store` |
 | `sms_tool/accounts` ↔ `sms_tool/registration` |
 | `sms_tool/auth_flow` ↔ `sms_tool/registration` |
 | `sms_tool/browser` ↔ `sms_tool/registration_drivers` |
-| `sms_tool/codex` ↔ `sms_tool/registration` |
 | `sms_tool/desktop` ↔ `sms_tool/mailbox` |
 | `sms_tool/desktop` ↔ `sms_tool/phone` |
 | `sms_tool/desktop` ↔ `sms_tool/registration` |
 | `sms_tool/mailbox` ↔ `sms_tool/providers` |
-| `sms_tool/payment` ↔ `sms_tool/paypal` |
+| `sms_tool/payment` ↔ `sms_tool/store` |
 | `sms_tool/phone` ↔ `sms_tool/registration` |
 | `sms_tool/proxy` ↔ `sms_tool/transport` |
 | `sms_tool/registration` ↔ `sms_tool/registration_drivers` |
@@ -64,8 +62,8 @@ None.
 | `sms_tool.transport.auth_headers` | 26 |
 | `sms_tool.observability.operator_output` | 18 |
 | `sms_tool.transport.http_client` | 15 |
-| `sms_tool.storage` | 13 |
 | `sms_tool.registration.state` | 12 |
 | `sms_tool.registration_drivers.base` | 12 |
-| `sms_tool.cross_process_gate` | 10 |
-| `sms_tool.accounts.account_liveness` | 9 |
+| `sms_tool.storage` | 12 |
+| `sms_tool.kernel.cross_process_gate` | 10 |
+| `sms_tool.kernel.failure_registry` | 10 |

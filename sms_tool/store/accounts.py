@@ -1,3 +1,5 @@
+import logging
+
 """accounts submodule of the former storage.py (mechanical split, bodies unchanged)."""
 
 from collections.abc import Mapping
@@ -27,6 +29,9 @@ from .normalize import (
     _status,
     _success_value,
 )
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _terminal_state_from(status: str, error: str, raw_json: str) -> str:
@@ -600,8 +605,8 @@ def migrate_account_email(old_email, new_email, verified_data, *, runtime_config
                     session_target.write_bytes(session_backup)
                 elif session_target.exists():
                     session_target.unlink()
-            except Exception:
-                pass
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+                _LOGGER.debug("session snapshot merge skipped: %s", exc)
         return False
     finally:
         conn.close()

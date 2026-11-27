@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 
 import requests
 
-from ..cross_process_gate import cross_process_write_lock
+from ..kernel.cross_process_gate import cross_process_write_lock
 from ..proxy.entry import (
     normalize_proxy_url as _normalize_proxy_url,
     redact_proxy_url as _canon_redact_proxy_url,

@@ -20,9 +20,45 @@ from .account_liveness import (
     browser_fetch_for_account as browser_fetch_for_account,
     probe_account_liveness,
 )
-from .account_terminal import text_has_account_deactivated
+from .recovery_state import (
+    _CODE_PHASE_MARKERS as _CODE_PHASE_MARKERS,
+    _NO_CODE_SPENT_MARKERS as _NO_CODE_SPENT_MARKERS,
+    _PRE_OTP_RETRY_MARKERS as _PRE_OTP_RETRY_MARKERS,
+    _RELOGIN_CODE_RE as _RELOGIN_CODE_RE,
+    _RELOGIN_STATUS_RE as _RELOGIN_STATUS_RE,
+    _TRANSIENT_RELOGIN_MODES as _TRANSIENT_RELOGIN_MODES,
+    _has_relogin_material as _has_relogin_material,
+    _is_pre_otp_proxy_retryable,
+    _is_token_revoked_drop as _is_token_revoked_drop,
+    _item_is_account_deactivated as _item_is_account_deactivated,
+    _local_account_data as _local_account_data,
+    _looks_account_deactivated,
+    _normalize_email as _normalize_email,
+    _normalize_relogin_mode as _normalize_relogin_mode,
+    _recoverable_on_other_proxy,
+    _relogin_attempt_shape as _relogin_attempt_shape,
+    _relogin_dead_end_reason as _relogin_dead_end_reason,
+    _relogin_failure_shape as _relogin_failure_shape,
+    _relogin_spent_email_code,
+    clear_relogin_failure as _clear_relogin_failure_impl,
+    health_status_code as _health_status_code_impl,
+    is_permanently_deactivated as is_permanently_deactivated,
+    is_transient_transport_error as is_transient_transport_error,
+    local_quota_accounts as _local_quota_accounts_impl,
+    mark_successful_relogin as _mark_successful_relogin_impl,
+    persist_permanent_deactivation as _persist_permanent_deactivation_impl,
+    persist_token_revoked_drop as _persist_token_revoked_drop_impl,
+    record_relogin_failure as _record_relogin_failure_impl,
+    recovery_allow_direct as _recovery_allow_direct_impl,
+    recovery_proxy_candidates as _recovery_proxy_candidates_impl,
+    relogin_cooldown_active as _relogin_cooldown_active_impl,
+    relogin_cooldown_seconds as _relogin_cooldown_seconds_impl,
+    relogin_dead_end_permanent as _relogin_dead_end_permanent_impl,
+    relogin_repeat_cooldown_seconds as _relogin_repeat_cooldown_seconds_impl,
+    timed_out_health_result as _timed_out_health_result_impl,
+)
 from ..config import CFG
-from ..transport.http_client import is_transient_transport_error
+from ..payment.promotion_states import AUTH_INVALID_LABEL, PROMOTION_STATE_AUTH_INVALID
 from ..proxy.routing import proxy_pool_for
 from ..kernel.paths import runtime_file
 from ..registration.state import _stored_registration_password
@@ -35,10 +71,6 @@ from ..storage import (
     upsert_account,
 )
 from ..mailbox.quarantine import mailbox_relogin_allowed as mailbox_relogin_allowed
-from ..payment.promotion_states import (
-    AUTH_INVALID_LABEL,
-    PROMOTION_STATE_AUTH_INVALID,
-)
 from ..providers.mailbox_graph import MailboxAuthInvalidError
 from ..utils import atomic_write_text
 from ..transport import endpoints
@@ -303,35 +335,6 @@ def relogin_chatgpt_email_account(
             "mode": "chatgpt_email_otp",
             "error": _redact_recovery_error(exc),
         }
-
-
-_PRE_OTP_RETRY_MARKERS = (
-    "session_circuit_open",
-    "missing_csrf_token",
-    "existing_login_continue_failed:429",
-    "existing_login_continue_failed:403",
-    "existing_login_continue_failed:502",
-    "existing_login_continue_failed:503",
-    "existing_login_continue_failed:504",
-    "edge_challenge",
-    "connect tunnel failed",
-)
-
-
-def _is_pre_otp_proxy_retryable(result: Any) -> bool:
-    """True when ``chatgpt_email_otp`` failed before spending an email code."""
-    if not isinstance(result, dict) or result.get("ok"):
-        return False
-    if result.get("terminal") or _looks_account_deactivated(result):
-        return False
-    if str(result.get("error") or "") == "mailbox_auth_invalid":
-        return False
-    if _relogin_spent_email_code(result):
-        return False
-    error = str(result.get("error") or "").lower()
-    if any(marker in error for marker in _PRE_OTP_RETRY_MARKERS):
-        return True
-    return is_transient_transport_error(error)
 
 
 def _needs_passwordless_email_fallback(account: dict[str, Any], result: Any) -> bool:
@@ -812,16 +815,7 @@ def _verify_and_persist_candidate(
 
 
 def _promotion_auth_failure(data: Any) -> bool:
-    """True when a persisted promotion probe recorded a dead access token.
-
-    ``store/markers.mark_promotion_status`` persists a machine-readable
-    ``promotion_state`` (``sms_tool/payment/promotion_states.py``) plus a HTTP
-    ``promotion.status_code`` next to the Chinese display label. Key off the
-    machine fields, not the label: the label is a UI string, and behaviour
-    that reads it breaks silently the moment the wording changes. The label
-    comparison stays only as a fallback for records written before the
-    machine fields existed.
-    """
+    """True when a persisted promotion probe recorded a dead access token."""
     if not isinstance(data, dict):
         return False
     _promotion_raw: object = data.get("promotion")
@@ -829,82 +823,16 @@ def _promotion_auth_failure(data: Any) -> bool:
     state = str(promotion.get("state") or data.get("promotion_state") or "").strip().lower()
     if state:
         return state == PROMOTION_STATE_AUTH_INVALID
-    code = str(promotion.get("status_code") or "").strip()
-    if code:
-        return code == "401"
+    if str(promotion.get("status_code") or "").strip():
+        return str(promotion.get("status_code") or "").strip() == "401"
     label = str(data.get("promotion_status") or "").strip() or str(promotion.get("status") or "").strip()
     return label == AUTH_INVALID_LABEL
 
 
 def _mark_successful_relogin(data: dict[str, Any], probe: dict[str, Any], *, now: int | None = None) -> None:
-    """Replace stale 401 metadata after a newly acquired AT passes HTTP 200."""
-    timestamp = int(now or time.time())
-    data["success"] = True
-    if str(data.get("status") or "").strip().lower() in {
-        "at_invalid",
-        "access_token_invalid",
-        "token_invalidated",
-    }:
-        data["status"] = "registered"
-    # Both callers gate on a verified HTTP 200 for the token just acquired, so
-    # whatever ``error`` the record still carries describes an attempt that is
-    # over. Matching a 401-worded whitelist (the old rule) missed the transport
-    # shapes: a ``web_session`` attempt killed by a dead exit records
-    # ``web_session_access_token_probe_failed:unknown`` -- no ``401``, no
-    # ``token_invalid`` -- and survived the OTP relogin that later succeeded.
-    # The account then kept ``status='registered'`` (``store.normalize._status``
-    # derives it from the AT alone) with a non-empty error, which the WPF 状态
-    # column renders as 失败: measured 2026-11-20, a 2-account 账号测活 round
-    # printed 正常 2，掉号 0，其他失败 0 while both rows showed 失败.
-    data.pop("error", None)
-    # A previous promotion probe can persist an auth-failure marker. A verified
-    # replacement AT makes that marker stale; keep its detailed result for
-    # later inspection but stop surfacing the authentication failure in the
-    # account list.
-    if _promotion_auth_failure(data):
-        data["promotion_status"] = ""
-        data.pop("promotion_state", None)
-        # Distinct name: ``promotion`` is declared ``dict`` two lines below, so a
-        # ``None`` assignment here would conflict with that declaration.
-        _promo_raw: object = data.get("promotion")
-        if isinstance(_promo_raw, dict):
-            _promo_raw.pop("state", None)
-            data["promotion"] = _promo_raw
-    _raw_promotion: object = data.get("promotion")
-    promotion: dict = _raw_promotion if isinstance(_raw_promotion, dict) else {}
-    if promotion and _promotion_auth_failure({**data, "promotion_status": promotion.get("status")}):
-        promotion["status"] = ""
-        data["promotion"] = promotion
-    _scan_raw: object = data.get("account_scan")
-    account_scan: dict[str, Any] = _scan_raw if isinstance(_scan_raw, dict) else {}
-    account_scan.update(
-        {
-            "ok": True,
-            "scan_status": "alive",
-            "token_probe": _safe_relogin_result(probe),
-        }
+    _mark_successful_relogin_impl(
+        data, probe, safe_result_fn=_safe_relogin_result, promotion_auth_failure_fn=_promotion_auth_failure, now=now
     )
-    data["account_scan"] = account_scan
-    data["account_scan_status"] = "alive"
-    data["account_scan_updated_at"] = timestamp
-    # A verified replacement AT must also clear the quota-side 401 marker.
-    # Otherwise JIT payment/account-pool filters continue to reject the account
-    # even though the newly persisted token has passed the canonical probe.
-    _quota_raw: object = data.get("quota")
-    quota: dict[str, Any] = _quota_raw if isinstance(_quota_raw, dict) else {}
-    quota_status = str(probe.get("quota_status") or "").strip()
-    if not quota_status or quota_status in {"401失效", "token_invalid", "HTTP 401"}:
-        quota_status = "可用"
-    quota["status"] = quota_status
-    quota["updated_at"] = timestamp
-    quota["last_result"] = {
-        key: value
-        for key, value in _safe_relogin_result(probe).items()
-        if key not in {"body", "access_token", "authorization", "cookie", "cookie_header"}
-    }
-    data["quota"] = quota
-    data["quota_status"] = quota_status
-    data["quota_updated_at"] = timestamp
 
 
 def _select_recovery_proxy(account: dict[str, Any], proxy: str | None) -> tuple[str | None, list[dict[str, Any]]]:
@@ -944,212 +872,36 @@ def _select_recovery_proxy(account: dict[str, Any], proxy: str | None) -> tuple[
         ]
 
 
-def _recovery_proxy_candidates(affinity_proxy: str | None, selected_proxy: str | None) -> list[str | None]:
-    """Exits to try for one strategy, best first.
-
-    The chain's own pick goes first, then the account's original (affinity)
-    exit.  These are usually the same host carrying a different sticky id, which
-    means two different egress IPs and therefore two different rate-limit
-    buckets -- enough to survive a blocked exit without leaving the pool.
-    """
-    ordered: list[str | None] = []
-    for value in (selected_proxy, affinity_proxy):
-        candidate = str(value or "").strip()
-        if candidate and candidate not in ordered:
-            ordered.append(candidate)
-    if not ordered:
-        ordered.append(None)
-    elif _recovery_allow_direct():
-        ordered.append(None)
-    return ordered
-
-
 def _recovery_allow_direct() -> bool:
-    """Whether the recovery chain may fall back to a direct (proxy-less) exit.
-
-    Off by default: routing a country-pinned account through the host's own
-    egress changes where the request comes from, so it stays an explicit
-    operator choice (``proxy.recovery_allow_direct``).
-    """
-    _proxy_raw: object = CFG.get("proxy")
-    proxy_cfg: dict[str, Any] = _proxy_raw if isinstance(_proxy_raw, dict) else {}
-    return bool(proxy_cfg.get("recovery_allow_direct"))
+    return _recovery_allow_direct_impl(CFG)
 
 
-def _recoverable_on_other_proxy(result: Any) -> bool:
-    """True when the same strategy deserves a retry through a different exit.
-
-    Only transport-level evidence counts.  A non-2xx from the target means the
-    exit was blocked or rate-limited and another exit can help; a 200 without an
-    access token means the session really is dead and no exit can help.
-    """
-    if not isinstance(result, dict) or result.get("ok"):
-        return False
-    if result.get("terminal") or _looks_account_deactivated(result):
-        return False
-    last_status = str(result.get("last_status") or "").strip()
-    if last_status:
-        return last_status != "200"
-    return is_transient_transport_error(result.get("error") or "")
+def _recovery_proxy_candidates(affinity_proxy: str | None, selected_proxy: str | None) -> list[str | None]:
+    return _recovery_proxy_candidates_impl(
+        affinity_proxy,
+        selected_proxy,
+        allow_direct=_recovery_allow_direct(),
+    )
 
 
-def is_permanently_deactivated(account: dict[str, Any]) -> bool:
-    if not isinstance(account, dict):
-        return False
-    values = [account.get("status"), account.get("error"), account.get("account_scan_status")]
-    terminal = account.get("terminal_failure")
-    if isinstance(terminal, dict):
-        values.extend((terminal.get("code"), terminal.get("reason")))
-    raw_json = str(account.get("raw_json") or "").strip()
-    if raw_json:
-        try:
-            parsed = json.loads(raw_json)
-            if isinstance(parsed, dict):
-                values.extend((parsed.get("status"), parsed.get("error"), parsed.get("account_scan_status")))
-        except Exception:
-            pass
-    return _looks_account_deactivated(values)
+def _health_status_code(probe: dict[str, Any], relogin: dict[str, Any]) -> str:
+    return _health_status_code_impl(probe, relogin, probe_is_token_invalid=_probe_is_token_invalid)
 
 
 def _local_quota_accounts(emails: list[str] | None) -> list[dict[str, Any]]:
-    requested = [_normalize_email(email) for email in (emails or []) if _normalize_email(email)]
-    if not requested:
-        requested = [
-            _normalize_email(row.get("email")) for row in list_paypal_accounts() if _normalize_email(row.get("email"))
-        ]
-    accounts = []
-    seen = set()
-    for email in requested:
-        if email in seen:
-            continue
-        seen.add(email)
-        record = get_account_record(email)
-        accounts.append(_local_account_data(record) if record else {"email": email})
-    return accounts
-
-
-def _local_account_data(record: dict[str, Any]) -> dict[str, Any]:
-    data: dict[str, Any] = {}
-    raw_json = str((record or {}).get("raw_json") or "")
-    if raw_json:
-        try:
-            parsed = json.loads(raw_json)
-            if isinstance(parsed, dict):
-                data.update(parsed)
-        except Exception:
-            pass
-    for key, value in (record or {}).items():
-        if value not in (None, ""):
-            data[key] = value
-    return data
-
-
-_TRANSIENT_RELOGIN_MODES = frozenset({"cooldown", "concurrency_limited"})
-
-
-def _has_relogin_material(account: dict[str, Any]) -> bool:
-    """Whether any relogin strategy has a credential to work with.
-
-    Only credentials the auto cascade actually consumes count: a refresh
-    token or a usable mailbox.  ``password``/``session_token`` are not
-    recovery material — no strategy performs a password login — so counting
-    them kept unrecoverable accounts out of 掉号 marking while every batch
-    burned a full relogin cascade on them.  A bare mailbox *provider*
-    qualifies: ReMail recovery rehydrates the credential supplier-side by
-    email even when the stored token is empty (observed in production).
-    """
-    if not isinstance(account, dict):
-        return False
-    for key in ("refresh_token", "oauth_refresh_token", "mailbox_token", "mailbox_provider"):
-        if str(account.get(key) or "").strip():
-            return True
-    mailbox = account.get("mailbox")
-    if isinstance(mailbox, dict):
-        for key in ("token", "refresh_token", "provider"):
-            if str(mailbox.get(key) or "").strip():
-                return True
-    return False
-
-
-def _is_token_revoked_drop(account: dict[str, Any]) -> bool:
-    if not isinstance(account, dict):
-        return False
-    candidates = [account.get("terminal_failure")]
-    raw_json = str(account.get("raw_json") or "").strip()
-    if raw_json:
-        try:
-            parsed = json.loads(raw_json)
-            if isinstance(parsed, dict):
-                candidates.append(parsed.get("terminal_failure"))
-        except Exception:
-            pass
-    for terminal in candidates:
-        if isinstance(terminal, dict) and str(terminal.get("code") or "").strip() == "token_revoked":
-            return True
-    return False
+    return _local_quota_accounts_impl(
+        emails,
+        list_accounts=list_paypal_accounts,
+        get_record=get_account_record,
+    )
 
 
 def _persist_token_revoked_drop(account: dict[str, Any]) -> bool:
-    """Persist 掉号: AT revoked with zero recovery material.
-
-    Uses the existing ``at_invalid`` vocabulary (already understood by
-    store/normalize and the WPF grid) plus a ``terminal_failure`` marker so
-    later batches skip the dead token via ``_is_token_revoked_drop``.
-    """
-    data = _local_account_data(account)
-    email = str(data.get("email") or "").strip().lower()
-    if not email:
-        return False
-    now = int(time.time())
-    data.update(
-        {
-            "email": email,
-            "status": "at_invalid",
-            "error": "token_revoked_unrecoverable",
-            "terminal_failure": {
-                "code": "token_revoked",
-                "reason": "token_invalid_no_relogin_material",
-                "updated_at": now,
-            },
-        }
-    )
-    json_path = str(data.get("json_path") or account.get("json_path") or "").strip()
-    if json_path:
-        try:
-            atomic_write_text(json_path, json.dumps(data, ensure_ascii=False, indent=2))
-        except Exception:
-            pass
-    return upsert_account(data, json_path=json_path)
+    return _persist_token_revoked_drop_impl(account, upsert=upsert_account, write_text=atomic_write_text)
 
 
 def _persist_permanent_deactivation(account: dict[str, Any], result: dict[str, Any] | None = None) -> bool:
-    del result
-    data = _local_account_data(account)
-    email = str(data.get("email") or "").strip().lower()
-    if not email:
-        return False
-    now = int(time.time())
-    data.update(
-        {
-            "email": email,
-            "success": False,
-            "status": "account_deactivated",
-            "error": "account_deactivated",
-            "account_scan_status": "account_deactivated",
-            "terminal_failure": {
-                "code": "account_deactivated",
-                "reason": "account_deactivated",
-                "updated_at": now,
-            },
-        }
-    )
-    json_path = str(data.get("json_path") or account.get("json_path") or "").strip()
-    if json_path:
-        try:
-            atomic_write_text(json_path, json.dumps(data, ensure_ascii=False, indent=2))
-        except Exception:
-            pass
-    return upsert_account(data, json_path=json_path)
+    return _persist_permanent_deactivation_impl(account, result, upsert=upsert_account, write_text=atomic_write_text)
 
 
 def _safe_relogin_result(result: dict[str, Any] | None) -> dict[str, Any]:
@@ -1184,40 +936,8 @@ def _redact_recovery_error(value: Any) -> str:
     return text[:1000]
 
 
-def _looks_account_deactivated(value: Any) -> bool:
-    return text_has_account_deactivated(json.dumps(value or {}, ensure_ascii=False))
-
-
-def _item_is_account_deactivated(value: Any) -> bool:
-    if not isinstance(value, dict):
-        return _looks_account_deactivated(value)
-    return _looks_account_deactivated(value.get("probe")) or _looks_account_deactivated(value.get("relogin"))
-
-
 def _timed_out_health_result(email: str, reason: str) -> dict[str, Any]:
-    """Return a stable result for an account skipped by a health deadline."""
-    probe = {
-        "ok": False,
-        "mode": "local",
-        "status": "timeout",
-        "quota_status": "health_timeout",
-        "error": str(reason or "health_timeout"),
-    }
-    persisted = mark_quota_status(email, probe["quota_status"], quota_result=probe) if email else False
-    return {
-        "ok": False,
-        "email": email,
-        "quota_status": probe["quota_status"],
-        "probe": probe,
-        "probe_ok": False,
-        "persisted": bool(persisted),
-        "health_status": "batch_timeout" if reason == "batch_timeout" else "account_timeout",
-        "timed_out": True,
-        "timeout_reason": str(reason or "health_timeout"),
-        "liveness_401": False,
-        "relogin_attempted": False,
-        "mailbox_auth_invalid": False,
-    }
+    return _timed_out_health_result_impl(email, reason, mark_quota=mark_quota_status)
 
 
 def _relogin_guard_path():
@@ -1225,320 +945,36 @@ def _relogin_guard_path():
 
 
 def _relogin_cooldown_seconds() -> int:
-    _health_raw: object = CFG.get("account_health")
-    health: dict[str, Any] = _health_raw if isinstance(_health_raw, dict) else {}
-    try:
-        return max(60, int(health.get("relogin_cooldown_seconds") or 1800))
-    except (TypeError, ValueError):
-        return 1800
+    return _relogin_cooldown_seconds_impl(CFG)
 
 
 def _relogin_cooldown_active(account: dict[str, Any]) -> bool:
-    email = _normalize_email(account.get("email"))
-    if not email:
-        return False
-    # Existing pools may only contain a localized/legacy label. OTP is kept as
-    # an ASCII marker so known mailbox failures do not immediately loop again.
-    _quota_raw: object = account.get("quota")
-    quota: dict[str, Any] = _quota_raw if isinstance(_quota_raw, dict) else {}
-    status = str(account.get("quota_status") or quota.get("status") or "").strip().lower()
-    try:
-        updated_at = int(account.get("quota_updated_at") or quota.get("updated_at") or 0)
-    except (TypeError, ValueError):
-        updated_at = 0
-    # Legacy localized OTP labels are only a cooldown signal when they were
-    # written inside the current cooldown window. Never turn an old historical
-    # failure into a permanent skip.
-    if updated_at and time.time() - updated_at < _relogin_cooldown_seconds():
-        if status in {"relogin_cooldown", "relogin_otp_failed"} or (
-            "otp" in status and any(marker in status for marker in ("fail", "失", "ʧ"))
-        ):
-            return True
-    try:
-        data = json.loads(_relogin_guard_path().read_text(encoding="utf-8"))
-        entry = data.get(email) or {}
-        # A dead end is not released by the clock: the evidence is a closed
-        # server-side loop, so waiting only buys another burned OTP.
-        if entry.get("permanent"):
-            return True
-        until = float(entry.get("cooldown_until") or 0)
-        return until > time.time()
-    except (OSError, ValueError, TypeError, AttributeError):
-        return False
-
-
-def _relogin_dead_end_reason(relogin: Any) -> str:
-    """The relogin outcome that cannot succeed however often it is retried.
-
-    Measured 2026-09-14 (``runtime/logs/backend_stdout.log``): landing on
-    ``/about-you`` for an address that already has an account is a closed
-    server-side loop.  ``create_account`` answers ``user_already_exists`` with
-    ``userAlreadyExistsRecovery.action=continue_to_login`` and
-    ``redirect_uri=chatgpt.com/auth/login_with`` (23/23 byte-identical), and
-    following that redirect produced no access token in 4/4 attempts while the
-    login lane landed back on the same page.
-
-    Each retry costs one OTP and changes nothing, so this must not be released
-    by the ordinary cooldown -- otherwise a 30-minute window turns into "one
-    burned OTP every 30 minutes, forever" (``aegis_coop.1e+oai02`` was retried
-    9 times across 15 hours exactly that way).
-    """
-    text = json.dumps(relogin or {}, ensure_ascii=False).lower()
-    if "user_already_exists" in text:
-        return "account_exists_login_loop"
-    return ""
+    return _relogin_cooldown_active_impl(
+        account, guard_path=_relogin_guard_path(), cooldown_seconds=_relogin_cooldown_seconds()
+    )
 
 
 def _relogin_dead_end_permanent() -> bool:
-    """Whether a dead end blocks relogin indefinitely. Operator-reversible.
-
-    The guard file is plain JSON under ``runtime/``, so an operator who fixes the
-    underlying cause can delete the entry.  Configurable so the escalation can be
-    turned back into a plain cooldown without a code change.
-    """
-    _health_raw: object = CFG.get("account_health")
-    health: dict[str, Any] = _health_raw if isinstance(_health_raw, dict) else {}
-    return bool(health.get("relogin_dead_end_permanent", True))
-
-
-_RELOGIN_STATUS_RE = re.compile(r'"status"\s*:\s*(\d{3})')
-_RELOGIN_CODE_RE = re.compile(r'"code"\s*:\s*"([A-Za-z0-9_\-]{1,40})"')
-
-
-def _relogin_attempt_shape(attempt: dict[str, Any]) -> str:
-    """``mode`` plus the fields that say *why* -- minus anything per-attempt.
-
-    The OTP branches append a JSON body to ``error`` whose session ids and
-    messages differ on every attempt, so the raw text can never be compared
-    directly.  Two fields do distinguish one failure from another -- the HTTP
-    ``status`` and the error ``code`` (409 ``invalid_state`` is not 401
-    ``login_failed``) -- so they are lifted out and the rest of the body is
-    dropped.  ``last_status`` is kept for the ``web_session`` lane, where a
-    changed upstream answer is the whole difference between two attempts.
-
-    Dropping the body wholesale is not enough: measured with
-    ``runtime/_probe_relogin_repeat_cooldown.py``, a 409 turning into a 401
-    still produced the same fingerprint and kept the long window.
-    """
-    mode = str(attempt.get("mode") or "")
-    error = str(attempt.get("error") or "")
-    head = error.split("{", 1)[0].strip()[:80]
-    marks = []
-    status = _RELOGIN_STATUS_RE.search(error)
-    if status:
-        marks.append(f"status={status.group(1)}")
-    code = _RELOGIN_CODE_RE.search(error)
-    if code:
-        marks.append(f"code={code.group(1)}")
-    last_status = str(attempt.get("last_status") or "").strip()
-    if last_status:
-        marks.append(f"last={last_status}")
-    return f"{mode}={head}({','.join(marks)})" if marks else f"{mode}={head}"
-
-
-def _relogin_failure_shape(relogin: Any) -> str:
-    """A fingerprint of *why* relogin failed, stable across retries.
-
-    Measured 2026-09-14 (``runtime/account_relogin_guard.json``): 83 guarded
-    addresses, **82 of them past ``cooldown_until``**, so the ordinary 300s
-    window re-runs a known-failing address every few minutes.  ``elms-dopey.8t
-    +oai02`` was re-run 45 minutes after being judged dead and produced a
-    byte-identical failure -- same six methods, same six errors
-    (``runtime/logs/backend_stdout.log`` 8879-8905 vs 9482-9504).  An unchanged
-    shape is the evidence that the retry bought no information, so the next
-    window has to be longer.
-
-    Per-attempt detail is reduced by :func:`_relogin_attempt_shape`; comparing
-    the raw ``error`` text would never match twice, because the OTP branches
-    embed a JSON body whose session ids change on every attempt.
-    """
-    attempts = relogin.get("attempts") if isinstance(relogin, dict) else None
-    parts = []
-    if isinstance(attempts, list):
-        for attempt in attempts:
-            if isinstance(attempt, dict):
-                parts.append(_relogin_attempt_shape(attempt))
-    if not parts:
-        parts.append(_relogin_attempt_shape(relogin if isinstance(relogin, dict) else {}))
-    return "|".join(parts)
+    return _relogin_dead_end_permanent_impl(CFG)
 
 
 def _relogin_repeat_cooldown_seconds() -> int:
-    """The window used when a retry reproduced the previous failure exactly.
-
-    Six hours rather than the ordinary 300s: the shape is the evidence that
-    waiting bought nothing, and the cost of being wrong is one OTP per window
-    instead of one OTP every five minutes.  A *different* shape resets the
-    window to ``relogin_cooldown_seconds``, so fixing the cause restores fast
-    retries without touching this key.
-    """
-    _health_raw: object = CFG.get("account_health")
-    health: dict[str, Any] = _health_raw if isinstance(_health_raw, dict) else {}
-    try:
-        return max(60, int(health.get("relogin_repeat_cooldown_seconds") or 21600))
-    except (TypeError, ValueError):
-        return 21600
+    return _relogin_repeat_cooldown_seconds_impl(CFG)
 
 
 def _clear_relogin_failure(email: str) -> None:
-    """Drop the guard entry once a relogin succeeds.
-
-    The stored shape describes a failure that is over.  Leaving it behind would
-    let the *next*, unrelated failure compare equal to a stale shape and take
-    the six-hour window for a transient error.
-    """
-    key = _normalize_email(email)
-    if not key:
-        return
-    path = _relogin_guard_path()
-    try:
-        data = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
-    except (OSError, ValueError, TypeError):
-        return
-    if not isinstance(data, dict) or key not in data:
-        return
-    data.pop(key, None)
-    try:
-        temp = path.with_suffix(path.suffix + ".tmp")
-        temp.write_text(json.dumps(data, ensure_ascii=True, separators=(",", ":")), encoding="utf-8")
-        temp.replace(path)
-    except OSError:
-        return
+    _clear_relogin_failure_impl(email, guard_path=_relogin_guard_path())
 
 
 def _record_relogin_failure(email: str, relogin: dict[str, Any]) -> None:
-    if not email or str(relogin.get("mode") or "").lower() == "cooldown":
-        return
-    text = json.dumps(relogin, ensure_ascii=False).lower()
-    dead_end = _relogin_dead_end_reason(relogin)
-    # A dead end is recorded on its own evidence.  Gating it on the OTP/mailbox
-    # markers below would make the stop depend on ``fallback_from`` happening to
-    # contain the word "email" -- which has nothing to do with why it is stuck.
-    if not dead_end and not any(marker in text for marker in ("otp", "mailbox", "email")):
-        return
-    path = _relogin_guard_path()
-    try:
-        data = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
-        if not isinstance(data, dict):
-            data = {}
-    except (OSError, ValueError, TypeError):
-        data = {}
-    key = _normalize_email(email)
-    _previous_raw: object = data.get(key)
-    previous: dict[str, Any] = _previous_raw if isinstance(_previous_raw, dict) else {}
-    shape = _relogin_failure_shape(relogin)
-    # An unchanged shape means the last window bought nothing, so waiting the
-    # ordinary cooldown again would spend the next OTP on the same answer.
-    repeated = bool(shape) and previous.get("last_shape") == shape
-    cooldown = _relogin_repeat_cooldown_seconds() if repeated else _relogin_cooldown_seconds()
-    entry: dict[str, Any] = {
-        "failure_class": "account"
-        if dead_end
-        else ("relogin_otp_failed" if _relogin_spent_email_code(relogin) else "relogin_failed"),
-        "last_error": str(relogin.get("error") or "relogin_failed")[:200],
-        "cooldown_until": int(time.time() + cooldown),
-        "updated_at": int(time.time()),
-        "last_shape": shape,
-    }
-    if repeated:
-        entry["repeat_failure"] = True
-    if dead_end:
-        entry["dead_end"] = dead_end
-        if _relogin_dead_end_permanent():
-            entry["permanent"] = True
-    data[key] = entry
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_suffix(path.suffix + ".tmp")
-    temp.write_text(json.dumps(data, ensure_ascii=True, separators=(",", ":")), encoding="utf-8")
-    temp.replace(path)
-
-
-#: Attempt errors that prove the email-OTP strategy failed *before* it asked for a
-#: code. The strategy is listed in ``attempts`` either way, which is why the
-#: attempt's name cannot be the evidence.
-_NO_CODE_SPENT_MARKERS = (
-    "existing_login_password_verify_failed",
-    "existing_login_password_required",
-    "existing_login_password_step_unknown",
-)
-
-#: Markers that mean a verification code / mailbox was actually involved.
-_CODE_PHASE_MARKERS = ("otp", "email_code", "verification_code", "mailbox")
-
-
-def _relogin_spent_email_code(relogin: Any) -> bool:
-    """True only when a relogin attempt actually reached the email-code phase.
-
-    ``relogin_otp_failed`` used to be produced by substring-matching the whole
-    payload for ``"otp"`` / ``"mailbox"`` / ``"email"``, so any failure that merely
-    *listed* the ``chatgpt_email_otp`` strategy was reported as an OTP failure --
-    including the ones that stopped at ``password/verify`` and never requested a
-    code. That label sends the operator to the mailbox for a problem the mailbox
-    does not have (measured 2026-10-25: two passwordless remail/outlook accounts).
-
-    The per-attempt error is the only evidence that counts: an error naming the
-    password/lookup phase is excluded, and any other error mentioning the code
-    phase is accepted. Shapes without ``attempts`` fall back to the top-level
-    ``error``, so older records and hand-built dicts classify exactly as before.
-    """
-    if not isinstance(relogin, dict):
-        return False
-    attempts = relogin.get("attempts")
-    errors: list[str] = []
-    if isinstance(attempts, list) and attempts:
-        for attempt in attempts:
-            if isinstance(attempt, dict):
-                errors.append(str(attempt.get("error") or "").lower())
-    if not errors:
-        errors = [str(relogin.get("error") or "").lower()]
-    for error in errors:
-        if not error:
-            continue
-        if any(marker in error for marker in _NO_CODE_SPENT_MARKERS):
-            continue
-        if any(marker in error for marker in _CODE_PHASE_MARKERS):
-            return True
-    return False
-
-
-def _health_status_code(probe: dict[str, Any], relogin: dict[str, Any]) -> str:
-    if _item_is_account_deactivated({"probe": probe, "relogin": relogin}):
-        return "account_deactivated"
-    if relogin and not relogin.get("ok"):
-        if str(relogin.get("mode") or "") == "cooldown":
-            return "relogin_cooldown"
-        if str(relogin.get("error") or "") == "mailbox_pool_repair_required":
-            return "mailbox_relogin_blocked"
-        if str(relogin.get("error") or "") == "mailbox_auth_invalid":
-            return "mailbox_auth_invalid"
-        if str(relogin.get("error") or "") == "relogin_concurrency_limited":
-            return "relogin_concurrency_limited"
-        text = json.dumps(relogin, ensure_ascii=False).lower()
-        if "mailbox_transport" in text or "mailbox_transport_unavailable" in text:
-            return "relogin_mailbox_transport_failed"
-        if _relogin_spent_email_code(relogin):
-            return "relogin_otp_failed"
-        return "relogin_failed"
-    if _probe_is_token_invalid(probe):
-        return "token_invalid"
-    if probe.get("status") == "timeout":
-        return "probe_timeout"
-    if probe.get("ok"):
-        return "active"
-    return "probe_failed"
-
-
-def _normalize_relogin_mode(value: Any) -> str:
-    text = str(value or "").strip().lower().replace("-", "_")
-    if text in {"web", "web_session", "session", "chatgpt_session"}:
-        return "web_session"
-    if text in {"email_otp", "chatgpt_email_otp", "passwordless", "passwordless_email"}:
-        return "chatgpt_email_otp"
-    if text in {"codex", "codex_oauth", "oauth", "pkce"}:
-        return "codex_oauth"
-    if text in {"browser", "browser_session", "camoufox"}:
-        return "browser_session"
-    return "auto"
+    _record_relogin_failure_impl(
+        email,
+        relogin,
+        guard_path=_relogin_guard_path(),
+        cooldown_seconds=_relogin_cooldown_seconds(),
+        repeat_cooldown_seconds=_relogin_repeat_cooldown_seconds(),
+        dead_end_permanent=_relogin_dead_end_permanent(),
+    )
 
 
 def _relogin_failure_quota_status(relogin: dict[str, Any]) -> str:
@@ -1561,7 +997,3 @@ def _relogin_failure_quota_status(relogin: dict[str, Any]) -> str:
     if "cooldown" in text:
         return "relogin_cooldown"
     return "relogin_failed"
-
-
-def _normalize_email(value: Any) -> str:
-    return str(value or "").strip().lower()

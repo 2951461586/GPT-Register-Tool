@@ -154,7 +154,7 @@ def main() -> int:
     # helpers that registration and payments reach inward toward, not account
     # lifecycle workflows.  Relocation cut the sms_tool->accounts minority edge
     # set 9 -> 5 and the total module edge count 287 -> 277.
-    _ALLOWED_TOP_LEVEL_ACCOUNT_HELPERS = {"registration/account_creation.py", "account_seed.py"}
+    _ALLOWED_TOP_LEVEL_ACCOUNT_HELPERS = {"registration/account_creation.py"}
     stray_accounts = sorted(
         p.name for p in PY_ROOT.glob("account_*.py") if p.name not in _ALLOWED_TOP_LEVEL_ACCOUNT_HELPERS
     )

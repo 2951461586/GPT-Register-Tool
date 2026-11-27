@@ -71,8 +71,8 @@ class RegistrationDriver(str, Enum):
 `sms_tool/transport/auth_headers.py` 是「每个账号看起来像同一台稳定设备」的事实来源。
 
 - **设备档案**：`AUTH_FINGERPRINT_PROFILES`（`transport/auth_headers.py:81`）覆盖 Chrome 124–152、Firefox 133–155、Safari 17–27（含 iOS）的 UA / 平台 / 渲染器组合；表的上限跟随已安装的 curl_cffi preset（0.17.0），`chrome150` 是唯一的 macOS Chrome 档位。
-- **确定性指纹**：`sentinel_fingerprint()`（`transport/auth_headers.py:995`）按账号 `device_id` **确定性派生** screen / CPU / 内存 / `time_origin`，使得同一账号每次注册拿到一致指纹，不同账号彼此不关联（防关联）。
-- **鉴权头注入**：`openai_auth_headers()`（`transport/auth_headers.py:1249`）注入 `oai-device-id`、`oai-session-id`、`sec-ch-ua*`、`sec-ch-ua-platform`、`Datadog` trace 等；`family` 分为 `nextauth` / `auth` / `chatgpt` 三族，三族**共享**同一 DID、稳定的 session logging id、flow invocation id、UA、client hints、GeoIP 派生的 locale/timezone。
+- **确定性指纹**：`sentinel_fingerprint()`（`transport/auth_headers.py:508`）按账号 `device_id` **确定性派生** screen / CPU / 内存 / `time_origin`，使得同一账号每次注册拿到一致指纹，不同账号彼此不关联（防关联）。
+- **鉴权头注入**：`openai_auth_headers()`（`transport/auth_headers.py:662`）注入 `oai-device-id`、`oai-session-id`、`sec-ch-ua*`、`sec-ch-ua-platform`、`Datadog` trace 等；`family` 分为 `nextauth` / `auth` / `chatgpt` 三族，三族**共享**同一 DID、稳定的 session logging id、flow invocation id、UA、client hints、GeoIP 派生的 locale/timezone。
 - **一致性强约束**（见 `architecture.md` 的 *Registration Protocol Consistency*）：Sentinel QuickJS 消费**同一指纹**，为 `username_password_create` / `authorize_continue` / `oauth_create_account` 分别产出 token；token payload id、`oai-did` cookie、auth header **必须匹配**。提取失败**fail closed**——绝不使用纯 HTTP 的 PoW fallback。
 
 - **TLS ClientHello 每账号唯一化**（2026-11-11）：`sms_tool/transport/tls_fingerprint.py` 按账号 device seed **确定性打乱** profile 自己那份扩展**顺序**（不改集合），经 `CurlOpt.TLS_EXTENSION_ORDER` 装到 session 上。此前 4 个 Firefox profile 共用同一个 `ja3_hash`（`6f7889b9…`），占指纹池 50% 权重；Chrome preset 本就逐握手打乱，Safari 的列表重排会被 BoringSSL 拒绝（`curl: (35) Invalid TLS extensions`），因此只有 Firefox 家族走这条覆盖。HTTP/2（Akamai）**故意不动**：preset 是 curl-impersonate native target，`extra_fp` 改不了它的 SETTINGS。配置：`registration.tls_fingerprint`；证据：`scripts/tls_fingerprint_probe.py`。
@@ -268,8 +268,8 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `normalize_registration_driver` | `registration_drivers/base.py:104` | 归一化，默认 protocol |
 | `BrowserRegistrationError` | `registration_drivers/base.py:140` | 浏览器层错误封装 |
 | `AUTH_FINGERPRINT_PROFILES` | `transport/auth_headers.py:81` | Chrome 124–152 / Firefox 133–155 / Safari 17–27 设备档案 |
-| `sentinel_fingerprint` | `transport/auth_headers.py:995` | 确定性指纹派生 |
-| `openai_auth_headers` | `transport/auth_headers.py:1249` | `oai-*` 头注入 |
+| `sentinel_fingerprint` | `transport/auth_headers.py:508` | 确定性指纹派生 |
+| `openai_auth_headers` | `transport/auth_headers.py:662` | `oai-*` 头注入 |
 | `OPENAI_SENTINEL_BACKEND` | `sentinel/client.py:59`（默认 `node_runner`） | Sentinel 后端选择 |
 | `_get_cached_sentinel` / `_save_sentinel_cache` | `registration/sentinel_tokens.py:86` / `:104` | 线程安全缓存 |
 | `_sentinel_device_id` / `assert_sentinel_device_id` | `registration/sentinel_tokens.py:800` / `:155` | DID 一致性 |

@@ -17,12 +17,13 @@
       "sms_tool/providers/__init__.py"
     ],
     "Configuration and environment inspection": [
-      "sms_tool/config_usage.py"
+      "sms_tool/config/usage.py"
     ],
     "CLI argument groups": [
       "sms_tool/cli_parsers/*.py"
     ],
     "CLI command adapters": [
+      "sms_tool/commands/cli_dispatch.py",
       "sms_tool/commands/payment.py",
       "sms_tool/commands/payment_links.py",
       "sms_tool/commands/registration.py",
@@ -56,7 +57,7 @@
       "sms_tool/observability/*.py"
     ],
     "Registration failure and batch safety": [
-      "sms_tool/batch_circuit_breaker.py"
+      "sms_tool/kernel/circuit_breaker.py"
     ],
     "Registration checkpoints, helpers and completion": [
       "sms_tool/registration/*.py"
@@ -74,8 +75,7 @@
       "sms_tool/transport/*.py"
     ],
     "Registration/auth": [
-      "sms_tool/cross_process_gate.py",
-      "sms_tool/accounts/account_2fa.py",
+            "sms_tool/accounts/account_2fa.py",
       "sms_tool/auth_flow/__init__.py",
       "sms_tool/auth_flow/deps.py",
       "sms_tool/auth_flow/steps.py",
@@ -99,6 +99,7 @@
       "sms_tool/accounts/account_liveness.py",
       "sms_tool/accounts/wham_usage.py",
       "sms_tool/accounts/account_recovery.py",
+      "sms_tool/accounts/recovery_state.py",
       "sms_tool/accounts/recovery_batch.py",
       "sms_tool/accounts/account_inspection.py",
       "sms_tool/accounts/account_scan.py",
@@ -135,7 +136,7 @@
       "sms_tool/phone/*.py"
     ],
     "Account data/import/export": [
-      "sms_tool/account_seed.py",
+      "sms_tool/store/account_seed.py",
       "sms_tool/storage.py",
       "sms_tool/importers/sub2api.py",
       "sms_tool/importers/*.py",

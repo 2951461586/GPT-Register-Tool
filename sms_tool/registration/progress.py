@@ -17,7 +17,7 @@ from .concurrency import (
     registration_stage_group,
     registration_stage_metrics,
 )
-from ..cross_process_gate import cross_process_write_lock
+from ..kernel.cross_process_gate import cross_process_write_lock
 from ..kernel.sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
 from ..kernel.sanitizer import account_reference
 from .policy import registration_retry_decision

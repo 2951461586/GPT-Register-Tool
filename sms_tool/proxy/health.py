@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from ..cross_process_gate import cross_process_write_lock
+from ..kernel.cross_process_gate import cross_process_write_lock
 from ..kernel.paths import runtime_file
 from .entry import strip_session_id
 

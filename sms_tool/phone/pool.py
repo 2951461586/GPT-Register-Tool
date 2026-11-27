@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Iterator, Optional
 
 from . import sms_providers
-from ..cross_process_gate import cross_process_write_lock
+from ..kernel.cross_process_gate import cross_process_write_lock
 from ..observability.operator_output import emit
 from .provider_lifecycle import _complete_provider_activation, _reset_provider_slot
 from .smsbower import DEFAULT_ENDPOINT, GHANA_COUNTRY_CODE, OPENAI_SERVICE_CODE, normalize_country, normalize_service

@@ -30,7 +30,7 @@ import time
 from typing import Any
 
 from ..config import CFG
-from ..cross_process_gate import CrossProcessSemaphore, GateTimeoutError
+from ..kernel.cross_process_gate import CrossProcessSemaphore, GateTimeoutError
 from ..kernel.paths import runtime_file
 
 

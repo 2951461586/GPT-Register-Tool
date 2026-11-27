@@ -18,7 +18,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from sms_tool.phone.reuse import PhonePool  # noqa: E402
-from sms_tool.cross_process_gate import cross_process_write_lock  # noqa: E402
+from sms_tool.kernel.cross_process_gate import cross_process_write_lock  # noqa: E402
 
 
 class PhoneReuseAtomicWriteTests(unittest.TestCase):

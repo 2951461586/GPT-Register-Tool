@@ -6,7 +6,7 @@ import unittest
 from concurrent import futures as _futures
 from pathlib import Path
 
-from sms_tool.cross_process_gate import CrossProcessSemaphore, GateTimeoutError
+from sms_tool.kernel.cross_process_gate import CrossProcessSemaphore, GateTimeoutError
 
 
 class CrossProcessGateTests(unittest.TestCase):

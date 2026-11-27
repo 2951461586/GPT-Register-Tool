@@ -9,13 +9,15 @@ from __future__ import annotations
 import os
 from email.utils import formataddr
 
+from ..observability.diagnostics import safe_print as safe_print
+
 
 def read_email_file(path):
     """Read one email per line from a file, skipping blanks and comments."""
     if not path:
         return []
     if not os.path.exists(path):
-        print(f"[Error] --email-file not found: {path}")
+        safe_print(f"[Error] --email-file not found: {path}")
         raise SystemExit(2)
     emails = []
     seen = set()
@@ -120,5 +122,5 @@ def one_click_sms_max_reuse(args) -> int:
     """One-click SMS forces max_reuse_count=1."""
     requested = int(getattr(args, "max_reuse_count", 0) or 0)
     if requested and requested != 1:
-        print("[*] One-click SMS forces max_reuse_count=1 so each email account gets its own phone number")
+        safe_print("[*] One-click SMS forces max_reuse_count=1 so each email account gets its own phone number")
     return 1

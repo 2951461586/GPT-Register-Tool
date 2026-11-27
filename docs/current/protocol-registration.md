@@ -164,7 +164,7 @@ Registration flows registered there are `username_password_create`
 Registered there are both checkout flows, and they are
 **not** interchangeable:
 
-- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at `sms_tool/sentinel/client.py:51`, issued by `issue_checkout_sentinel` at `sms_tool/sentinel/client.py:793`.
+- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at `sms_tool/sentinel/client.py:54`, issued by `issue_checkout_sentinel` at `sms_tool/sentinel/client.py:796`.
 - **Checkout approve** mints `checkout_session_approval` — `PPLinkExtractor._fresh_approval_sentinel` mints it at `sms_tool/paypal/extract.py:245` (the retired UPI approve lane previously used the same flow).
 
   🔴 **How to write a guardable pointer here** — two rules, both learned the hard

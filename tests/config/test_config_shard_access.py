@@ -33,7 +33,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 #   - tests/                   : 在 tmp 目录里造临时文件
 _ALLOWED_PREFIXES = (
     "sms_tool/config.py",
-    "sms_tool/config_usage.py",
+    "sms_tool/config/usage.py",
     "services/",
     "tests/",
 )

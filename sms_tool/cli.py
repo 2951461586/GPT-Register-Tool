@@ -1,17 +1,27 @@
 import argparse
 import importlib
-import json
 import os
-import re
 import sys
 import time
 from typing import Any
 
 from .config import CFG, ConfigError, default_config_dir, initialize_config_shards, initialize_runtime_config
-from .observability.diagnostics import install_safe_stdio, safe_print
 from .desktop.ipc import emit_result
 from .kernel.paths import output_dir, runtime_file
 from .kernel.sanitizer import sanitize_text
+from .observability.diagnostics import install_safe_stdio, safe_print
+
+_PROXY_ENV = "SMS_TOOL_PROXY"
+_PROXY_POOL_ENV = "SMS_TOOL_PROXY_POOL"
+_CHECKOUT_PROXY_POOL_ENV = "SMS_TOOL_CHECKOUT_PROXY_POOL"
+_APPROVE_PROXY_POOL_ENV = "SMS_TOOL_APPROVE_PROXY_POOL"
+
+_PROXY_TRANSPORT_ROUTES = (
+    (_PROXY_ENV, "proxy"),
+    (_PROXY_POOL_ENV, "proxy_pool"),
+    (_CHECKOUT_PROXY_POOL_ENV, "checkout_proxy_pool"),
+    (_APPROVE_PROXY_POOL_ENV, "approve_proxy_pool"),
+)
 
 
 class _LazyModule:
@@ -39,6 +49,7 @@ class _LazyModule:
 
 
 account_commands = _LazyModule(".commands.accounts")
+cli_dispatch = _LazyModule(".commands.cli_dispatch")
 mailbox_commands = _LazyModule(".commands.mailbox_ops")
 one_click_commands = _LazyModule(".commands.one_click")
 payment_commands = _LazyModule(".commands.payment")
@@ -201,140 +212,36 @@ def _load_heavy_deps() -> None:
 
 
 def _registration_proxy_lane(registration_driver: object = None) -> str:
-    from .registration_drivers.base import normalize_registration_driver
-
-    driver = normalize_registration_driver(registration_driver, CFG)
-    return "protocol_registration" if driver == "protocol" else "browser_registration"
+    return cli_dispatch.registration_proxy_lane(registration_driver, CFG)
 
 
 def _configured_registration_proxy(registration_driver: object = None, tracker=None) -> str:
-    from .proxy.routing import proxy_pool_for
-
-    _raw_proxy_cfg: object = CFG.get("proxy")
-    proxy_cfg: dict = _raw_proxy_cfg if isinstance(_raw_proxy_cfg, dict) else {}
-    lane = _registration_proxy_lane(registration_driver)
-    lane_keys = (
-        ("browser_pool", "browser_registration_pool")
-        if lane == "browser_registration"
-        else ("protocol_pool", "protocol_registration_pool")
-    )
-    if CFG.get("registration_proxy") and not any(proxy_cfg.get(key) for key in (*lane_keys, "registration", "pool")):
-        return str(CFG["registration_proxy"]).strip()
-    values = proxy_pool_for(CFG, lane)
-    if values:
-        # P2-1: when more than one candidate exists, pick the healthiest via the
-        # shared ProxyHealthTracker instead of always pinning the first. On a fresh
-        # tracker (no health data) rank() preserves input order, so behaviour is
-        # unchanged for a single-account run that has never recorded failures.
-        from .proxy.health import ProxyHealthTracker
-
-        if len(values) > 1:
-            tracker = tracker or ProxyHealthTracker(CFG)
-            return tracker.rank(values)[0]
-        return values[0]
-    return str(proxy_cfg.get("default") or "").strip()
-
-
-#: Desktop -> backend proxy transport. The matching constants live in
-#: ``SmsWorkbench.Contracts/ProxyArgumentTransport.cs``; both sides are pinned to
-#: ``tests/fixtures/proxy_env_transport.json`` so renaming one without the other
-#: fails a test instead of silently dropping the operator's proxy route.
-#:
-#: Why the transport exists at all: a residential proxy URL carries ``user:pass``,
-#: and on Windows every same-user process can read another process's command line.
-_PROXY_ENV = "SMS_TOOL_PROXY"
-_PROXY_POOL_ENV = "SMS_TOOL_PROXY_POOL"
-#: Payment lane. ``--checkout-proxy-pool`` / ``--approve-proxy-pool`` carry whole
-#: pools of credential-bearing URLs, so they travel the same way. Kept as two
-#: named constants (not just a tuple literal) because the cross-language fixture
-#: pins them by name.
-_CHECKOUT_PROXY_POOL_ENV = "SMS_TOOL_CHECKOUT_PROXY_POOL"
-_APPROVE_PROXY_POOL_ENV = "SMS_TOOL_APPROVE_PROXY_POOL"
-
-#: ``(environment variable, argparse attribute)`` for every credential-bearing
-#: proxy route the desktop may emit. One list, read by the loop below and by the
-#: guard that keeps every entry in ``sensitive_policy.json``.
-_PROXY_TRANSPORT_ROUTES = (
-    (_PROXY_ENV, "proxy"),
-    (_PROXY_POOL_ENV, "proxy_pool"),
-    (_CHECKOUT_PROXY_POOL_ENV, "checkout_proxy_pool"),
-    (_APPROVE_PROXY_POOL_ENV, "approve_proxy_pool"),
-)
+    return cli_dispatch.configured_registration_proxy(CFG, registration_driver, tracker=tracker)
 
 
 def _apply_proxy_argument_transport(args) -> None:
-    """Fill the proxy flags from the environment when the command line has none.
-
-    The WPF host moves these values out of argv before starting this process
-    (``PythonBackendClient`` -> ``ProxyArgumentTransport``); the flags stay
-    supported for the CLI, for scripts and for every existing caller.
-
-    Precedence is *flag over environment*: a value typed on the command line is
-    more specific than one transported by the desktop. Each variable is popped
-    after it is consumed so the route is not inherited by the child processes
-    this backend starts (the Sentinel node runner, browser drivers): only this
-    process needs it, and an inherited copy is one more place a credential can
-    leak from.
-    """
-    for env_name, attribute in _PROXY_TRANSPORT_ROUTES:
-        value = str(os.environ.pop(env_name, "") or "").strip()
-        if not value:
-            continue
-        # Only fill a slot the parser actually defines. ``--proxy*`` live on the
-        # root parser, but keeping the check makes adding a route harmless for a
-        # future subcommand-specific parser.
-        if not hasattr(args, attribute):
-            continue
-        if str(getattr(args, attribute, "") or "").strip():
-            continue
-        setattr(args, attribute, value)
+    cli_dispatch.apply_proxy_argument_transport(args)
 
 
 def _normalize_proxy_args(args) -> None:
-    """Settle the proxy route: transport first, then explicitness, then default.
-
-    Order matters. The desktop transports ``--proxy``/``--proxy-pool`` through
-    the environment (see ``_apply_proxy_argument_transport``), and a transported
-    route must count as *explicit* -- otherwise the configured
-    ``proxy.default`` silently replaces the proxy the operator picked in the UI.
-
-    ``proxy_explicit`` itself is kept because some commands (notably
-    ``--generate-ba-link``) need an omitted single proxy to mean "use the
-    configured stage proxies", while the rest of the CLI wants
-    ``proxy.default`` as its normal default.
-    """
-    _apply_proxy_argument_transport(args)
-    args.proxy_explicit = bool(args.proxy)
-    if not args.proxy:
-        args.proxy = ((CFG.get("proxy") or {}).get("default") or "").strip() or None
+    cli_dispatch.normalize_proxy_args(args, CFG)
 
 
 def _apply_registration_proxy_defaults(args) -> None:
-    if bool(getattr(args, "proxy_explicit", False)):
-        return
-    if str(getattr(args, "proxy_pool", "") or "").strip():
-        args.proxy = None
-        return
-    args.proxy = _configured_registration_proxy(getattr(args, "registration_driver", None)) or None
+    cli_dispatch.apply_registration_proxy_defaults(args, configured_proxy_fn=_configured_registration_proxy)
 
 
 def _proxy_pool_values(args) -> list[str]:
-    from .proxy.routing import proxy_pool_for
+    return cli_dispatch.proxy_pool_values(args, CFG, configured_proxy_fn=_configured_registration_proxy)
 
-    raw = str(getattr(args, "proxy_pool", "") or "").strip()
-    values = [item.strip() for item in re.split(r"[\r\n,;]+", raw) if item.strip()]
-    primary = str(getattr(args, "proxy", "") or "").strip()
-    if bool(getattr(args, "proxy_explicit", False)) and primary:
-        values.insert(0, primary)
-    if values:
-        return list(dict.fromkeys(values))
 
-    values.extend(proxy_pool_for(CFG, _registration_proxy_lane(getattr(args, "registration_driver", None))))
-    if not values:
-        fallback = _configured_registration_proxy(getattr(args, "registration_driver", None))
-        if fallback:
-            values.append(fallback)
-    return list(dict.fromkeys(values))
+def _init_config_command() -> int:
+    return cli_dispatch.init_config_command(
+        safe_print_fn=safe_print,
+        initialize_config_shards_fn=initialize_config_shards,
+        default_config_dir_fn=default_config_dir,
+        config_error_cls=ConfigError,
+    )
 
 
 def _registration_command_context():
@@ -448,28 +355,6 @@ def build_parser():
     return parser
 
 
-def _init_config_command() -> int:
-    """Bootstrap the config shards, then exit.
-
-    Runs before ``initialize_runtime_config`` on purpose: the machine this
-    command exists for has no config at all, and ``load_runtime_config`` raises
-    on an empty config (``chatgpt must be an object``) before the CLI can even
-    parse ``--init-config``. Existing shards are never overwritten, so the
-    command is safe to re-run.
-    """
-    try:
-        results = initialize_config_shards()
-    except ConfigError as error:
-        safe_print(f"--init-config: {error}", file=sys.stderr)
-        return 2
-    config_dir = default_config_dir()
-    for filename, status in results:
-        safe_print(f"{status:8s} {config_dir / filename}")
-    if all(status == "skipped" for _, status in results):
-        safe_print("nothing to do: every config shard already exists")
-    return 0
-
-
 def main():
     # Parsed ahead of the real parser so `--init-config` can run on a machine
     # whose config is empty -- `initialize_runtime_config` would raise first.
@@ -561,7 +446,7 @@ def main():
     if args.rebuild_sqlite:
         _load_storage_deps()
         count = rebuild_from_session_dir(base_dir)
-        print(f"[*] SQLite rebuilt: {database_path()} ({count} account record(s))")
+        safe_print(f"[*] SQLite rebuilt: {database_path()} ({count} account record(s))")
         return
     if args.list_paypal_links:
         _print_paypal_links(args.email)
@@ -648,99 +533,35 @@ def main():
 
 
 def _main_early_commands(args) -> bool:
-    """Early-exit commands that run before the registration pipeline.
+    def _run_doctor_lazy(cfg, config_dir):
+        from .doctor import run_doctor
 
-    Returns True when the command was handled (desktop serve/doctor/read).
-    Extracted from ``main`` so the pipeline bootstrap, the early exits, and
-    the dispatch chain are three visible segments instead of one 402-line
-    body.
-    """
-    if getattr(args, "desktop_serve", False):
-        from .desktop.serve import serve_forever
+        return run_doctor(cfg, config_dir)
 
-        raise SystemExit(serve_forever())
-    if getattr(args, "proxy_list", False) or getattr(args, "proxy_test", False) or getattr(args, "proxy_screen", False):
-        from .commands.proxy_admin import run_proxy_command
+    def _print_doctor_lazy(report):
+        from .doctor import print_doctor_report
 
-        run_proxy_command(args)
-        raise SystemExit(0)
-    if getattr(args, "doctor", False):
-        from .config import default_config_dir
-        from .doctor import print_doctor_report, run_doctor
+        return print_doctor_report(report)
 
-        # The canonical config is the proxy/runtime/payment shards under the
-        # project root, so report that directory as the source. This used to be
-        # `default_config_path().parent`, which silently became `sms_tool/` once
-        # the legacy project-root config.json was archived -- i.e. the report
-        # named the directory holding the *bundled fallback* as the live config
-        # source. Nothing flagged it: `_probe_config` compares against the
-        # bundled *file* path, so a directory never matches and the status stays
-        # `ok`. The operator just read the wrong path.
-        report = run_doctor(CFG, str(default_config_dir()))
-        if getattr(args, "json_output", False):
-            print(json.dumps(report, ensure_ascii=False, indent=2))
-        elif getattr(args, "desktop_ipc", False):
-            emit_result(dict(report), enabled=True)
-        else:
-            print_doctor_report(report)
-        raise SystemExit(0 if getattr(args, "desktop_ipc", False) else report["failed"])
-    if args.desktop_read:
-        from .desktop.read import (
-            create_account_file,
-            create_mailbox_file,
-            create_payment_url_file,
-            read_account,
-            read_accounts,
-            read_mailbox_pool,
-            read_proxy_pool,
-        )
-
-        if args.desktop_read == "accounts":
-            payload = {"ok": True, "accounts": read_accounts(CFG, include_session=False)}
-        elif args.desktop_read == "account":
-            payload = {"ok": True, "account": read_account(args.account_id or "", args.email or "", CFG)}
-        elif args.desktop_read == "mailbox-pool":
-            extra_files = (args.chatai_mailbox_file,) if args.chatai_mailbox_file else ()
-            payload = {"ok": True, **read_mailbox_pool(CFG, extra_files=extra_files)}
-        elif args.desktop_read == "proxy-pool":
-            payload = read_proxy_pool(
-                CFG,
-                lane=str(getattr(args, "proxy_read_lane", "") or "protocol_registration"),
-            )
-        elif args.desktop_read == "mailbox-file":
-            payload = create_mailbox_file(args.account_id or "", args.email or "", CFG)
-        elif args.desktop_read == "account-file":
-            payload = create_account_file(args.account_id or "", args.email or "", CFG)
-        else:
-            payload = create_payment_url_file(args.account_id or "", args.email or "", CFG)
-        emit_result(payload, enabled=True)
-        # True, not a bare return: `main` treats the result as "handled" and
-        # would otherwise fall through into `_load_heavy_deps` and the
-        # registration pipeline (observed: `--desktop-read accounts
-        # --desktop-ipc` emitted the result frame, then ran the registration
-        # preflight, printed error frames and exited 2).  The docstring above
-        # already promised this contract.
-        return True
-    if getattr(args, "import_account_json", None):
-        # Handled here, not in the dispatcher: importing an export needs neither
-        # the config-heavy startup nor the registration pipeline, and `main`'s
-        # length is pinned by scripts/function_length_ratchet.py.
-        _import_account_json(args)
-        return True
-    if getattr(args, "inspect_accounts", False):
-        _inspect_accounts(args)
-        return True
-    return False
+    return cli_dispatch.main_early_commands(
+        args,
+        cfg=CFG,
+        emit_result_fn=emit_result,
+        import_account_json_fn=_import_account_json,
+        inspect_accounts_fn=_inspect_accounts,
+        safe_print_fn=safe_print,
+        run_doctor_fn=_run_doctor_lazy,
+        print_doctor_report_fn=_print_doctor_lazy,
+        default_config_dir_fn=default_config_dir,
+    )
 
 
 def _resolve_target_success_plan(args, mailboxes, effective_count: int) -> tuple[int, int]:
-    """Expand attempt pool to loaded mailboxes when ``--target-success`` is requested."""
-    target = max(0, int(getattr(args, "target_success", 0) or 0))
-    if target <= 0:
-        return effective_count, 0
-    if mailboxes and effective_count < len(mailboxes) and int(getattr(args, "count", 1) or 1) <= target:
-        effective_count = len(mailboxes)
-    return effective_count, target
+    return cli_dispatch.resolve_target_success_plan(args, mailboxes, effective_count)
+
+
+def _registration_exit_code(report, *, target_success: int = 0) -> int:
+    return cli_dispatch.registration_exit_code(report, target_success=target_success)
 
 
 def _run_email_registration_batch(
@@ -755,55 +576,21 @@ def _run_email_registration_batch(
     mailbox_seconds: float,
     register_started: float,
 ):
-    proxy_pool = _proxy_pool_values(args)
-    if effective_count > 1:
-
-        def persist_completed_result(_index, result):
-            registration_commands.persist_registration_result(
-                args,
-                result,
-                base_dir,
-                _registration_command_context(),
-                pipeline_timing=registration_commands.registration_pipeline_timing(
-                    pipeline_started,
-                    mailbox_seconds,
-                    register_started,
-                ),
-            )
-
-        batch_kwargs = {
-            "count": effective_count,
-            "proxy": args.proxy,
-            "proxy_pool": proxy_pool,
-            "mailboxes": mailboxes,
-            "workers": args.workers,
-            "phone_pool": phone_pool,
-            "codex_oauth": False,
-            "registration_mode": args.registration_mode,
-            "registration_driver": getattr(args, "registration_driver", None),
-            "browser_headless": getattr(args, "browser_headless", None),
-            "enroll_2fa": not getattr(args, "no_2fa", False),
-            "run_email_func": run_email,
-            "on_result": persist_completed_result,
-        }
-        if target_success > 0:
-            batch_kwargs["target_success"] = target_success
-        return run_batch(**batch_kwargs)
-
-    mailbox = mailboxes[0] if mailboxes else None
-    return run_batch(
-        count=1,
-        proxy=args.proxy,
-        proxy_pool=proxy_pool,
-        mailboxes=[mailbox] if mailbox else [],
-        workers=1,
+    return cli_dispatch.run_email_registration_batch(
+        args,
+        mailboxes,
+        effective_count=effective_count,
+        target_success=target_success,
         phone_pool=phone_pool,
-        codex_oauth=False,
-        registration_mode=args.registration_mode,
-        registration_driver=getattr(args, "registration_driver", None),
-        browser_headless=getattr(args, "browser_headless", None),
-        enroll_2fa=not getattr(args, "no_2fa", False),
-        run_email_func=run_email,
+        base_dir=base_dir,
+        pipeline_started=pipeline_started,
+        mailbox_seconds=mailbox_seconds,
+        register_started=register_started,
+        proxy_pool_values_fn=_proxy_pool_values,
+        registration_commands_mod=registration_commands,
+        registration_context_fn=_registration_command_context,
+        run_batch_fn=run_batch,
+        run_email_fn=run_email,
     )
 
 
@@ -874,24 +661,24 @@ def _main_registration_pipeline(args, base_dir) -> None:
     if getattr(args, "buy_remail_mailbox", False) or getattr(args, "remail_service_mode", None):
         effective_count = len(mailboxes)
         if effective_count != requested_count:
-            print(
+            safe_print(
                 f"[!] Requested {requested_count} mailbox(es), ReMail returned {effective_count}; registering returned mailboxes only."
             )
     elif getattr(args, "buy_cfworker_mailbox", False):
         effective_count = len(mailboxes)
         if effective_count != requested_count:
-            print(
+            safe_print(
                 f"[!] Requested {requested_count} mailbox(es), CFWorker returned {effective_count}; registering returned mailboxes only."
             )
     elif getattr(args, "buy_smailr_mailbox", False):
         effective_count = len(mailboxes)
         if effective_count != requested_count:
-            print(
+            safe_print(
                 f"[!] Requested {requested_count} mailbox(es), Smailr returned {effective_count}; registering returned mailboxes only."
             )
     elif mailboxes and requested_count > len(mailboxes):
         effective_count = len(mailboxes)
-        print(
+        safe_print(
             f"[!] Requested {requested_count} account(s), but only {effective_count} mailbox(es) were loaded; registering loaded mailboxes only."
         )
 
@@ -912,9 +699,9 @@ def _main_registration_pipeline(args, base_dir) -> None:
         results = []
         register_started = time.time()
         for i in range(effective_count):
-            print(f"\n{'=' * 60}")
-            print(f"[*] Phone registration {i + 1}/{effective_count}")
-            print(f"{'=' * 60}")
+            safe_print(f"\n{'=' * 60}")
+            safe_print(f"[*] Phone registration {i + 1}/{effective_count}")
+            safe_print(f"{'=' * 60}")
             result = run_phone_register(
                 proxy=registration_proxy,
                 password=args.password,
@@ -934,9 +721,9 @@ def _main_registration_pipeline(args, base_dir) -> None:
                 ),
             )
             if result.get("success"):
-                print(f"[OK] Phone registered: {result.get('phone', '')} | AT: [REDACTED]")
+                safe_print(f"[OK] Phone registered: {result.get('phone', '')} | AT: [REDACTED]")
             else:
-                print(f"[FAIL] {result.get('error', 'unknown')}")
+                safe_print(f"[FAIL] {result.get('error', 'unknown')}")
         report = _save_registration_results(
             args,
             results,
@@ -990,34 +777,6 @@ def _main_registration_pipeline(args, base_dir) -> None:
         raise SystemExit(exit_code)
 
 
-def _registration_exit_code(report, *, target_success: int = 0) -> int:
-    """Map a finished registration batch report onto a process exit code.
-
-    Returns 3 when the batch did not fully succeed, 0 otherwise.  The failure
-    is read from the report itself rather than recomputed, so the exit code can
-    never disagree with the ``N/M registered successfully`` line printed next to
-    it.
-
-    The two fields are a union, not a vote: either an explicit ``ok: False`` or
-    a non-zero ``failed`` marks the batch failed.  A real report sets both
-    consistently (``ok`` *is* ``success == total``), so the union only decides
-    the outcome for a truncated or hand-built report.  A report that carries
-    neither field is left at 0 -- a missing verdict is not evidence of failure,
-    and guessing would fail batches that actually succeeded.
-    """
-    _raw_data: object = report
-    data: dict = _raw_data if isinstance(_raw_data, dict) else {}
-    if target_success > 0:
-        return 0 if data.get("ok") is True else 3
-    if data.get("ok") is False:
-        return 3
-    try:
-        failed = int(data.get("failed") or 0)
-    except (TypeError, ValueError):
-        return 0
-    return 3 if failed > 0 else 0
-
-
 def _save_registration_results(
     args,
     results,
@@ -1040,22 +799,14 @@ def _save_registration_results(
 
 
 def _emit_registration_error(args, error: str, *, exit_code: int) -> dict:
-    """Emit one standard terminal registration failure at the CLI boundary."""
-    safe_error = sanitize_text(error)[:500]
-    payload = {
-        "ok": False,
-        "total": 0,
-        "success": 0,
-        "failed": 1,
-        "batch_id": str(getattr(args, "registration_batch_id", "") or ""),
-        "error": safe_error,
-        "exit_code": int(exit_code),
-    }
-    if bool(getattr(args, "desktop_ipc", False)):
-        emit_result(payload, enabled=True)
-    else:
-        safe_print(f"[Error] {safe_error}")
-    return payload
+    return cli_dispatch.emit_registration_error(
+        args,
+        error,
+        exit_code=exit_code,
+        emit_result_fn=emit_result,
+        safe_print_fn=safe_print,
+        sanitize_text_fn=sanitize_text,
+    )
 
 
 def _check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy_pool=None):

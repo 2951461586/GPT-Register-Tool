@@ -134,13 +134,13 @@ class ConnectedPlaywrightSession(PlaywrightBrowserSession):
                     continue
                 try:
                     item.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("managed browser session cleanup ignored: %s", exc)
         if self._playwright is not None:
             try:
                 self._playwright.stop()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("managed browser session cleanup ignored: %s", exc)
         self.page = None
         self.context = None
         self.browser = None
@@ -494,15 +494,15 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
         if self._camoufox_ctx is not None:
             try:
                 self._camoufox_ctx.__exit__(None, None, None)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("managed browser session cleanup ignored: %s", exc)
             self._camoufox_ctx = None
         # Close the proxy bridge if one was started.
         if self._proxy_bridge_closer is not None:
             try:
                 self._proxy_bridge_closer()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("managed browser session cleanup ignored: %s", exc)
             self._proxy_bridge_closer = None
         super().close()
         self._launch_succeeded = False
@@ -677,8 +677,8 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
             # __enter__ 内 open 失败：清理已建 profile，避免孤儿占满 Roxy 3/3 额度
             try:
                 self.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("managed browser session cleanup ignored: %s", exc)
             raise
         ws_address = _first(
             opened,
@@ -735,14 +735,14 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
             # delete_profile_after_run 删除），否则孤儿占满 Roxy 3/3 额度 → 死亡螺旋
             try:
                 self.close()
-            except Exception:
-                pass
+            except Exception as close_exc:
+                logger.debug("managed browser session cleanup ignored: %s", close_exc)
             raise
         except Exception as exc:
             try:
                 self.close()
-            except Exception:
-                pass
+            except Exception as close_exc:
+                logger.debug("managed browser session cleanup ignored: %s", close_exc)
             raise BrowserRegistrationError("roxy_connect_failed", type(exc).__name__) from exc
 
     def close(self) -> None:
@@ -762,8 +762,8 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
         # 关窗（幂等，失败忽略）。Roxy 关窗是异步的，紧接着删会 code:101 请先关闭窗口。
         try:
             self._request(close_method, close_path, common)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("managed browser session cleanup ignored: %s", exc)
         if self.created_profile and bool(self.driver_config.get("delete_profile_after_run", True)):
             payload = {"workspaceId": common["workspaceId"], "dirIds": [common["dirId"]]}
             last_err: Exception | None = None
@@ -778,8 +778,8 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
                         # 窗口可能尚未完全关闭 → 先再发一次 close 确保关闭，退避后重试删
                         try:
                             self._request(close_method, close_path, common)
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug("managed browser session cleanup ignored: %s", exc)
                         time.sleep(2**attempt)
             # 3 次仍失败：不抛（delete_profile_after_run 仅做清理），但必须
             # 告警——孤儿 profile 会静默累积直到占满 Roxy 额度。

@@ -54,6 +54,27 @@ def json_or_raw(response, limit: int = 500):
 _json_or_raw = json_or_raw
 
 
+def create_account_continue_url(create_data) -> str:
+    """Extract the next continue/redirect URL from an OpenAI create-account payload."""
+    if not isinstance(create_data, dict):
+        return ""
+    continue_url = str(create_data.get("continue_url") or "").strip()
+    if continue_url:
+        return continue_url
+    _error_raw: object = create_data.get("error")
+    error: dict = _error_raw if isinstance(_error_raw, dict) else {}
+    return str(error.get("redirect_uri") or error.get("redirect_url") or "").strip()
+
+
+def is_user_already_exists(create_data) -> bool:
+    """True when an OpenAI create-account payload reports ``user_already_exists``."""
+    if not isinstance(create_data, dict):
+        return False
+    _error_raw: object = create_data.get("error")
+    error: dict = _error_raw if isinstance(_error_raw, dict) else {}
+    return str(error.get("code") or "").strip() == "user_already_exists"
+
+
 # ── URL helpers ───────────────────────────────────────────────────────────────
 
 

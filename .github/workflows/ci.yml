@@ -152,6 +152,7 @@ jobs:
       # from that list, so the two must move together.
       - run: python scripts/sentinel_asset_guard.py
       - run: cargo test --manifest-path native/sentinel_vm/Cargo.toml --release
+      - run: python scripts/rust_crates_guard.py --cargo-check
       # The dependency view is *generated*: this step fails when the committed
       # `docs/current/dependency-graph.md` and the source disagree, so the
       # cycle/mutual-pair numbers cannot go stale the way a hand-built review

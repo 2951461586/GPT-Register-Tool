@@ -23,9 +23,15 @@
 
 ## 简介
 
-GPT-Register-Tool 采用 **WPF (.NET 10) 桌面端 + Python 3.12+ 业务核心 + 原生 Rust 加速层**（内置 `native/sentinel_vm/` 进程内 Rust Sentinel VM，彻底移除 Node.js 依赖；并集成 47 个 `rust-anything` PyO3 热点扩展，覆盖脱敏、`.env` 解析、OTP/SMS/SMSBower/NexSMS 号码解析、Sentinel SHA3-512 PoW 求解、TLS 扩展序置换与指纹头、注册重授权 URL 与认证流程步骤/SO Token/跳转解析、CAPTCHA 配置/桥接 HTML 与进程 Profile 匹配、代理归一化/凭据掩码/地区改写/手机代理模板/出口键与批次交错、边缘探测挑战分类、支付线缆/PayPal DOM 匹配与资格方式/状态分类、Team 试用/巡检/测活/Codex/OAuth/Agent Identity/身份 JWT 与安全 URL 解析、账号邮箱核心归一化、提链契约归一化、HTML/JS/API 路径/URL 凭据清洗、静态资源过滤、HTTP 回调/Cookie 与会话拼装、错误与重登恢复分类、CPA/SUB2API 解析与会话转换），提供邮箱 OTP 注册、账号与 Session 管理、Plus 与 GPT Team 5 席位试用优惠检测及原生 Team 托管提链、代理池治理、统一提链服务器对接和账号导出能力。运行数据默认保存在本机，不写入 Git。
+**GPT-Register-Tool** 是一款基于 **WPF (.NET 10) + Python 3.12+ + 原生 Rust** 构建的 Windows 桌面工作台，聚焦 ChatGPT 账号全生命周期自动化与运维：
 
-当前发布说明：[release-v2026.11.25.md](docs/releases/release-v2026.11.25.md)。
+- **自动化注册与接码**：支持协议直连与多浏览器驱动双泳道注册、多供应商邮箱 OTP 与手机接码、断点续跑及 AT 200 验真。
+- **账号与支付工作流**：内置账号测活、401 分层恢复、离线 JWT 巡检、Plus / GPT Team 5 席位试用检测、原生 Team 托管提链与统一外部提链服务器对接，支持 Codex / CPA / SUB2API 导入导出。
+- **高性能与本机隔离**：内置进程内 Rust Sentinel VM（零 Node.js 依赖）与 [47 个 PyO3 热点加速扩展](docs/current/rust-acceleration.md)；配置分片、Session 与运行数据默认存放在本机用户目录，不写入 Git。
+
+当前发布说明：[release-v2026.11.25.md](docs/releases/release-v2026.11.25.md)
+
+[![Buy me AI tokens](https://buymeatokens.com/api/badge/2951461586?style=flat)](https://buymeatokens.com/api/badge/2951461586?ref=badge)
 
 
 ## 赞助商
@@ -40,10 +46,6 @@ GPT-Register-Tool 采用 **WPF (.NET 10) 桌面端 + Python 3.12+ 业务核心 +
 [ProxyLane](https://proxylane.dev/?utm_source=gpt-register-tool&utm_medium=partnership&utm_campaign=gpt-register-tool_sponsor_202610&utm_content=github_readme) 住宅代理覆盖 195 个国家，95%+ IP 获 Scamalytics 低风险评级，可按城市、ISP、ASN 定向。<br>
 适合「账号 ↔ 代理槽绑定」：用户名后加会话名和城市，最长 72 小时同一个住宅 IP，换 IP 也留在同一城市。<br>
 中文界面，支持 USDT 付款，首次购买使用优惠码 GPTREG30 享 7 折。
-
-### 支持项目
-
-[![Buy Me AI Tokens](https://buymeatokens.com/api/badge/2951461586)](https://buymeatokens.com/2951461586)
 
 ## 功能亮点
 
@@ -84,7 +86,7 @@ flowchart TB
         direction LR
         CLI["sms_tool/cli.py（惰性分发）"]
         CMDS["commands/ · cli_parsers/"]
-        DIAG["doctor.py · config_usage.py"]
+        DIAG["doctor.py · config/usage.py"]
     end
 
     subgraph L3["③ 应用工作流层"]
@@ -107,9 +109,9 @@ flowchart TB
 
     subgraph L5["⑤ 基础内核与领域契约层（最内层 · 零外向依赖）"]
         direction LR
-        KERN["kernel/（仅标准库）<br/>paths · sanitizer · timeouts · flags"]
+        KERN["kernel/（仅标准库）<br/>paths · sanitizer · timeouts · flags<br/>circuit_breaker · cross_process_gate · humanize · native_loader"]
         INFRA["config/ · transport/ · proxy/ · geo/<br/>observability/"]
-        SEAMS["不可变领域契约与跨泳道原语<br/>account_models · payment/wire & checkout_contract<br/>desktop/ipc · operation_journal · cross_process_gate"]
+        SEAMS["不可变领域契约与跨泳道原语<br/>account_models · payment/wire & checkout_contract<br/>desktop/ipc · operation_journal · store/account_seed"]
         RUST["rust/（47 个 PyO3 热点扩展 · 92 函数）<br/>sanitizer · env_loader · mail_otp · sentinel_pow · tls_fingerprint · auth_headers · auth_flow_steps · auth_wire · account_stages · captcha_config · profile_reclaim · proxy · phone_proxy · batch_proxy · edge_probe · html · sms · smsbower · nexsms · data_saver · http · session_builder · session · codex_jwt · codex_oauth · agent_identity · store · cpa · sub2api · accounts · lifecycle · liveness · team_trial · payment_wire · paypal_dom · pay_link · qualification"]
     end
 
@@ -133,18 +135,18 @@ flowchart TB
 | --- | --- | --- |
 | ① 表面层（桌面端 UI） | `SmsWorkbench/`（`Views` · `Dialogs` · `ViewModels` · `Services` · `Models` · `Interop` · `Localization` · `Themes` · `Assets/Fonts/`） | Generic Host / DI、角色目录命名空间隔离、MVVM 主窗与全 XAML 弹窗、无窗口依赖 Coordinator、DeepAI 壳层-悬浮画布双主题（光/暗）与内嵌 `Atkinson Hyperlegible Next` 字体、可折叠日志/队列底栏、托盘与全局热键、工作区备份恢复 |
 | ① 表面层（桌面契约与读通道） | `SmsWorkbench.Contracts/`、`sms_tool/desktop/serve.py`、`sms_tool/desktop/read.py` | 窗口无关的 CLI 命令规划（`BackendCommandPlanner`）、支付方式目录、敏感词脱敏、常驻 JSONL 只读快照服务与 `DesktopReadClient` 协议契约 |
-| ② CLI / 命令适配 | `sms_tool/cli.py`、`sms_tool/commands/`、`sms_tool/cli_parsers/`、`sms_tool/doctor.py`、`sms_tool/config_usage.py` | 惰性命令分发、纯参数声明组、退出码映射与环境诊断；不承载 provider 协议实现或直接写库 |
+| ② CLI / 命令适配 | `sms_tool/cli.py`、`sms_tool/commands/`、`sms_tool/cli_parsers/`、`sms_tool/doctor.py`、`sms_tool/config/usage.py` | 惰性命令分发、纯参数声明组、退出码映射与环境诊断；不承载 provider 协议实现或直接写库 |
 | ③ 应用工作流（注册与认证） | `sms_tool/registration/`（`orchestrator.py` · `handlers.py` · `batch_runner.py` · `pulse.py`）、`sms_tool/auth_flow/`、`sms_tool/registration_drivers/browser_flow/` | 注册入口分派与 `RegistrationOperations` 不可变绑定、协议分阶段执行、目标成功数与脉冲调度、断点续跑、浏览器页面状态机；协议与浏览器两条泳道共用 OTP / Session / AT 200 边界 |
 | ③ 应用工作流（邮箱 · 账号 · 支付编排） | `sms_tool/mailbox/`、`sms_tool/accounts/`、`sms_tool/codex/`、`sms_tool/importers/`、`sms_tool/payment/batch.py`、`sms_tool/payment/qualification_batch.py` | 邮箱路由/策略/轮询、存量账号测活/401 分层恢复/离线 JWT 巡检（`sms_tool/accounts/account_inspection.py`）/优惠与健康批处理/换绑/终端清理、Codex OAuth 与 CPA / SUB2API 导入导出、批量协议支付与支付资格编排 |
 | ④ Provider / 驱动适配 | `sms_tool/providers/`、`sms_tool/phone/`、`sms_tool/registration_drivers/`、`sms_tool/browser/`、`sms_tool/sentinel/`、`sms_tool/registration/sentinel_tokens.py` | 邮箱与手机接码供应商客户端与号池复用；浏览器驱动（playwright · camoufox · roxy · cloak）、静态资源省流拦截（`sms_tool/registration_drivers/data_saver.py`）与进程/指纹池；Sentinel 进程内原生 Rust FFI（`sms_tool/sentinel/native_ffi.py`）签发 |
 | ④ 支付泳道与持久化适配 | `sms_tool/pay_link/`、`sms_tool/paypal/`、`sms_tool/store/`、`sms_tool/session/` | 多方式支付注册表与统一提链服务器 HTTP 适配（`sms_tool/pay_link/extract_server.py`，覆盖全部 15 种目录支付方式）、PayPal 自动授权执行；SQLite + Session JSON 双层索引与断点持久化（`sms_tool/storage.py` 为兼容壳）、标准会话构建与刷新 |
-| ⑤ 基础内核 | `sms_tool/kernel/` | 零应用层依赖的纯标准库底座：路径、脱敏、超时常量、冻结配置布尔开关、失败分类词表与共享传输原语 |
+| ⑤ 基础内核 | `sms_tool/kernel/` | 零应用层依赖的纯标准库底座：路径、脱敏、超时常量、冻结配置布尔开关、失败分类词表、批次熔断器、跨进程文件锁、人性化节奏与共享原生扩展加载器 |
 | ⑤ 基础设施底座 | `sms_tool/config/`、`sms_tool/transport/`、`sms_tool/proxy/`、`sms_tool/geo/`、`sms_tool/observability/` | 分片配置加载与只读冻结；`curl_cffi` / `wreq` 双传输后端、端点单一权威（`sms_tool/transport/endpoints.py`）与指纹池；代理串单一权威（`sms_tool/proxy/entry.py`）、通道路由、健康度与二级跳板本地桥（`sms_tool/proxy/bridge.py`）；出口 GeoIP / 时区单一权威与脱敏遥测 |
-| ⑤ 领域契约与共享原语 | `sms_tool/accounts/account_models.py`、`sms_tool/payment/wire.py`、`sms_tool/payment/checkout_contract.py`、`sms_tool/payment/catalog.py`、`sms_tool/desktop/ipc.py`、`sms_tool/operation_journal.py`、`sms_tool/cross_process_gate.py` | 跨泳道不可变契约（账号模型、Checkout 与支付线缆核、方法目录、优惠/支付资格状态机、唯一 `@@SMSWORKBENCH_V2@@` IPC 写入器、幂等恢复日志与跨进程文件锁） |
+| ⑤ 领域契约与共享原语 | `sms_tool/accounts/account_models.py`、`sms_tool/payment/wire.py`、`sms_tool/payment/checkout_contract.py`、`sms_tool/payment/catalog.py`、`sms_tool/desktop/ipc.py`、`sms_tool/operation_journal.py`、`sms_tool/store/account_seed.py` | 跨泳道不可变契约（账号模型、Checkout 与支付线缆核、方法目录、优惠/支付资格状态机、唯一 `@@SMSWORKBENCH_V2@@` IPC 写入器、幂等恢复日志与账号种子解析） |
 
 - **提链外部服务边界**：旧版内置协议支付源提取器已彻底退役，全部 15 种支付方式统一经 `sms_tool/pay_link/extract_server.py` 对接外部提链服务器（`protocol_payments.extract_link_server` / `EXTRACT_LINK_*` 环境变量）。
 - **Rust 原生加速与零 Node.js 依赖**：`native/sentinel_vm/` 提供进程内 Sentinel VM FFI；`rust/` 下 47 个由 `rust-anything` 管理的 PyO3 扩展加速 92 个热点函数（14,124 条录制用例 100% 一致，0 `unsafe`，完整基准见 [Rust 原生加速架构](docs/current/rust-acceleration.md)）。
-- **自动化架构门禁**：五层依赖方向与命名空间隔离由 CI 和预提交钩子强制守卫，包括 `scripts/import_layer_ratchet.py`、`scripts/kernel_boundary_ratchet.py`、`scripts/root_module_ratchet.py`、`scripts/architecture_scan.py` 以及 `tests/SmsWorkbench.Tests/NamespaceArchitectureTests.cs`。
+- **自动化架构门禁**：五层依赖方向（零反向白名单、零跨泳道耦合）、24 份机读边界 Spec、47 个 Rust PyO3 扩展编译校验与命名空间隔离由 CI 和预提交钩子强制守卫，包括 `scripts/import_layer_ratchet.py`、`scripts/kernel_boundary_ratchet.py`、`scripts/root_module_ratchet.py`、`scripts/lane_coupling_ratchet.py`、`scripts/spec_validate.py`、`scripts/rust_crates_guard.py`、`scripts/architecture_scan.py` 以及 `tests/SmsWorkbench.Tests/NamespaceArchitectureTests.cs`。
 
 更详细的边界规则见 [架构与边界说明](docs/architecture.md)，WPF 前端架构见 [桌面端 UI 架构](docs/current/ui-architecture.md)，Rust 原生加速见 [Rust 加速架构](docs/current/rust-acceleration.md)，物理文件归属见 [目录职责](docs/directory-map.md)。
 

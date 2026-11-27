@@ -30,7 +30,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # annotation only: the import itself is function-local
-    from ..batch_circuit_breaker import BatchCircuitBreaker
+    from ..kernel.circuit_breaker import BatchCircuitBreaker
 
 from .qualification import (
     _scrub,
@@ -602,7 +602,7 @@ def _as_int(value: Any, default: int = 0) -> int:
 
 def _breaker() -> "BatchCircuitBreaker":
     """Whole-batch breaker sharing the registration batch-policy keys."""
-    from ..batch_circuit_breaker import BatchCircuitBreaker
+    from ..kernel.circuit_breaker import BatchCircuitBreaker
 
     registration_cfg = _runtime_config().get("registration")
     if not isinstance(registration_cfg, dict):
