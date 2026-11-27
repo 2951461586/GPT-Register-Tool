@@ -151,3 +151,42 @@ def register(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Skip read-only team-1-month-free coupon pre-check before creating Team checkout link",
     )
+    _register_protocol_card_args(parser)
+
+
+def _register_protocol_card_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--protocol-card-quote",
+        action="store_true",
+        help="Read-only Stripe Hosted Checkout quote (init + billing/tax sync) for a cs_ checkout URL",
+    )
+    parser.add_argument(
+        "--protocol-card-pay",
+        action="store_true",
+        help="Execute non-CAPTCHA Stripe Hosted (cs_) or Custom (oaics_) protocol card payment (card from --card-file or GPT_CARD_JSON)",
+    )
+    parser.add_argument(
+        "--checkout-url",
+        default=None,
+        help="Stripe Hosted (cs_...) or ChatGPT Custom (oaics_...) checkout URL or session ID",
+    )
+    parser.add_argument(
+        "--stripe-publishable-key",
+        default=None,
+        help="Stripe publishable key (pk_live_... / pk_test_...) for --protocol-card-quote / --protocol-card-pay",
+    )
+    parser.add_argument(
+        "--payment-method-id",
+        default=None,
+        help="Pre-tokenized Stripe PaymentMethod ID (pm_...) to reuse in --protocol-card-pay",
+    )
+    parser.add_argument(
+        "--card-file",
+        default=None,
+        help="Path to local JSON file with card fields (number, exp_month, exp_year, cvc); falls back to GPT_CARD_JSON",
+    )
+    parser.add_argument(
+        "--protocol-read-only",
+        action="store_true",
+        help="Inspect/reconcile an existing oaics_ custom checkout without submitting payment",
+    )

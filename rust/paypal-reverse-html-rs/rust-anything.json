@@ -1,0 +1,142 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/paypal/reverse_protocol.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "paypal-reverse-html-rs",
+  "exports": [
+    {
+      "name": "extract_hidden_fields",
+      "file": "sms_tool/paypal/reverse_protocol.py",
+      "line": 134,
+      "params": [
+        { "name": "form_html", "ts_type": "string", "optional": false, "rest": false }
+      ],
+      "returns": "Record<string, string>",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "extract_input_fields",
+      "file": "sms_tool/paypal/reverse_protocol.py",
+      "line": 147,
+      "params": [
+        { "name": "form_html", "ts_type": "string", "optional": false, "rest": false }
+      ],
+      "returns": "Record<string, string>",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "extract_select_fields",
+      "file": "sms_tool/paypal/reverse_protocol.py",
+      "line": 161,
+      "params": [
+        { "name": "form_html", "ts_type": "string", "optional": false, "rest": false }
+      ],
+      "returns": "Record<string, string>",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "find_signup_form",
+      "file": "sms_tool/paypal/reverse_protocol.py",
+      "line": 195,
+      "params": [
+        { "name": "html", "ts_type": "string", "optional": false, "rest": false },
+        { "name": "current_url", "ts_type": "string", "optional": false, "rest": false }
+      ],
+      "returns": "tuple | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "find_submit_form",
+      "file": "sms_tool/paypal/reverse_protocol.py",
+      "line": 204,
+      "params": [
+        { "name": "html", "ts_type": "string", "optional": false, "rest": false },
+        { "name": "current_url", "ts_type": "string", "optional": false, "rest": false }
+      ],
+      "returns": "tuple | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "extract_challenge_form",
+      "file": "sms_tool/paypal/reverse_protocol.py",
+      "line": 225,
+      "params": [
+        { "name": "html", "ts_type": "string", "optional": false, "rest": false },
+        { "name": "current_url", "ts_type": "string", "optional": false, "rest": false }
+      ],
+      "returns": "tuple | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "build_reverse_session_headers",
+      "file": "sms_tool/paypal/reverse_protocol.py",
+      "line": 76,
+      "reason": "static header dict stays in Python"
+    },
+    {
+      "name": "extract_token",
+      "file": "sms_tool/paypal/reverse_protocol.py",
+      "line": 98,
+      "reason": "takes `*args`"
+    },
+    {
+      "name": "get_attr",
+      "file": "sms_tool/paypal/reverse_protocol.py",
+      "line": 115,
+      "reason": "small helper with dynamic attribute name stays in Python"
+    },
+    {
+      "name": "extract_form_action",
+      "file": "sms_tool/paypal/reverse_protocol.py",
+      "line": 121,
+      "reason": "benchmarked at 1.02x tie due to PyO3 call-crossing cost"
+    },
+    {
+      "name": "find_form_by_fields",
+      "file": "sms_tool/paypal/reverse_protocol.py",
+      "line": 179,
+      "reason": "delegates to accelerated field extractors"
+    },
+    {
+      "name": "is_js_only_page",
+      "file": "sms_tool/paypal/reverse_protocol.py",
+      "line": 216,
+      "reason": "benchmarked at 0.44x on short HTML due to PyO3 call-crossing cost"
+    },
+    {
+      "name": "cookie_dict",
+      "file": "sms_tool/paypal/reverse_protocol.py",
+      "line": 247,
+      "reason": "inspects live response cookie jar object"
+    },
+    {
+      "name": "extract_csrf_token",
+      "file": "sms_tool/paypal/reverse_protocol.py",
+      "line": 255,
+      "reason": "inspects live response object and cookies"
+    }
+  ]
+}

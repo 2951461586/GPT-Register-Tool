@@ -12,6 +12,20 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
+from ..kernel.native_loader import load_native_module
+
+_NATIVE_PAYPAL_REVERSE_HTML = load_native_module(
+    "paypal-reverse-html-rs",
+    "paypal_reverse_html_rs",
+    "RUST_ANYTHING_UNIT_PAYPAL_REVERSE_HTML",
+)
+_NATIVE_EXTRACT_HIDDEN_FIELDS = getattr(_NATIVE_PAYPAL_REVERSE_HTML, "extract_hidden_fields", None)
+_NATIVE_EXTRACT_INPUT_FIELDS = getattr(_NATIVE_PAYPAL_REVERSE_HTML, "extract_input_fields", None)
+_NATIVE_EXTRACT_SELECT_FIELDS = getattr(_NATIVE_PAYPAL_REVERSE_HTML, "extract_select_fields", None)
+_NATIVE_FIND_SIGNUP_FORM = getattr(_NATIVE_PAYPAL_REVERSE_HTML, "find_signup_form", None)
+_NATIVE_FIND_SUBMIT_FORM = getattr(_NATIVE_PAYPAL_REVERSE_HTML, "find_submit_form", None)
+_NATIVE_EXTRACT_CHALLENGE_FORM = getattr(_NATIVE_PAYPAL_REVERSE_HTML, "extract_challenge_form", None)
+
 
 @dataclass
 class ReversePayResult:
@@ -133,6 +147,8 @@ def extract_form_action(form_html: str, current_url: str) -> str:
 
 def extract_hidden_fields(form_html: str) -> dict[str, str]:
     """Extract hidden input fields from a form."""
+    if _NATIVE_EXTRACT_HIDDEN_FIELDS is not None and isinstance(form_html, str):
+        return _NATIVE_EXTRACT_HIDDEN_FIELDS(form_html)
     fields: dict[str, str] = {}
     pattern = re.compile(r'<input[^>]*type=["\']hidden["\'][^>]*>', re.IGNORECASE)
     for match in pattern.finditer(form_html):
@@ -146,6 +162,8 @@ def extract_hidden_fields(form_html: str) -> dict[str, str]:
 
 def extract_input_fields(form_html: str) -> dict[str, str]:
     """Extract all non-button input fields from a form."""
+    if _NATIVE_EXTRACT_INPUT_FIELDS is not None and isinstance(form_html, str):
+        return _NATIVE_EXTRACT_INPUT_FIELDS(form_html)
     fields: dict[str, str] = {}
     pattern = re.compile(r"<input[^>]*>", re.IGNORECASE)
     for match in pattern.finditer(form_html):
@@ -160,6 +178,8 @@ def extract_input_fields(form_html: str) -> dict[str, str]:
 
 def extract_select_fields(form_html: str) -> dict[str, str]:
     """Extract select field names with their selected/default option values."""
+    if _NATIVE_EXTRACT_SELECT_FIELDS is not None and isinstance(form_html, str):
+        return _NATIVE_EXTRACT_SELECT_FIELDS(form_html)
     fields: dict[str, str] = {}
     pattern = re.compile(r"<select[^>]*>.*?</select>", re.IGNORECASE | re.DOTALL)
     for match in pattern.finditer(form_html):
@@ -194,6 +214,8 @@ def find_form_by_fields(html: str, current_url: str, field_names: list[str]) -> 
 
 def find_signup_form(html: str, current_url: str) -> tuple[str, dict[str, str]] | None:
     """Find the main signup/login form on the page."""
+    if _NATIVE_FIND_SIGNUP_FORM is not None and isinstance(html, str) and isinstance(current_url, str):
+        return _NATIVE_FIND_SIGNUP_FORM(html, current_url)
     return find_form_by_fields(
         html,
         current_url,
@@ -203,6 +225,8 @@ def find_signup_form(html: str, current_url: str) -> tuple[str, dict[str, str]] 
 
 def find_submit_form(html: str, current_url: str) -> tuple[str, dict[str, str]] | None:
     """Find a form with a submit button containing agree/pay text."""
+    if _NATIVE_FIND_SUBMIT_FORM is not None and isinstance(html, str) and isinstance(current_url, str):
+        return _NATIVE_FIND_SUBMIT_FORM(html, current_url)
     form_pattern = re.compile(r"<form[^>]*>(.*?)</form>", re.DOTALL | re.IGNORECASE)
     for match in form_pattern.finditer(html):
         form_html = match.group(0)
@@ -224,6 +248,8 @@ def is_js_only_page(html: str) -> bool:
 
 def extract_challenge_form(html: str, current_url: str) -> tuple[str, dict[str, str]] | None:
     """Extract PayPal ADS CAPTCHA challenge action URL and hidden inputs."""
+    if _NATIVE_EXTRACT_CHALLENGE_FORM is not None and isinstance(html, str) and isinstance(current_url, str):
+        return _NATIVE_EXTRACT_CHALLENGE_FORM(html, current_url)
     action_match = re.search(
         r'<form[^>]*name=["\']?challenge["\']?[^>]*action=["\']([^"\']+)["\']',
         html,

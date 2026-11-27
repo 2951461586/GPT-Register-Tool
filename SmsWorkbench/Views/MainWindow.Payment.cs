@@ -33,6 +33,38 @@ namespace SmsWorkbench.Views
         // stage-matrix store and the dialog service were deleted. Batch protocol
         // payment (the only supported entry) stays below.
 
+        private readonly IProtocolCardPaymentDialogService? protocolCardPaymentDialogs;
+
+        private void OpenProtocolCardPayment()
+        {
+            if (backendTasks.IsRunning)
+            {
+                ShowThemedInfoDialog(
+                    Loc.T("任务进行中"),
+                    Loc.T("已有后端任务正在运行，请先等待其完成或取消后再发起协议卡付。"));
+                return;
+            }
+
+            PoolRow? row = Pool.SelectedRow ?? accountGridControl.SelectedRow;
+            string initialUrl = row != null && LooksLikeProtocolCardUrl(row.PayPalUrl)
+                ? row.PayPalUrl.Trim()
+                : "";
+            string initialEmail = row?.Identifier?.Trim() ?? "";
+            string initialSessionFile = row != null ? SessionFileFor(row) : "";
+
+            IProtocolCardPaymentDialogService dialogService = protocolCardPaymentDialogs
+                ?? new ProtocolCardPaymentDialogService(new ProtocolCardPaymentService(backendTasks, settingsService));
+            dialogService.ShowDialog(this, initialUrl, initialEmail, initialSessionFile);
+        }
+
+        private static bool LooksLikeProtocolCardUrl(string? url)
+        {
+            if (!ProtocolCardPaymentViewModel.TryValidateHttpsUrl(url, out string normalized))
+                return false;
+            return normalized.Contains("cs_", StringComparison.OrdinalIgnoreCase)
+                || normalized.Contains("oaics_", StringComparison.OrdinalIgnoreCase);
+        }
+
         private void BatchProtocolPayment()
         {
             var rows = SelectedRowsOrCurrent()

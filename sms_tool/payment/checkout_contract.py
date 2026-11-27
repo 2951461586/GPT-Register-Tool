@@ -9,11 +9,30 @@ from typing import Any, Iterable
 
 from .catalog import PAYMENT_METHODS as CATALOG_PAYMENT_METHODS
 from .promotion_states import TEAM_TRIAL_CAMPAIGN_ID as TEAM_TRIAL_CAMPAIGN_ID
+from .protocol_codec import billing_currency_for as billing_currency_for
 from ..transport import endpoints
 
 
 CHECKOUT_PATH = "/backend-api/payments/checkout"
 CHECKOUT_URL = f"{endpoints.CHATGPT_BASE}{CHECKOUT_PATH}"
+CHATGPT_BASE = endpoints.CHATGPT_BASE
+CHATGPT_CHECKOUT_API = endpoints.CHATGPT_CHECKOUT_API
+CHATGPT_CHECKOUT_CONFIRM = endpoints.CHATGPT_CHECKOUT_CONFIRM
+CHATGPT_CHECKOUT_SESSION_ACK = endpoints.CHATGPT_CHECKOUT_SESSION_ACK
+CHATGPT_CHECKOUT_TAXES = endpoints.CHATGPT_CHECKOUT_TAXES
+CHATGPT_CHECKOUT_UPDATE_TAX_ID = endpoints.CHATGPT_CHECKOUT_UPDATE_TAX_ID
+CHATGPT_SUBSCRIPTIONS = endpoints.CHATGPT_SUBSCRIPTIONS
+OPENAI_PAY_BASE = endpoints.OPENAI_PAY_BASE
+STRIPE_API_BASE = endpoints.STRIPE_API_BASE
+STRIPE_CONFIRMATION_TOKENS = endpoints.STRIPE_CONFIRMATION_TOKENS
+STRIPE_ELEMENTS_SESSIONS = endpoints.STRIPE_ELEMENTS_SESSIONS
+STRIPE_JS_ORIGIN = endpoints.STRIPE_JS_ORIGIN
+STRIPE_PAYMENT_INTENTS = endpoints.STRIPE_PAYMENT_INTENTS
+STRIPE_PAYMENT_METHODS = endpoints.STRIPE_PAYMENT_METHODS
+STRIPE_PAYMENT_PAGES = endpoints.STRIPE_PAYMENT_PAGES
+STRIPE_SETUP_INTENTS = endpoints.STRIPE_SETUP_INTENTS
+openai_pay_page = endpoints.openai_pay_page
+stripe_payment_page = endpoints.stripe_payment_page
 STRIPE_INIT_URL = endpoints.STRIPE_API_BASE + "/v1/payment_pages/{checkout_session_id}/init"
 DEFAULT_STRIPE_VERSION = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
 

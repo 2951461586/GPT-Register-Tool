@@ -1,0 +1,38 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/pay_link/extract_server.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "extract-server-parse-rs",
+  "exports": [
+    {
+      "name": "_validate_api_base",
+      "file": "sms_tool/pay_link/extract_server.py",
+      "line": 140,
+      "params": [
+        { "name": "api_base", "ts_type": "string", "optional": false, "rest": false }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "resolve_extract_server_config",
+      "file": "sms_tool/pay_link/extract_server.py",
+      "line": 156,
+      "reason": "reads environment variables and config mappings"
+    },
+    {
+      "name": "extract_link_via_server",
+      "file": "sms_tool/pay_link/extract_server.py",
+      "line": 506,
+      "reason": "network HTTP client stays in Python"
+    }
+  ]
+}

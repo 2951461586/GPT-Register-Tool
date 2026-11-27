@@ -1,0 +1,222 @@
+{"fn": "_validate_api_base", "args": ["./x/**/*.json"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a.b.c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a"], "ok": false}
+{"fn": "_validate_api_base", "args": ["ab"], "ok": false}
+{"fn": "_validate_api_base", "args": ["trailing.emoji 👍🏽 mix"], "ok": false}
+{"fn": "_validate_api_base", "args": ["  padded  "], "ok": false}
+{"fn": "_validate_api_base", "args": ["a..btrailing."], "ok": false}
+{"fn": "_validate_api_base", "args": ["src/a/b.ts"], "ok": false}
+{"fn": "_validate_api_base", "args": ["hello world"], "ok": false}
+{"fn": "_validate_api_base", "args": ["İstanbul"], "ok": false}
+{"fn": "_validate_api_base", "args": ["😀"], "ok": false}
+{"fn": "_validate_api_base", "args": ["straße"], "ok": false}
+{"fn": "_validate_api_base", "args": ["abc"], "ok": false}
+{"fn": "_validate_api_base", "args": ["Hello World"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a:b:c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["İstanbul  padded  "], "ok": false}
+{"fn": "_validate_api_base", "args": ["emoji 👍🏽 mix日本語のテキスト"], "ok": false}
+{"fn": "_validate_api_base", "args": ["emoji 👍🏽 mix"], "ok": false}
+{"fn": "_validate_api_base", "args": ["éemoji 👍🏽 mix"], "ok": false}
+{"fn": "_validate_api_base", "args": ["./x/**/*.jsona.b.c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["ünïcödéa😀b😀c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["aé"], "ok": false}
+{"fn": "_validate_api_base", "args": [""], "ok": false}
+{"fn": "_validate_api_base", "args": ["ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_validate_api_base", "args": ["﻿bomkey_name-1"], "ok": false}
+{"fn": "_validate_api_base", "args": ["tab\tseparated"], "ok": false}
+{"fn": "_validate_api_base", "args": ["./x/**/*.json﻿bom"], "ok": false}
+{"fn": "_validate_api_base", "args": ["ΣΊΣΥΦΟΣHELLO"], "ok": false}
+{"fn": "_validate_api_base", "args": ["ünïcödé"], "ok": false}
+{"fn": "_validate_api_base", "args": ["{name} has {count} items"], "ok": false}
+{"fn": "_validate_api_base", "args": ["  padded  {name} has {count} items"], "ok": false}
+{"fn": "_validate_api_base", "args": ["ab{name} has {count} items"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a..b"], "ok": false}
+{"fn": "_validate_api_base", "args": ["ns:key.path"], "ok": false}
+{"fn": "_validate_api_base", "args": ["日本語のテキスト"], "ok": false}
+{"fn": "_validate_api_base", "args": ["ns:key.pathsrc/a/b.ts"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a:b:ca.b.c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a..b﻿bom"], "ok": false}
+{"fn": "_validate_api_base", "args": ["日本語のテキストHELLO"], "ok": false}
+{"fn": "_validate_api_base", "args": [":"], "ok": false}
+{"fn": "_validate_api_base", "args": ["hello"], "ok": false}
+{"fn": "_validate_api_base", "args": [":a"], "ok": false}
+{"fn": "_validate_api_base", "args": ["key_name-1"], "ok": false}
+{"fn": "_validate_api_base", "args": ["trailing.  padded  "], "ok": false}
+{"fn": "_validate_api_base", "args": ["a😀b😀c"], "ok": false}
+{"fn": "_validate_api_base", "args": [":trailing."], "ok": false}
+{"fn": "_validate_api_base", "args": ["😀line1\nline2"], "ok": false}
+{"fn": "_validate_api_base", "args": ["trailing."], "ok": false}
+{"fn": "_validate_api_base", "args": ["日本語のテキストHello World"], "ok": false}
+{"fn": "_validate_api_base", "args": ["é"], "ok": false}
+{"fn": "_validate_api_base", "args": ["﻿bom"], "ok": false}
+{"fn": "_validate_api_base", "args": ["src/a/b.tsns:key.path"], "ok": false}
+{"fn": "_validate_api_base", "args": ["line1\nline2"], "ok": false}
+{"fn": "_validate_api_base", "args": ["hello:"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a.b.cünïcödé"], "ok": false}
+{"fn": "_validate_api_base", "args": ["İstanbulline1\nline2"], "ok": false}
+{"fn": "_validate_api_base", "args": ["Hello Worldab"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a.b.ctab\tseparated"], "ok": false}
+{"fn": "_validate_api_base", "args": [".leading"], "ok": false}
+{"fn": "_validate_api_base", "args": ["src/a/b.tsa😀b😀c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["﻿bom./x/**/*.json"], "ok": false}
+{"fn": "_validate_api_base", "args": ["  padded  ab"], "ok": false}
+{"fn": "_validate_api_base", "args": ["HELLO"], "ok": false}
+{"fn": "_validate_api_base", "args": ["aab"], "ok": false}
+{"fn": "_validate_api_base", "args": ["hello worldns:key.path"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a:b:cİstanbul"], "ok": false}
+{"fn": "_validate_api_base", "args": ["tab\tseparateda..b"], "ok": false}
+{"fn": "_validate_api_base", "args": ["ΣΊΣΥΦΟΣé"], "ok": false}
+{"fn": "_validate_api_base", "args": ["helloünïcödé"], "ok": false}
+{"fn": "_validate_api_base", "args": ["key_name-1HELLO"], "ok": false}
+{"fn": "_validate_api_base", "args": ["HELLO日本語のテキスト"], "ok": false}
+{"fn": "_validate_api_base", "args": ["trailing.trailing."], "ok": false}
+{"fn": "_validate_api_base", "args": ["./x/**/*.jsonstraße"], "ok": false}
+{"fn": "_validate_api_base", "args": [".leadingline1\nline2"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a:b:ca😀b😀c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["aünïcödé"], "ok": false}
+{"fn": "_validate_api_base", "args": ["straßeΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_validate_api_base", "args": ["abline1\nline2"], "ok": false}
+{"fn": "_validate_api_base", "args": ["ΣΊΣΥΦΟΣHello World"], "ok": false}
+{"fn": "_validate_api_base", "args": [":ns:key.path"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a😀b😀c{name} has {count} items"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a:b:c.leading"], "ok": false}
+{"fn": "_validate_api_base", "args": ["HELLO﻿bom"], "ok": false}
+{"fn": "_validate_api_base", "args": ["tab\tseparatedkey_name-1"], "ok": false}
+{"fn": "_validate_api_base", "args": ["helloa:b:c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["é日本語のテキスト"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a.b.csrc/a/b.ts"], "ok": false}
+{"fn": "_validate_api_base", "args": [".leadingabc"], "ok": false}
+{"fn": "_validate_api_base", "args": ["İstanbula"], "ok": false}
+{"fn": "_validate_api_base", "args": ["astraße"], "ok": false}
+{"fn": "_validate_api_base", "args": ["aba😀b😀c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["HELLOa:b:c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["emoji 👍🏽 mixHELLO"], "ok": false}
+{"fn": "_validate_api_base", "args": ["tab\tseparated./x/**/*.json"], "ok": false}
+{"fn": "_validate_api_base", "args": ["é:"], "ok": false}
+{"fn": "_validate_api_base", "args": ["emoji 👍🏽 mixns:key.path"], "ok": false}
+{"fn": "_validate_api_base", "args": ["ΣΊΣΥΦΟΣ:"], "ok": false}
+{"fn": "_validate_api_base", "args": ["abcé"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a..bstraße"], "ok": false}
+{"fn": "_validate_api_base", "args": ["abΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_validate_api_base", "args": ["hello world日本語のテキスト"], "ok": false}
+{"fn": "_validate_api_base", "args": ["éΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_validate_api_base", "args": ["helloİstanbul"], "ok": false}
+{"fn": "_validate_api_base", "args": ["{name} has {count} itemshello"], "ok": false}
+{"fn": "_validate_api_base", "args": ["日本語のテキストa.b.c"], "ok": false}
+{"fn": "_validate_api_base", "args": [".leadingsrc/a/b.ts"], "ok": false}
+{"fn": "_validate_api_base", "args": ["tab\tseparated日本語のテキスト"], "ok": false}
+{"fn": "_validate_api_base", "args": ["{name} has {count} itemsab"], "ok": false}
+{"fn": "_validate_api_base", "args": ["İstanbultab\tseparated"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a.b.c.leading"], "ok": false}
+{"fn": "_validate_api_base", "args": ["﻿bomünïcödé"], "ok": false}
+{"fn": "_validate_api_base", "args": ["abchello world"], "ok": false}
+{"fn": "_validate_api_base", "args": ["  padded  ./x/**/*.json"], "ok": false}
+{"fn": "_validate_api_base", "args": ["hello worldé"], "ok": false}
+{"fn": "_validate_api_base", "args": [".leadingtab\tseparated"], "ok": false}
+{"fn": "_validate_api_base", "args": ["é./x/**/*.json"], "ok": false}
+{"fn": "_validate_api_base", "args": ["trailing.a😀b😀c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["helloemoji 👍🏽 mix"], "ok": false}
+{"fn": "_validate_api_base", "args": [".leading.leading"], "ok": false}
+{"fn": "_validate_api_base", "args": ["İstanbulé"], "ok": false}
+{"fn": "_validate_api_base", "args": ["HELLOHello World"], "ok": false}
+{"fn": "_validate_api_base", "args": ["src/a/b.tsab"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a.b.c日本語のテキスト"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a:b:c日本語のテキスト"], "ok": false}
+{"fn": "_validate_api_base", "args": ["tab\tseparatedünïcödé"], "ok": false}
+{"fn": "_validate_api_base", "args": ["Hello WorldHELLO"], "ok": false}
+{"fn": "_validate_api_base", "args": ["  padded  .leading"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a..ba"], "ok": false}
+{"fn": "_validate_api_base", "args": ["﻿bomHello World"], "ok": false}
+{"fn": "_validate_api_base", "args": [":ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_validate_api_base", "args": ["HELLOa😀b😀c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a..bns:key.path"], "ok": false}
+{"fn": "_validate_api_base", "args": ["  padded  Hello World"], "ok": false}
+{"fn": "_validate_api_base", "args": ["helloa"], "ok": false}
+{"fn": "_validate_api_base", "args": ["İstanbula..b"], "ok": false}
+{"fn": "_validate_api_base", "args": ["line1\nline2ns:key.path"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a😀b😀cline1\nline2"], "ok": false}
+{"fn": "_validate_api_base", "args": ["line1\nline2./x/**/*.json"], "ok": false}
+{"fn": "_validate_api_base", "args": ["./x/**/*.json日本語のテキスト"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a:b:csrc/a/b.ts"], "ok": false}
+{"fn": "_validate_api_base", "args": ["straße日本語のテキスト"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a:b:cabc"], "ok": false}
+{"fn": "_validate_api_base", "args": ["ahello world"], "ok": false}
+{"fn": "_validate_api_base", "args": ["./x/**/*.jsoné"], "ok": false}
+{"fn": "_validate_api_base", "args": ["tab\tseparatedline1\nline2"], "ok": false}
+{"fn": "_validate_api_base", "args": ["Hello Worldemoji 👍🏽 mix"], "ok": false}
+{"fn": "_validate_api_base", "args": ["  padded  ünïcödé"], "ok": false}
+{"fn": "_validate_api_base", "args": [":ünïcödé"], "ok": false}
+{"fn": "_validate_api_base", "args": ["HELLOab"], "ok": false}
+{"fn": "_validate_api_base", "args": ["src/a/b.tsHELLO"], "ok": false}
+{"fn": "_validate_api_base", "args": ["HELLOtrailing."], "ok": false}
+{"fn": "_validate_api_base", "args": ["ünïcödéHello World"], "ok": false}
+{"fn": "_validate_api_base", "args": ["HELLO{name} has {count} items"], "ok": false}
+{"fn": "_validate_api_base", "args": ["key_name-1😀"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a.b.cΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_validate_api_base", "args": ["日本語のテキストé"], "ok": false}
+{"fn": "_validate_api_base", "args": ["./x/**/*.jsonHELLO"], "ok": false}
+{"fn": "_validate_api_base", "args": ["HELLOkey_name-1"], "ok": false}
+{"fn": "_validate_api_base", "args": ["tab\tseparatedhello world"], "ok": false}
+{"fn": "_validate_api_base", "args": ["src/a/b.tsa.b.c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["日本語のテキストemoji 👍🏽 mix"], "ok": false}
+{"fn": "_validate_api_base", "args": ["abc日本語のテキスト"], "ok": false}
+{"fn": "_validate_api_base", "args": ["İstanbulHELLO"], "ok": false}
+{"fn": "_validate_api_base", "args": ["asrc/a/b.ts"], "ok": false}
+{"fn": "_validate_api_base", "args": ["hello worldİstanbul"], "ok": false}
+{"fn": "_validate_api_base", "args": ["😀abc"], "ok": false}
+{"fn": "_validate_api_base", "args": ["abca"], "ok": false}
+{"fn": "_validate_api_base", "args": ["line1\nline2a"], "ok": false}
+{"fn": "_validate_api_base", "args": [".leading日本語のテキスト"], "ok": false}
+{"fn": "_validate_api_base", "args": ["  padded  İstanbul"], "ok": false}
+{"fn": "_validate_api_base", "args": ["src/a/b.tsé"], "ok": false}
+{"fn": "_validate_api_base", "args": ["trailing.key_name-1"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a:b:c./x/**/*.json"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a.b.cHELLO"], "ok": false}
+{"fn": "_validate_api_base", "args": ["HELLOa..b"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a:b:ca:b:c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["ns:key.path😀"], "ok": false}
+{"fn": "_validate_api_base", "args": ["key_name-1é"], "ok": false}
+{"fn": "_validate_api_base", "args": ["abca:b:c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a:b:ca"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a..ba:b:c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["abca.b.c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["trailing.tab\tseparated"], "ok": false}
+{"fn": "_validate_api_base", "args": ["İstanbulHello World"], "ok": false}
+{"fn": "_validate_api_base", "args": ["line1\nline2tab\tseparated"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a:b:cemoji 👍🏽 mix"], "ok": false}
+{"fn": "_validate_api_base", "args": ["éa😀b😀c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["hello worldhello"], "ok": false}
+{"fn": "_validate_api_base", "args": ["straßekey_name-1"], "ok": false}
+{"fn": "_validate_api_base", "args": ["src/a/b.tshello"], "ok": false}
+{"fn": "_validate_api_base", "args": ["ns:key.path.leading"], "ok": false}
+{"fn": "_validate_api_base", "args": ["﻿bomline1\nline2"], "ok": false}
+{"fn": "_validate_api_base", "args": ["ΣΊΣΥΦΟΣa:b:c"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a..b.leading"], "ok": false}
+{"fn": "_validate_api_base", "args": ["abc﻿bom"], "ok": false}
+{"fn": "_validate_api_base", "args": ["Hello Worldhello world"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a.b.c😀"], "ok": false}
+{"fn": "_validate_api_base", "args": ["helloa..b"], "ok": false}
+{"fn": "_validate_api_base", "args": ["hello{name} has {count} items"], "ok": false}
+{"fn": "_validate_api_base", "args": ["src/a/b.tsİstanbul"], "ok": false}
+{"fn": "_validate_api_base", "args": ["héllo wörld"], "ok": false}
+{"fn": "_validate_api_base", "args": ["👍🏽 thumbs"], "ok": false}
+{"fn": "_validate_api_base", "args": ["日本語"], "ok": false}
+{"fn": "_validate_api_base", "args": ["ılık ırmak"], "ok": false}
+{"fn": "_validate_api_base", "args": ["👨‍👩‍👧 family"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a b"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a😀b"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a²b x½ y①"], "ok": false}
+{"fn": "_validate_api_base", "args": ["aⅠb Ⅻ"], "ok": false}
+{"fn": "_validate_api_base", "args": ["a𐐀b 𝐀bc"], "ok": false}
+{"fn": "_validate_api_base", "args": ["कि ٣٤"], "ok": false}
+{"fn": "_validate_api_base", "args": ["https://pay.example.com"], "ok": true}
+{"fn": "_validate_api_base", "args": ["http://127.0.0.1:8080/api/extract"], "ok": true}
+{"fn": "_validate_api_base", "args": ["https://[::1]:8443/v1"], "ok": true}
+{"fn": "_validate_api_base", "args": ["HTTPS://PAY.EXAMPLE.COM/api"], "ok": true}
+{"fn": "_validate_api_base", "args": ["ftp://pay.example.com"], "ok": false}
+{"fn": "_validate_api_base", "args": ["https:///no-host"], "ok": false}
+{"fn": "_validate_api_base", "args": ["https://[bad-ipv6/api"], "ok": false}
+{"fn": "_validate_api_base", "args": ["https://[127.0.0.1]/api"], "ok": false}
+{"fn": "_validate_api_base", "args": ["  https://pay.example.com\r\n"], "ok": true}
+{"fn": "_validate_api_base", "args": ["not-a-url"], "ok": false}
+{"fn": "_validate_api_base", "args": [""], "ok": false}

@@ -34,6 +34,8 @@ namespace SmsWorkbench
                     services.AddSingleton<IFileLauncher, FileLauncher>();
                     services.AddSingleton<IPaymentBatchService, PaymentBatchService>();
                     services.AddSingleton<IPaymentBatchDialogService, PaymentBatchDialogService>();
+                    services.AddSingleton<IProtocolCardPaymentService, ProtocolCardPaymentService>();
+                    services.AddSingleton<IProtocolCardPaymentDialogService, ProtocolCardPaymentDialogService>();
                     services.AddSingleton<IProxyPoolService, ProxyPoolService>();
                     services.AddSingleton<IProxyPoolDialogService, ProxyPoolDialogService>();
                     services.AddSingleton<ISettingsService, SettingsService>();

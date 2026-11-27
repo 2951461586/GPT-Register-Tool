@@ -729,6 +729,70 @@ namespace SmsWorkbench.Localization
             ["正在执行提链服务器批量提取..."] = "Running batch payment link extraction via server...",
             ["已有后端任务正在运行，请先等待其完成或取消后再发起支付链接提取。"]
                 = "A backend task is already running. Wait for it to finish or cancel it before starting payment link extraction.",
+
+            // ── Protocol card payment / quote (non-CAPTCHA cs_ & oaics_) ────
+            ["协议卡付"] = "Protocol card pay",
+            ["协议卡付 / 报价"] = "Protocol card pay / quote",
+            ["非验证码直连：支持 Stripe Hosted (cs_) 与 Custom (oaics_) 结账，遇 3DS/人机挑战自动中止交还浏览器"]
+                = "Direct non-CAPTCHA checkout for Stripe Hosted (cs_) and Custom (oaics_); safely hands off 3DS/challenges to your browser",
+            ["关联账号：{0}"] = "Bound account: {0}",
+            ["未绑定账号（oaics_ 模式建议先选中账号）"] = "No bound account (select an account first for oaics_)",
+            ["结账链接 (cs_ / oaics_)"] = "Checkout URL (cs_ / oaics_)",
+            ["Stripe 公钥 (pk_...)"] = "Stripe publishable key (pk_...)",
+            ["账单国家"] = "Billing country",
+            ["出口代理（可选）"] = "Exit proxy (optional)",
+            ["超时秒"] = "Timeout (s)",
+            ["仅只读核账（不创建支付方式，不扣款）"] = "Read-only check (no payment method, no charge)",
+            ["支付凭据（查询报价或只读核账可留空）"] = "Payment credentials (leave blank for quote or read-only)",
+            ["清空卡信息"] = "Clear card",
+            ["卡号 (PAN)"] = "Card number (PAN)",
+            ["月 (MM)"] = "Month (MM)",
+            ["年 (YY/YYYY)"] = "Year (YY/YYYY)",
+            ["或已有 PaymentMethod ID (pm_...)"] = "Or existing PaymentMethod ID (pm_...)",
+            ["卡号与 CVC 仅通过子进程环境变量传递，不落盘、不写入命令行参数、不写日志，执行后自动清空内存。"]
+                = "Card number and CVC pass only via child-process environment variable; never saved, logged, or placed in argv, and cleared after run.",
+            ["执行结果"] = "Execution result",
+            ["复制结果"] = "Copy result",
+            ["检测到 3DS 或人机验证挑战，协议引擎已安全中止，请在浏览器手动完成。"]
+                = "3DS or human-verification challenge detected. Protocol engine aborted safely; continue manually in your browser.",
+            ["在浏览器打开结账页"] = "Open checkout in browser",
+            ["查询报价"] = "Quote",
+            ["执行协议支付"] = "Execute payment",
+            ["报价成功"] = "Quote ready",
+            ["支付成功"] = "Paid",
+            ["只读核账完成"] = "Read-only check done",
+            ["需要人工验证"] = "Manual verification required",
+            ["银行卡被拒"] = "Card declined",
+            ["确认失败"] = "Confirmation failed",
+            ["处理中"] = "Processing",
+            ["遇到 3DS / 人机挑战，请在浏览器打开结账页面手动完成验证。"]
+                = "3DS or human-verification challenge detected. Open the checkout URL in your browser to finish manually.",
+            ["协议卡付未完成，请查看返回详情。"] = "Protocol card payment did not complete. Check the response details.",
+            ["后端返回了无效的 JSON 对象。"] = "The backend returned an invalid JSON object.",
+            ["协议卡付命令超时。"] = "Protocol card payment command timed out.",
+            ["后端未返回协议卡付结果。"] = "The backend returned no protocol card payment result.",
+            ["就绪：可先查询报价，确认金额后再执行协议支付。"]
+                = "Ready: query a quote first, verify the amount, then execute payment.",
+            ["正在查询结账报价…"] = "Querying checkout quote…",
+            ["正在执行只读核账…"] = "Running read-only checkout check…",
+            ["正在执行协议卡付…"] = "Executing protocol card payment…",
+            ["已清空内存中的卡信息。"] = "Cleared in-memory card fields.",
+            ["结账链接必须是有效的 HTTPS 地址。"] = "Checkout URL must be a valid HTTPS URL.",
+            ["已在浏览器打开结账页面，请手动完成验证。"] = "Opened checkout page in browser; complete verification manually.",
+            ["打开浏览器失败："] = "Failed to open browser: ",
+            ["已复制结果 JSON。"] = "Result JSON copied.",
+            ["已安全中止：检测到 3DS / 人机挑战，请点击“在浏览器打开结账页”手动完成。"]
+                = "Aborted safely: 3DS or human-verification challenge detected. Click \"Open checkout in browser\" to continue manually.",
+            ["请填写有效的 HTTPS 结账链接（cs_ 或 oaics_）。"] = "Enter a valid HTTPS checkout URL (cs_ or oaics_).",
+            ["请填写有效的 Stripe 公钥（pk_ 开头）。"] = "Enter a valid Stripe publishable key (starts with pk_).",
+            ["超时秒数必须在 5 到 300 之间。"] = "Timeout must be between 5 and 300 seconds.",
+            ["请填写卡号（12-19 位数字），或提供已有 PaymentMethod ID（pm_）。"]
+                = "Enter a card number (12–19 digits) or an existing PaymentMethod ID (pm_).",
+            ["有效期月份必须是 01-12。"] = "Expiration month must be 01–12.",
+            ["有效期年份必须是 2 位或 4 位数字。"] = "Expiration year must be 2 or 4 digits.",
+            ["安全码 (CVC) 必须是 3-4 位数字。"] = "Security code (CVC) must be 3–4 digits.",
+            ["已有后端任务正在运行，请先等待其完成或取消后再发起协议卡付。"]
+                = "A backend task is already running. Wait for it to finish or cancel it before starting protocol card payment.",
         };
     }
 }

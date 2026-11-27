@@ -49,6 +49,7 @@
     "payment/executor": 4,
     "payment/flow": 4,
     "payment/link_manager": 3,
+    "payment/protocol_pay": 4,
     "payment/routing": 4,
     "paypal/authorization_queue": 3,
     "paypal/orchestrator": 3,

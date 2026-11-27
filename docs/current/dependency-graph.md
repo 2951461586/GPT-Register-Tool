@@ -17,10 +17,10 @@ the *gate* (per-pair, only-down); this file is the *view*.
 
 | Measure | Value |
 | --- | ---: |
-| Modules | 303 |
-| Module-level import edges | 962 |
+| Modules | 305 |
+| Module-level import edges | 970 |
 | Delayed (function-local) edges | 309 |
-| Type-only (`if TYPE_CHECKING`) edges | 65 |
+| Type-only (`if TYPE_CHECKING`) edges | 66 |
 | Strongly connected components (size > 1) | 0 |
 | Modules inside a cycle | 0 |
 | Mutually dependent directory pairs | 14 |
@@ -53,7 +53,7 @@ None.
 | Module | Importers |
 | --- | ---: |
 | `sms_tool.config` | 60 |
-| `sms_tool.kernel.native_loader` | 47 |
+| `sms_tool.kernel.native_loader` | 50 |
 | `sms_tool.transport` | 33 |
 | `sms_tool.transport.endpoints` | 33 |
 | `sms_tool.kernel.sanitizer` | 31 |

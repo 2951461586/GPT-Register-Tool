@@ -184,6 +184,11 @@
                 <Path Style="{StaticResource MenuIconPath}" Data="{StaticResource Glyph.BatchPay}"/>
               </MenuItem.Icon>
             </MenuItem>
+            <MenuItem Header="{loc:Tr Key='协议卡付 / 报价'}" Command="{Binding PlacementTarget.DataContext.CtxProtocolCardPaymentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
+              <MenuItem.Icon>
+                <Path Style="{StaticResource MenuIconPath}" Data="{StaticResource Glyph.PaymentQualification}"/>
+              </MenuItem.Icon>
+            </MenuItem>
             <MenuItem Header="{loc:Tr Key='批量邮箱换绑'}" Command="{Binding PlacementTarget.DataContext.CtxChangeEmailCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
               <MenuItem.Icon>
                 <Path Style="{StaticResource MenuIconPath}" Data="{StaticResource Glyph.ChangeEmail}"/>

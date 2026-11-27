@@ -36,6 +36,7 @@ CHATGPT_BASE = "https://chatgpt.com"
 API_BASE = "https://api.openai.com"
 STRIPE_API_BASE = "https://api.stripe.com"
 STRIPE_CHECKOUT_BASE = "https://checkout.stripe.com"
+STRIPE_JS_ORIGIN = "https://js.stripe.com"
 OPENAI_PAY_BASE = "https://pay.openai.com"
 
 #: ``https://chatgpt.com/`` — the trailing-slash form used for ``Referer`` /
@@ -57,12 +58,20 @@ CHATGPT_CHECKOUT_API = f"{CHATGPT_BACKEND_API}/payments/checkout"
 CHATGPT_CHECKOUT_SNAPSHOT = f"{CHATGPT_CHECKOUT_API}/snapshot"
 CHATGPT_CHECKOUT_UPDATE = f"{CHATGPT_CHECKOUT_API}/update"
 CHATGPT_CHECKOUT_APPROVE = f"{CHATGPT_CHECKOUT_API}/approve"
+CHATGPT_CHECKOUT_CONFIRM = f"{CHATGPT_CHECKOUT_API}/confirm"
 CHATGPT_CHECKOUT_TAXES = f"{CHATGPT_CHECKOUT_API}/taxes"
+CHATGPT_CHECKOUT_UPDATE_TAX_ID = f"{CHATGPT_CHECKOUT_API}/update_tax_id"
+CHATGPT_CHECKOUT_SESSION_ACK = f"{CHATGPT_BACKEND_API}/payments/checkout_session"
+CHATGPT_SUBSCRIPTIONS = f"{CHATGPT_BACKEND_API}/subscriptions"
 CHATGPT_SENTINEL_PING = f"{CHATGPT_BACKEND_API}/sentinel/ping"
 
 # Stripe API paths
 STRIPE_PAYMENT_METHODS = f"{STRIPE_API_BASE}/v1/payment_methods"
 STRIPE_PAYMENT_PAGES = f"{STRIPE_API_BASE}/v1/payment_pages"
+STRIPE_ELEMENTS_SESSIONS = f"{STRIPE_API_BASE}/v1/elements/sessions"
+STRIPE_CONFIRMATION_TOKENS = f"{STRIPE_API_BASE}/v1/confirmation_tokens"
+STRIPE_PAYMENT_INTENTS = f"{STRIPE_API_BASE}/v1/payment_intents"
+STRIPE_SETUP_INTENTS = f"{STRIPE_API_BASE}/v1/setup_intents"
 
 # Auth pages that serve as the flow-binding target for Sentinel issuance and as
 # the landing page a step settles on.
@@ -88,6 +97,11 @@ def stripe_payment_page(cs_id: str, suffix: str) -> str:
     return f"{STRIPE_API_BASE}/v1/payment_pages/{cs_id}/{suffix}"
 
 
+def openai_pay_page(cs_id: str) -> str:
+    """The hosted Stripe Checkout URL hosted under ``pay.openai.com``."""
+    return f"{OPENAI_PAY_BASE}/c/pay/{cs_id}"
+
+
 __all__ = [
     "API_BASE",
     "AUTH_ABOUT_YOU",
@@ -101,19 +115,29 @@ __all__ = [
     "CHATGPT_CES_SETTINGS",
     "CHATGPT_CHECKOUT_API",
     "CHATGPT_CHECKOUT_APPROVE",
+    "CHATGPT_CHECKOUT_CONFIRM",
+    "CHATGPT_CHECKOUT_SESSION_ACK",
     "CHATGPT_CHECKOUT_SNAPSHOT",
     "CHATGPT_CHECKOUT_TAXES",
     "CHATGPT_CHECKOUT_UPDATE",
+    "CHATGPT_CHECKOUT_UPDATE_TAX_ID",
     "CHATGPT_LOGIN_PAGE",
     "CHATGPT_ORIGIN",
     "CHATGPT_PAYMENT_METHODS",
     "CHATGPT_SENTINEL_PING",
+    "CHATGPT_SUBSCRIPTIONS",
     "OPENAI_PAY_BASE",
     "STRIPE_API_BASE",
     "STRIPE_CHECKOUT_BASE",
+    "STRIPE_CONFIRMATION_TOKENS",
+    "STRIPE_ELEMENTS_SESSIONS",
+    "STRIPE_JS_ORIGIN",
+    "STRIPE_PAYMENT_INTENTS",
     "STRIPE_PAYMENT_METHODS",
     "STRIPE_PAYMENT_PAGES",
+    "STRIPE_SETUP_INTENTS",
     "chatgpt_checkout_page",
     "chatgpt_checkout_verify",
+    "openai_pay_page",
     "stripe_payment_page",
 ]

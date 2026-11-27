@@ -89,12 +89,25 @@ def has_explicit_payment_proxy(args: Any) -> bool:
     )
 
 
+def _link_manager() -> Any:
+    import sms_tool.payment.link_manager as link_manager
+
+    return link_manager
+
+
+def _emit_desktop_ipc(payload: Any, args: Any) -> None:
+    if bool(getattr(args, "desktop_ipc", False)):
+        from ..desktop.ipc import emit_result
+
+        emit_result(payload, enabled=True)
+
+
 def payment_country(payment_method: str, explicit: str = "") -> str:
     value = str(explicit or "").strip().upper()
     if value:
         return value
 
-    from ..payment.link_manager import PAYMENT_METHODS
+    payment_methods = _link_manager().PAYMENT_METHODS
 
     method = str(payment_method or "paypal").strip().lower().replace("-", "_")
     try:
@@ -116,7 +129,7 @@ def payment_country(payment_method: str, explicit: str = "") -> str:
         # block falls back to the catalog's country below. The exception types are
         # narrowed so a real bug (e.g. a NameError) is no longer hidden.
         pass
-    spec = PAYMENT_METHODS.get(method)
+    spec = payment_methods.get(method)
     return spec.country if spec else "US"
 
 
@@ -490,9 +503,7 @@ def _probe_dependencies(packages: tuple[str, ...]) -> dict[str, bool]:
 
 
 def list_payment_methods() -> None:
-    from ..payment.link_manager import supported_payment_methods
-
-    methods = supported_payment_methods()
+    methods = _link_manager().supported_payment_methods()
     dependency_map = _method_dependency_map()
     for method in methods:
         if isinstance(method, dict):
@@ -599,10 +610,7 @@ def test_payment_proxies(args: Any, context: PaymentCommandContext) -> None:
     ok = all(bool(item.get("ok")) for item in stages.values())
     payload = {"ok": ok, "payment_method": method, "stages": stages}
     desktop_ipc = bool(getattr(args, "desktop_ipc", False))
-    if desktop_ipc:
-        from ..desktop.ipc import emit_result
-
-        emit_result(payload, enabled=True)
+    _emit_desktop_ipc(payload, args)
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     # A failed probe is a valid desktop result (rendered per stage); only the
     # plain CLI path signals it through a non-zero exit for scripting.
@@ -641,9 +649,7 @@ def check_payment_qualification(args: Any, context: PaymentCommandContext) -> No
     _print_payment_qualification_summary(result)
     desktop_ipc = bool(getattr(args, "desktop_ipc", False))
     if desktop_ipc:
-        from ..desktop.ipc import emit_result
-
-        emit_result(result, enabled=True)
+        _emit_desktop_ipc(result, args)
     else:
         safe_print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
@@ -701,7 +707,6 @@ def _apply_team_trial_options(args: Any, method: str, target: dict[str, Any]) ->
 def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
     """Extract a supported protocol payment link from an AT or saved account."""
     from ..desktop.ipc import emit_event, emit_result
-    from ..payment.link_manager import generate_payment_link
 
     def output(payload: Any) -> None:
         emit_result(payload, enabled=bool(getattr(args, "desktop_ipc", False)))
@@ -878,7 +883,7 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
         kwargs["blik_code"] = getattr(args, "blik_code", None)
     _apply_team_trial_options(args, method, kwargs)
 
-    result = generate_payment_link(
+    result = _link_manager().generate_payment_link(
         access_token=at,
         proxy=route["proxy"],
         payment_method=method,
@@ -905,5 +910,81 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
             result["authorization_queued"] = False
             result["authorization_error"] = str(exc)
     print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
+
+
+def protocol_card_payment(args: Any, context: PaymentCommandContext) -> None:
+    """Execute non-CAPTCHA Stripe Hosted (cs_) or Custom (oaics_) quote/payment."""
+    lm = _link_manager()
+    quote_only = bool(getattr(args, "protocol_card_quote", False))
+    read_only = bool(getattr(args, "protocol_read_only", False)) or quote_only
+    checkout_url = str(getattr(args, "checkout_url", None) or "").strip()
+    publishable_key = str(getattr(args, "stripe_publishable_key", None) or "").strip()
+    payment_method_id = str(getattr(args, "payment_method_id", None) or "").strip()
+    card_file = str(getattr(args, "card_file", None) or "").strip()
+    country = (
+        str(getattr(args, "checkout_country", None) or getattr(args, "target_country", None) or "US").strip().upper()
+    )
+    proxy = str(
+        getattr(args, "provider_proxy", None)
+        or getattr(args, "checkout_proxy", None)
+        or getattr(args, "proxy", None)
+        or ""
+    ).strip()
+    timeout = max(5, _safe_int(getattr(args, "refresh_timeout", 30) or 30, 30))
+
+    if not checkout_url or not publishable_key:
+        payload = {
+            "ok": False,
+            "error": "--checkout-url and --stripe-publishable-key are required",
+            "error_code": "missing_protocol_payment_args",
+        }
+        _emit_desktop_ipc(payload, args)
+        sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+        raise SystemExit(2)
+
+    card: dict[str, str] | None = None
+    if not read_only and not payment_method_id:
+        try:
+            card = lm.load_card_from_env_or_file(card_file)
+        except lm.ProtocolPaymentError as exc:
+            payload = {"ok": False, "error": str(exc), "error_code": exc.error_code}
+            _emit_desktop_ipc(payload, args)
+            sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+            raise SystemExit(2) from exc
+
+    access_token, auth_ctx = context.resolve_access_token(args)
+    cookie_header = str(auth_ctx.get("cookie_header") or "") if isinstance(auth_ctx, Mapping) else ""
+    account_id = str(auth_ctx.get("account_id") or "") if isinstance(auth_ctx, Mapping) else ""
+    device_id = str(getattr(args, "device_id", None) or "")
+    try:
+        result = lm.execute_protocol_card_payment(
+            checkout_url,
+            publishable_key=publishable_key,
+            card=card,
+            payment_method_id=payment_method_id,
+            access_token=access_token,
+            cookie_header=cookie_header,
+            account_id=account_id,
+            device_id=device_id,
+            country=country,
+            proxy=proxy,
+            timeout=timeout,
+            read_only=read_only,
+            quote_only=quote_only,
+        )
+    except lm.ProtocolPaymentError as exc:
+        result = {
+            "ok": False,
+            "status": "failed",
+            "error": str(exc),
+            "error_code": exc.error_code,
+            "error_stage": exc.error_stage,
+            "retryable": exc.retryable,
+            "status_code": exc.status_code,
+        }
+    _emit_desktop_ipc(result, args)
+    sys.stdout.write(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     if not result.get("ok"):
         raise SystemExit(3)

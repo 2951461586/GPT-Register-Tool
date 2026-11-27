@@ -28,7 +28,15 @@ from urllib.parse import urlparse
 
 import requests
 
+from ..kernel.native_loader import load_native_module
 from .base import _LOGGER, _as_bool, _config_data, _protocol_cfg, _redact_sensitive_text, safe_int
+
+_NATIVE_EXTRACT_SERVER_PARSE = load_native_module(
+    "extract-server-parse-rs",
+    "extract_server_parse_rs",
+    "RUST_ANYTHING_UNIT_EXTRACT_SERVER_PARSE",
+)
+_NATIVE_VALIDATE_API_BASE = getattr(_NATIVE_EXTRACT_SERVER_PARSE, "_validate_api_base", None)
 
 DEFAULT_EXTRACT_SERVER_ENDPOINT = "/api/v1/extract"
 DEFAULT_EXTRACT_SERVER_TIMEOUT_SECONDS = 60
@@ -138,6 +146,8 @@ def _normalize_methods(raw: Any) -> tuple[str, ...]:
 
 
 def _validate_api_base(api_base: str) -> bool:
+    if _NATIVE_VALIDATE_API_BASE is not None and isinstance(api_base, str):
+        return bool(_NATIVE_VALIDATE_API_BASE(api_base))
     try:
         parsed = urlparse(api_base)
     except ValueError:

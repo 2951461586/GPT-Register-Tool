@@ -1,0 +1,32 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/accounts/wham_usage.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "wham-usage-rs",
+  "exports": [
+    {
+      "name": "parse_wham_usage",
+      "file": "sms_tool/accounts/wham_usage.py",
+      "line": 32,
+      "params": [
+        { "name": "body", "ts_type": "unknown", "optional": false, "rest": false }
+      ],
+      "returns": "Record<string, unknown> | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "format_wham_usage_label",
+      "file": "sms_tool/accounts/wham_usage.py",
+      "line": 66,
+      "reason": "benchmarked at 0.17x on tiny dicts due to PyO3 dict conversion cost"
+    }
+  ]
+}

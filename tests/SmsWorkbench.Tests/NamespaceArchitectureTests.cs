@@ -33,6 +33,7 @@ namespace SmsWorkbench.Tests
             "MainWindow",
             "SettingsWindow",
             "PaymentBatchWindow",
+            "ProtocolCardPaymentWindow",
             "ProxyPoolWindow",
             "AccountFilterBar",
             "AccountGridView",

@@ -100,7 +100,8 @@ namespace SmsWorkbench.Views
             ThemeCoordinator? themeCoordinator = null,
             BackendBatchCoordinator? backendBatchCoordinator = null,
             RegistrationWorkflowCoordinator? registrationWorkflowCoordinator = null,
-            AccountExportCoordinator? accountExportCoordinator = null)
+            AccountExportCoordinator? accountExportCoordinator = null,
+            IProtocolCardPaymentDialogService? protocolCardPaymentDialogs = null)
         {
             Shell = shell ?? new ShellViewModel();
             poolRefresh = poolRefreshCoordinator ?? new PoolRefreshCoordinator();
@@ -113,6 +114,7 @@ namespace SmsWorkbench.Views
             this.backendTasks = backendTasks;
             this.desktopRead = desktopRead;
             this.paymentBatchDialogs = paymentBatchDialogs;
+            this.protocolCardPaymentDialogs = protocolCardPaymentDialogs;
             this.proxyPoolDialogs = proxyPoolDialogs;
             this.paymentBatchService = paymentBatchService;
             this.snackbarService = snackbarService;

@@ -1,5 +1,5 @@
 {
-  "delayed_cross_dir_edges": 319,
+  "delayed_cross_dir_edges": 316,
   "minority_edges": 26,
   "mutual_pairs": 14,
   "ordered_pairs": 133,
@@ -11,7 +11,7 @@
     "sms_tool -> sms_tool/store": 2,
     "sms_tool/accounts -> sms_tool": 14,
     "sms_tool/accounts -> sms_tool/codex": 2,
-    "sms_tool/accounts -> sms_tool/kernel": 12,
+    "sms_tool/accounts -> sms_tool/kernel": 13,
     "sms_tool/accounts -> sms_tool/mailbox": 3,
     "sms_tool/accounts -> sms_tool/payment": 3,
     "sms_tool/accounts -> sms_tool/phone": 2,
@@ -69,7 +69,7 @@
     "sms_tool/mailbox -> sms_tool/providers": 10,
     "sms_tool/observability -> sms_tool/kernel": 1,
     "sms_tool/pay_link -> sms_tool": 5,
-    "sms_tool/pay_link -> sms_tool/kernel": 4,
+    "sms_tool/pay_link -> sms_tool/kernel": 5,
     "sms_tool/pay_link -> sms_tool/payment": 11,
     "sms_tool/payment -> sms_tool": 2,
     "sms_tool/payment -> sms_tool/kernel": 11,
@@ -78,7 +78,7 @@
     "sms_tool/payment -> sms_tool/store": 2,
     "sms_tool/payment -> sms_tool/transport": 6,
     "sms_tool/paypal -> sms_tool": 5,
-    "sms_tool/paypal -> sms_tool/kernel": 5,
+    "sms_tool/paypal -> sms_tool/kernel": 6,
     "sms_tool/paypal -> sms_tool/payment": 6,
     "sms_tool/paypal -> sms_tool/phone": 2,
     "sms_tool/paypal -> sms_tool/proxy": 2,
@@ -138,6 +138,6 @@
     "sms_tool/transport -> sms_tool/observability": 1,
     "sms_tool/transport -> sms_tool/proxy": 1
   },
-  "total_module_edges": 528,
+  "total_module_edges": 531,
   "type_only_edges": 13
 }

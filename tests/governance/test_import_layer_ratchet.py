@@ -522,7 +522,11 @@ def test_summary_facts_are_pinned():
         # account_seed into store/, config_usage into config/; converted paypal/__init__.py
         # to a PEP 562 lazy facade (layer_manifest allow 3 -> 0); split the top 8 >1000L
         # Python monoliths into sibling modules with zero cross-dir edge inflation.
-        "total_module_edges": 528,
+        # 2026-11-27 (Wave-11 Rust PyO3 migrations):
+        # 528 -> 531 edges (+3 strictly inward -> kernel.native_loader edges for
+        # pay_link/extract_server.py, paypal/reverse_protocol.py, accounts/wham_usage.py;
+        # ordered_pairs=133, mutual_pairs=14, minority_edges=26 unchanged).
+        "total_module_edges": 531,
         "ordered_pairs": 133,
         "mutual_pairs": 14,
         "minority_edges": 26,
@@ -643,7 +647,10 @@ def test_summary_facts_are_pinned():
         # after removing legacy UPI/PayPal-link/wallet packages and regional adapters.
         # 2026-11-27 (P2.1–P2.3): 321 -> 319 (-2) after root-module relocations and
         # monolith splits eliminated redundant cross-dir delayed imports.
-        "delayed_cross_dir_edges": 319,
+        # 2026-11-27 (Protocol card payment migration): 319 -> 316 (-3) after
+        # consolidating repeated link_manager & desktop.ipc delayed imports in
+        # commands/payment.py into shared helpers while adding zero module edges.
+        "delayed_cross_dir_edges": 316,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
         # `pay_link` re-exports type-only (the module is not a package, so the

@@ -1,0 +1,1459 @@
+{"fn": "extract_hidden_fields", "args": ["emoji 👍🏽 mixstraße"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a.b.cΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["tab\tseparated"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["src/a/b.ts"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["./x/**/*.json"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": [":"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["hello world"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a😀b😀c日本語のテキスト"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["HELLO"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["key_name-1"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ns:key.path"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["abc"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["straße./x/**/*.json"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ns:key.patha😀b😀c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["emoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a.b.c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["hello"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["İstanbul﻿bom"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": [":src/a/b.ts"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": [""], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["Hello World"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["😀"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["{name} has {count} items"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["trailing.tab\tseparated"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["./x/**/*.jsonline1\nline2"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ünïcödéHello World"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ünïcödé"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["line1\nline2"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a:b:c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["﻿bom"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["İstanbul"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["  padded  "], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["{name} has {count} items😀"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": [".leading"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a😀b😀c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["HELLO日本語のテキスト"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["straße  padded  "], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["helloa:b:c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a..b"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["hello worlda"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["trailing."], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["日本語のテキスト"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["  padded  ./x/**/*.json"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["key_name-1HELLO"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["emoji 👍🏽 mix﻿bom"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["é"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ab"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["straße"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["HELLOHELLO"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["abcé"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a.b.cns:key.path"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["tab\tseparatedns:key.path"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a:b:cİstanbul"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["{name} has {count} items  padded  "], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ab日本語のテキスト"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a:b:c😀"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ΣΊΣΥΦΟΣünïcödé"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["﻿bomab"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["emoji 👍🏽 mix:"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["abline1\nline2"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["emoji 👍🏽 mixa😀b😀c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ΣΊΣΥΦΟΣab"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["straßeemoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["Hello World  padded  "], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["😀line1\nline2"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["line1\nline2ns:key.path"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["{name} has {count} itemsab"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["src/a/b.tsé"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": [".leadingİstanbul"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["src/a/b.tshello world"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["src/a/b.ts😀"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": [":.leading"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["HELLOa"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["Hello Worldabc"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ab﻿bom"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a:b:ca..b"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["line1\nline2a.b.c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["emoji 👍🏽 mix.leading"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a.b.c.leading"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["straßeİstanbul"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a.b.c:"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["src/a/b.tsa.b.c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["HELLOemoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["emoji 👍🏽 mixΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["Hello WorldHello World"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ns:key.pathhello world"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["./x/**/*.json日本語のテキスト"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["﻿bom😀"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["aemoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["./x/**/*.jsontrailing."], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a﻿bom"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["﻿bomhello world"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["straßeHELLO"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["😀a:b:c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["﻿bomabc"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["abcünïcödé"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ünïcödétab\tseparated"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["HELLO😀"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["line1\nline2.leading"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["﻿boma.b.c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["éemoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["﻿bom{name} has {count} items"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ΣΊΣΥΦΟΣ.leading"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a..bstraße"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["日本語のテキストsrc/a/b.ts"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["key_name-1abc"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["aünïcödé"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["abHello World"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["日本語のテキスト  padded  "], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["İstanbulHello World"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["src/a/b.tsabc"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["İstanbula"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["{name} has {count} itemsns:key.path"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["aa:b:c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["  padded  日本語のテキスト"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a..bΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": [".leadingünïcödé"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["tab\tseparated  padded  "], "ok": {}}
+{"fn": "extract_hidden_fields", "args": [".leadinghello world"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["hello world😀"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["tab\tseparatedtrailing."], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["straßetrailing."], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["éa.b.c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a..btab\tseparated"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["İstanbul😀"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": [".leadingtab\tseparated"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["Hello Worldtab\tseparated"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["emoji 👍🏽 mixtrailing."], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["straßeabc"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ΣΊΣΥΦΟΣa.b.c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["src/a/b.tsns:key.path"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a😀b😀c﻿bom"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ΣΊΣΥΦΟΣns:key.path"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["HELLOhello"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["abc:"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ünïcödé.leading"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["aline1\nline2"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ünïcödéa..b"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["﻿bom﻿bom"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": [":tab\tseparated"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["key_name-1日本語のテキスト"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["İstanbulemoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["line1\nline2emoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["key_name-1😀"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["straßehello world"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": [":a"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["😀emoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["abc  padded  "], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["straße😀"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ahello world"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a..bsrc/a/b.ts"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": [":emoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ünïcödé😀"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["éΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["日本語のテキスト日本語のテキスト"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["Hello Worldstraße"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["src/a/b.tsİstanbul"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["hello worldkey_name-1"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ns:key.path﻿bom"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["emoji 👍🏽 mix日本語のテキスト"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a:b:c:"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": [".leadinga..b"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["😀a.b.c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["HELLOa.b.c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["trailing.HELLO"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ΣΊΣΥΦΟΣ😀"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["İstanbulé"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["  padded  abc"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ΣΊΣΥΦΟΣhello world"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["hello worldhello"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ésrc/a/b.ts"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["abcİstanbul"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ns:key.pathhello"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["hello.leading"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": [".leading日本語のテキスト"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["helloa"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["abkey_name-1"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["İstanbulkey_name-1"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["﻿bomns:key.path"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["emoji 👍🏽 mixab"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ns:key.patha..b"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["key_name-1src/a/b.ts"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ahello"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["emoji 👍🏽 mixé"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["aa😀b😀c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["😀é"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["akey_name-1"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a..ba"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a..bkey_name-1"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["src/a/b.tstab\tseparated"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a:b:chello world"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": [".leadingé"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["emoji 👍🏽 mix😀"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["İstanbulns:key.path"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["src/a/b.tsΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["straßea😀b😀c"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a😀b😀c{name} has {count} items"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["tab\tseparatedé"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["héllo wörld"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["👍🏽 thumbs"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["日本語"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ılık ırmak"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["👨‍👩‍👧 family"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a b"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a😀b"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a²b x½ y①"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["aⅠb Ⅻ"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a𐐀b 𝐀bc"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["कि ٣٤"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["Iı İi"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["K K k"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ſ s S"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["x‍y 👨‍👩‍👧"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["a b c　d"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["١٢٣ ٤٥"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["𝟘𝟙 ²³"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["snake_case foo-bar o'neil"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ǅungla Ǆ"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["one\r\ntwo threefour"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["café café"], "ok": {}}
+{"fn": "extract_hidden_fields", "args": ["ΣΑΣ σας ς"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["İstanbulabc"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["straßehello"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a..b"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ünïcödé"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["straße"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["İstanbula:b:c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["hello"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a😀b😀c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["İstanbul"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a:b:c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["Hello World"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["İstanbulünïcödé"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["﻿bom"], "ok": {}}
+{"fn": "extract_input_fields", "args": [".leading"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ab"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["﻿bomkey_name-1"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["é"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["key_name-1"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["emoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_input_fields", "args": [""], "ok": {}}
+{"fn": "extract_input_fields", "args": ["abc"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["Hello Worlda😀b😀c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["tab\tseparated  padded  "], "ok": {}}
+{"fn": "extract_input_fields", "args": ["line1\nline2😀"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ns:key.path"], "ok": {}}
+{"fn": "extract_input_fields", "args": [":"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["😀"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["tab\tseparated"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["hello world"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["HELLO"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a.b.c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["HELLOline1\nline2"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["key_name-1  padded  "], "ok": {}}
+{"fn": "extract_input_fields", "args": ["{name} has {count} items"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["./x/**/*.json"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a..ba.b.c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ns:key.pathHello World"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["src/a/b.ts"], "ok": {}}
+{"fn": "extract_input_fields", "args": [".leadinghello world"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["src/a/b.tsa..b"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["  padded  HELLO"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["trailing."], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ΣΊΣΥΦΟΣkey_name-1"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["  padded  "], "ok": {}}
+{"fn": "extract_input_fields", "args": ["line1\nline2"], "ok": {}}
+{"fn": "extract_input_fields", "args": [":straße"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["  padded  trailing."], "ok": {}}
+{"fn": "extract_input_fields", "args": ["Hello Worldünïcödé"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["tab\tseparatedkey_name-1"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["key_name-1key_name-1"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a./x/**/*.json"], "ok": {}}
+{"fn": "extract_input_fields", "args": [":ab"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["é﻿bom"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a.b.chello"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["./x/**/*.jsona"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ünïcödéΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["{name} has {count} items  padded  "], "ok": {}}
+{"fn": "extract_input_fields", "args": ["abc😀"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a.b.ca"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["éabc"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["straßeHello World"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ΣΊΣΥΦΟΣabc"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["日本語のテキスト"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ünïcödé{name} has {count} items"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a..bab"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ΣΊΣΥΦΟΣİstanbul"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["key_name-1hello"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a..bemoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["key_name-1tab\tseparated"], "ok": {}}
+{"fn": "extract_input_fields", "args": [".leadingkey_name-1"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ns:key.path﻿bom"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["éhello world"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ünïcödéa.b.c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ns:key.pathHELLO"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["./x/**/*.json.leading"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ns:key.patha..b"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["aemoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["emoji 👍🏽 mixemoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["helloa"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a:b:cns:key.path"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["trailing.straße"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["😀hello"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["aa.b.c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["日本語のテキストns:key.path"], "ok": {}}
+{"fn": "extract_input_fields", "args": [":trailing."], "ok": {}}
+{"fn": "extract_input_fields", "args": ["abchello world"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["﻿boma:b:c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a.leading"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["emoji 👍🏽 mix  padded  "], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ünïcödéHello World"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["src/a/b.ts  padded  "], "ok": {}}
+{"fn": "extract_input_fields", "args": ["emoji 👍🏽 mixhello"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["straßeİstanbul"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["hello worldhello world"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["straßea:b:c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["  padded  😀"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["hello world﻿bom"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["./x/**/*.jsonHello World"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["line1\nline2hello world"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["./x/**/*.jsonİstanbul"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["tab\tseparated{name} has {count} items"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["src/a/b.tsstraße"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a😀b😀ctab\tseparated"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["﻿bom😀"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["日本語のテキストsrc/a/b.ts"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["trailing.line1\nline2"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ünïcödésrc/a/b.ts"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ünïcödé  padded  "], "ok": {}}
+{"fn": "extract_input_fields", "args": ["{name} has {count} itemsa:b:c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a..b./x/**/*.json"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["abcİstanbul"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["tab\tseparateda.b.c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ΣΊΣΥΦΟΣ  padded  "], "ok": {}}
+{"fn": "extract_input_fields", "args": ["tab\tseparatedsrc/a/b.ts"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["line1\nline2é"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["key_name-1./x/**/*.json"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a.b.c./x/**/*.json"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ns:key.pathİstanbul"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a:b:cemoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a.b.cünïcödé"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ab😀"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["é.leading"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["Hello Worldé"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["emoji 👍🏽 mixstraße"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["trailing.ΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ΣΊΣΥΦΟΣa..b"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["HELLO﻿bom"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a.b.cİstanbul"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["  padded  key_name-1"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["tab\tseparatedhello world"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["src/a/b.ts./x/**/*.json"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["emoji 👍🏽 mix./x/**/*.json"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["Hello World😀"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["helloΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["İstanbulline1\nline2"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a:b:cé"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["trailing.hello"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["HELLOa😀b😀c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["straße./x/**/*.json"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["﻿bomtab\tseparated"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ns:key.pathstraße"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ékey_name-1"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["😀😀"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["Hello World  padded  "], "ok": {}}
+{"fn": "extract_input_fields", "args": ["straßehello world"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["line1\nline2ns:key.path"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["﻿bom  padded  "], "ok": {}}
+{"fn": "extract_input_fields", "args": ["  padded  :"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ΣΊΣΥΦΟΣ﻿bom"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["key_name-1line1\nline2"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ünïcödéabc"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ns:key.pathemoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ab.leading"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["abctab\tseparated"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a😀b😀c./x/**/*.json"], "ok": {}}
+{"fn": "extract_input_fields", "args": [":.leading"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["hello:"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["line1\nline2﻿bom"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["hello worldé"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["  padded  tab\tseparated"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["İstanbulΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["{name} has {count} itemsa"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["helloünïcödé"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a..bstraße"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["trailing.日本語のテキスト"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["é./x/**/*.json"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["line1\nline2a:b:c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a.b.cab"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["Hello Worldhello"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a😀b😀cabc"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["trailing.﻿bom"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a..b  padded  "], "ok": {}}
+{"fn": "extract_input_fields", "args": [":ünïcödé"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ΣΊΣΥΦΟΣ:"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["astraße"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["Hello World:"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["src/a/b.tssrc/a/b.ts"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["emoji 👍🏽 mixa:b:c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["Hello World./x/**/*.json"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["日本語のテキスト  padded  "], "ok": {}}
+{"fn": "extract_input_fields", "args": ["trailing../x/**/*.json"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["  padded  src/a/b.ts"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["  padded  ab"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["emoji 👍🏽 mixé"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ΣΊΣΥΦΟΣa:b:c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["İstanbul:"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["key_name-1straße"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["tab\tseparated.leading"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["line1\nline2src/a/b.ts"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["abchello"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["helloemoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["İstanbulHELLO"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["é{name} has {count} items"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a😀b😀c﻿bom"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["./x/**/*.jsonab"], "ok": {}}
+{"fn": "extract_input_fields", "args": [":a😀b😀c"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["日本語のテキストİstanbul"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["trailing.hello world"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["héllo wörld"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["👍🏽 thumbs"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["日本語"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ılık ırmak"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["👨‍👩‍👧 family"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a b"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a😀b"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a²b x½ y①"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["aⅠb Ⅻ"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a𐐀b 𝐀bc"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["कि ٣٤"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["Iı İi"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["K K k"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ſ s S"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["x‍y 👨‍👩‍👧"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["a b c　d"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["١٢٣ ٤٥"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["𝟘𝟙 ²³"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["snake_case foo-bar o'neil"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ǅungla Ǆ"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["one\r\ntwo threefour"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["café café"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["ΣΑΣ σας ς"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a..bemoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a😀b😀c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["emoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["  padded  "], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ns:key.path"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["straße"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["﻿bom"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["😀"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["😀./x/**/*.json"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["hello world"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a:b:c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["tab\tseparated"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["line1\nline2"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["./x/**/*.json"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["{name} has {count} items"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["Hello World"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["HELLO"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["éemoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ab"], "ok": {}}
+{"fn": "extract_select_fields", "args": [":"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["日本語のテキスト"], "ok": {}}
+{"fn": "extract_select_fields", "args": [".leading{name} has {count} items"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["İstanbula😀b😀c"], "ok": {}}
+{"fn": "extract_select_fields", "args": [""], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ünïcödéa😀b😀c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a..b"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["Hello World😀"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a.b.cé"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["straßeHELLO"], "ok": {}}
+{"fn": "extract_select_fields", "args": [".leading"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["hello"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["trailing."], "ok": {}}
+{"fn": "extract_select_fields", "args": ["abc"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["  padded  ab"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["  padded  .leading"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["key_name-1"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["src/a/b.ts"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["İstanbul"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ns:key.pathΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a..b日本語のテキスト"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a.b.c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["emoji 👍🏽 mixkey_name-1"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["helloa"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["trailing.hello world"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["é"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ünïcödéab"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ns:key.pathns:key.path"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["😀Hello World"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["tab\tseparatedΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["﻿bomtrailing."], "ok": {}}
+{"fn": "extract_select_fields", "args": ["key_name-1hello world"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["emoji 👍🏽 mixhello world"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["line1\nline2İstanbul"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["straßekey_name-1"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a.b.c.leading"], "ok": {}}
+{"fn": "extract_select_fields", "args": [":İstanbul"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["日本語のテキストé"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ns:key.patha😀b😀c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["src/a/b.ts﻿bom"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a./x/**/*.json"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["trailing.İstanbul"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["İstanbultrailing."], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a:b:c:"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["./x/**/*.json:"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["straßeabc"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a.b.csrc/a/b.ts"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["src/a/b.tsHELLO"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["  padded  a"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["HELLOtrailing."], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ünïcödé"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["  padded  straße"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a.b.cİstanbul"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ΣΊΣΥΦΟΣ  padded  "], "ok": {}}
+{"fn": "extract_select_fields", "args": [":straße"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ünïcödéa.b.c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["src/a/b.tsé"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["﻿bomemoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a😀b😀cHELLO"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["line1\nline2abc"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["Hello Worldİstanbul"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["./x/**/*.jsonünïcödé"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a.b.ca.b.c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ünïcödéHELLO"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["HELLOa😀b😀c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["hello worldabc"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["trailing../x/**/*.json"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a..bΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["tab\tseparatedtab\tseparated"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["日本語のテキストa:b:c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["{name} has {count} itemsa😀b😀c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["abchello"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a.b.c日本語のテキスト"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["src/a/b.tsabc"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["straße:"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["😀日本語のテキスト"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["src/a/b.ts  padded  "], "ok": {}}
+{"fn": "extract_select_fields", "args": ["﻿bomtab\tseparated"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["étab\tseparated"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a..bhello world"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["aemoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a..bstraße"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["é{name} has {count} items"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["tab\tseparated:"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ünïcödétrailing."], "ok": {}}
+{"fn": "extract_select_fields", "args": ["emoji 👍🏽 mixline1\nline2"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["Hello Worldab"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ΣΊΣΥΦΟΣtab\tseparated"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a:b:c﻿bom"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ünïcödé  padded  "], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ΣΊΣΥΦΟΣhello"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["trailing.ab"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["Hello Worldünïcödé"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["﻿bomab"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["  padded  line1\nline2"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["abc./x/**/*.json"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["line1\nline2line1\nline2"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["src/a/b.tsab"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["trailing.a😀b😀c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ünïcödéstraße"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a:b:ctrailing."], "ok": {}}
+{"fn": "extract_select_fields", "args": ["./x/**/*.jsonns:key.path"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a:b:c  padded  "], "ok": {}}
+{"fn": "extract_select_fields", "args": ["aa😀b😀c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["trailing.a.b.c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["éHello World"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["😀key_name-1"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["helloa😀b😀c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["Hello Worlda.b.c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["key_name-1﻿bom"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["src/a/b.ts日本語のテキスト"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["emoji 👍🏽 mixab"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ab{name} has {count} items"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["{name} has {count} items日本語のテキスト"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ns:key.path./x/**/*.json"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ΣΊΣΥΦΟΣünïcödé"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["Hello Worldhello"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["hello world﻿bom"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a😀b😀cΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_select_fields", "args": [":{name} has {count} items"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["  padded  ﻿bom"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["hello worldkey_name-1"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["aba😀b😀c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ababc"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["helloa.b.c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["Hello Worldline1\nline2"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["HELLOkey_name-1"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["﻿bom﻿bom"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["tab\tseparatedİstanbul"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["日本語のテキスト.leading"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["tab\tseparated./x/**/*.json"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ünïcödéa:b:c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["😀emoji 👍🏽 mix"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["é.leading"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["hello world  padded  "], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ΣΊΣΥΦΟΣ:"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["日本語のテキストΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["HELLOstraße"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a😀b😀ca..b"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["./x/**/*.jsona"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["emoji 👍🏽 mix:"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a:b:cHello World"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a..babc"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["İstanbulkey_name-1"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["hello worlda.b.c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["日本語のテキストHELLO"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["key_name-1trailing."], "ok": {}}
+{"fn": "extract_select_fields", "args": ["abckey_name-1"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ΣΊΣΥΦΟΣ😀"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["trailing.trailing."], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ékey_name-1"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["asrc/a/b.ts"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a.b.cΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["abc  padded  "], "ok": {}}
+{"fn": "extract_select_fields", "args": ["trailing.  padded  "], "ok": {}}
+{"fn": "extract_select_fields", "args": ["{name} has {count} items  padded  "], "ok": {}}
+{"fn": "extract_select_fields", "args": ["{name} has {count} itemsΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["İstanbula..b"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["hello worldline1\nline2"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["emoji 👍🏽 mixns:key.path"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["Hello WorldΣΊΣΥΦΟΣ"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ans:key.path"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a😀b😀ca.b.c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["Hello Worldsrc/a/b.ts"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ünïcödé.leading"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a😀b😀c😀"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["{name} has {count} itemssrc/a/b.ts"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["straßea:b:c"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["﻿bomkey_name-1"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["akey_name-1"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a:b:cline1\nline2"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ünïcödé﻿bom"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["😀İstanbul"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ünïcödéünïcödé"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["key_name-1ns:key.path"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["abcsrc/a/b.ts"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ΣΊΣΥΦΟΣ./x/**/*.json"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a..bünïcödé"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["straßeHello World"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["héllo wörld"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["👍🏽 thumbs"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["日本語"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ılık ırmak"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["👨‍👩‍👧 family"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a b"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a😀b"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a²b x½ y①"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["aⅠb Ⅻ"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a𐐀b 𝐀bc"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["कि ٣٤"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["Iı İi"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["K K k"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ſ s S"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["x‍y 👨‍👩‍👧"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["a b c　d"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["١٢٣ ٤٥"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["𝟘𝟙 ²³"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["snake_case foo-bar o'neil"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ǅungla Ǆ"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["one\r\ntwo threefour"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["café café"], "ok": {}}
+{"fn": "extract_select_fields", "args": ["ΣΑΣ σας ς"], "ok": {}}
+{"fn": "find_signup_form", "args": ["İstanbul", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["tab\tseparated", ":"], "ok": null}
+{"fn": "find_signup_form", "args": ["HELLO", "emoji 👍🏽 mixns:key.path"], "ok": null}
+{"fn": "find_signup_form", "args": ["key_name-1a", "abc.leading"], "ok": null}
+{"fn": "find_signup_form", "args": ["a.b.cé", ":"], "ok": null}
+{"fn": "find_signup_form", "args": ["﻿bomHELLO", "key_name-1"], "ok": null}
+{"fn": "find_signup_form", "args": ["tab\tseparated", "a..b"], "ok": null}
+{"fn": "find_signup_form", "args": ["a", "hello"], "ok": null}
+{"fn": "find_signup_form", "args": ["hello", "HELLO"], "ok": null}
+{"fn": "find_signup_form", "args": ["hello world", "hello"], "ok": null}
+{"fn": "find_signup_form", "args": ["ünïcödé", "ünï"], "ok": null}
+{"fn": "find_signup_form", "args": ["a", "ünïcödé"], "ok": null}
+{"fn": "find_signup_form", "args": [":a:b:c", ":b:c"], "ok": null}
+{"fn": "find_signup_form", "args": ["HELLO", "a..b"], "ok": null}
+{"fn": "find_signup_form", "args": ["HELLO", "  padded  "], "ok": null}
+{"fn": "find_signup_form", "args": ["S", "tab\tseparated"], "ok": null}
+{"fn": "find_signup_form", "args": ["a", "./x/**/*.json:"], "ok": null}
+{"fn": "find_signup_form", "args": ["HELLO", "straße"], "ok": null}
+{"fn": "find_signup_form", "args": ["ns:key.path", "straße"], "ok": null}
+{"fn": "find_signup_form", "args": ["{name} has {count} items", "hello"], "ok": null}
+{"fn": "find_signup_form", "args": [".leading", "ababc"], "ok": null}
+{"fn": "find_signup_form", "args": ["  padded  ", "日本語のテキスト"], "ok": null}
+{"fn": "find_signup_form", "args": ["hello world", "abc"], "ok": null}
+{"fn": "find_signup_form", "args": ["ΣΊΣΥΦΟΣ", "Σ"], "ok": null}
+{"fn": "find_signup_form", "args": ["", ":"], "ok": null}
+{"fn": "find_signup_form", "args": [":", "./x/**/*.json"], "ok": null}
+{"fn": "find_signup_form", "args": ["_name-1", "key_name-1"], "ok": null}
+{"fn": "find_signup_form", "args": ["﻿bom", "straße"], "ok": null}
+{"fn": "find_signup_form", "args": ["  padded  ", "Hello World"], "ok": null}
+{"fn": "find_signup_form", "args": ["abc", "abc"], "ok": null}
+{"fn": "find_signup_form", "args": ["line1\nline2", "hello"], "ok": null}
+{"fn": "find_signup_form", "args": ["tab\tseparated", "key_name-1"], "ok": null}
+{"fn": "find_signup_form", "args": ["abcİstanbul", "ns:key.path"], "ok": null}
+{"fn": "find_signup_form", "args": [".leading", "trailing."], "ok": null}
+{"fn": "find_signup_form", "args": ["ns:key.pathabc", "a.b.c"], "ok": null}
+{"fn": "find_signup_form", "args": ["ab", "İstanbul"], "ok": null}
+{"fn": "find_signup_form", "args": ["ünïcödéemoji 👍🏽 mix", "😀"], "ok": null}
+{"fn": "find_signup_form", "args": ["C/A/", "src/a/b.ts"], "ok": null}
+{"fn": "find_signup_form", "args": ["Hello World", "ns:key.path"], "ok": null}
+{"fn": "find_signup_form", "args": ["Oa.", "HELLOa..b"], "ok": null}
+{"fn": "find_signup_form", "args": ["./x/**/*.jsona.b.c", ".leading"], "ok": null}
+{"fn": "find_signup_form", "args": ["ΣΊΣΥΦΟΣ", "src/a/b.ts"], "ok": null}
+{"fn": "find_signup_form", "args": ["key_name-1", ".leading"], "ok": null}
+{"fn": "find_signup_form", "args": ["abca😀b😀c", "src/a/b.ts"], "ok": null}
+{"fn": "find_signup_form", "args": ["X/**/*.JS", "./x/**/*.json"], "ok": null}
+{"fn": "find_signup_form", "args": ["﻿bom", "ünïcödé"], "ok": null}
+{"fn": "find_signup_form", "args": ["😀", "HELLO"], "ok": null}
+{"fn": "find_signup_form", "args": ["Hello World日本語のテキスト", ":"], "ok": null}
+{"fn": "find_signup_form", "args": ["a:b:cHello World", "line1\nline2"], "ok": null}
+{"fn": "find_signup_form", "args": ["line1\nline2", "INE1\nL"], "ok": null}
+{"fn": "find_signup_form", "args": ["emoji 👍🏽 mix", "ab"], "ok": null}
+{"fn": "find_signup_form", "args": ["hellosrc/a/b.ts", "abcsrc/a/b.ts"], "ok": null}
+{"fn": "find_signup_form", "args": ["a😀b😀c", "a..b"], "ok": null}
+{"fn": "find_signup_form", "args": ["a:b:c", "tab\tseparated"], "ok": null}
+{"fn": "find_signup_form", "args": ["a:b:c", "abc"], "ok": null}
+{"fn": "find_signup_form", "args": ["rc/", "src/a/b.ts"], "ok": null}
+{"fn": "find_signup_form", "args": ["emoji 👍🏽 mix", "a:b:c"], "ok": null}
+{"fn": "find_signup_form", "args": ["/A/B.TS", "src/a/b.ts"], "ok": null}
+{"fn": "find_signup_form", "args": ["hello world", "a..b"], "ok": null}
+{"fn": "find_signup_form", "args": ["LEADI", ".leading"], "ok": null}
+{"fn": "find_signup_form", "args": ["a:b:c", "a.b.c"], "ok": null}
+{"fn": "find_signup_form", "args": ["abcHello World", "abc"], "ok": null}
+{"fn": "find_signup_form", "args": ["./x/**/*.json", "﻿bomstraße"], "ok": null}
+{"fn": "find_signup_form", "args": ["am", "key_name-1"], "ok": null}
+{"fn": "find_signup_form", "args": ["Hello World", "éΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "find_signup_form", "args": ["hello😀", "./x/**/*.jsonemoji 👍🏽 mix"], "ok": null}
+{"fn": "find_signup_form", "args": ["a", "  padded  "], "ok": null}
+{"fn": "find_signup_form", "args": ["ab", "straße"], "ok": null}
+{"fn": "find_signup_form", "args": ["a:b:c", "line1\nline2"], "ok": null}
+{"fn": "find_signup_form", "args": ["tab\tseparated", "straße"], "ok": null}
+{"fn": "find_signup_form", "args": ["key_name-1", ""], "ok": null}
+{"fn": "find_signup_form", "args": ["a", "a"], "ok": null}
+{"fn": "find_signup_form", "args": ["hello", "﻿bom"], "ok": null}
+{"fn": "find_signup_form", "args": [".leadin", ".leading"], "ok": null}
+{"fn": "find_signup_form", "args": ["key_name-1", "Hello World"], "ok": null}
+{"fn": "find_signup_form", "args": ["emoji 👍🏽 mix", ":"], "ok": null}
+{"fn": "find_signup_form", "args": [":", ":"], "ok": null}
+{"fn": "find_signup_form", "args": ["ab", "ünïcödé"], "ok": null}
+{"fn": "find_signup_form", "args": ["Hello World", ":HELLO"], "ok": null}
+{"fn": "find_signup_form", "args": ["HELLO", "aline1\nline2"], "ok": null}
+{"fn": "find_signup_form", "args": ["﻿bom", "é"], "ok": null}
+{"fn": "find_signup_form", "args": [".leading", ".leading"], "ok": null}
+{"fn": "find_signup_form", "args": ["hello worldemoji 👍🏽 mix", "é"], "ok": null}
+{"fn": "find_signup_form", "args": ["ΣΊΣΥΦΟΣ", "straße"], "ok": null}
+{"fn": "find_signup_form", "args": ["日本語のテキストa.b.c", ".c"], "ok": null}
+{"fn": "find_signup_form", "args": ["hello", "ell"], "ok": null}
+{"fn": "find_signup_form", "args": [":", "a..b日本語のテキスト"], "ok": null}
+{"fn": "find_signup_form", "args": ["a..b", "ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "find_signup_form", "args": ["hello", "straße"], "ok": null}
+{"fn": "find_signup_form", "args": ["ünïcödéHello World", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "find_signup_form", "args": ["trailing.", "a.b.c"], "ok": null}
+{"fn": "find_signup_form", "args": ["ns:key.path", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "{name} has {count} items"], "ok": null}
+{"fn": "find_signup_form", "args": ["tab\tseparatedhello world", "a.b.c"], "ok": null}
+{"fn": "find_signup_form", "args": ["trailing.", "hello world"], "ok": null}
+{"fn": "find_signup_form", "args": ["tab\tseparated", "ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "find_signup_form", "args": ["", "a😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": [".leading", "a.b.c"], "ok": null}
+{"fn": "find_signup_form", "args": ["😀", "😀"], "ok": null}
+{"fn": "find_signup_form", "args": ["  padded  ", "ns:key.path"], "ok": null}
+{"fn": "find_signup_form", "args": ["ns:key.path", ".leading"], "ok": null}
+{"fn": "find_signup_form", "args": ["ab", "a.b.c"], "ok": null}
+{"fn": "find_signup_form", "args": [":", "a:b:c"], "ok": null}
+{"fn": "find_signup_form", "args": ["a😀b😀c", "line1\nline2"], "ok": null}
+{"fn": "find_signup_form", "args": ["straße", "﻿bomHello World"], "ok": null}
+{"fn": "find_signup_form", "args": ["trailing.", "./x/**/*.json"], "ok": null}
+{"fn": "find_signup_form", "args": ["src/a/b.ts", ".t"], "ok": null}
+{"fn": "find_signup_form", "args": ["line1\nline2", "a"], "ok": null}
+{"fn": "find_signup_form", "args": ["emoji 👍🏽 mix", "İstanbul"], "ok": null}
+{"fn": "find_signup_form", "args": ["tab\tseparated", "src/a/b.ts"], "ok": null}
+{"fn": "find_signup_form", "args": ["emoji 👍🏽 mix", "{name} has {count} itemshello"], "ok": null}
+{"fn": "find_signup_form", "args": ["abc", "C"], "ok": null}
+{"fn": "find_signup_form", "args": ["trailing.a😀b😀c", "hello world"], "ok": null}
+{"fn": "find_signup_form", "args": [".leading", "key_name-1"], "ok": null}
+{"fn": "find_signup_form", "args": ["ΣΊΣΥΦΟΣ😀", "ΟΣ"], "ok": null}
+{"fn": "find_signup_form", "args": ["ΣΊΣΥΦΟΣ./x/**/*.json", "a😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["A", ".leading"], "ok": null}
+{"fn": "find_signup_form", "args": ["key_name-1", "astraße"], "ok": null}
+{"fn": "find_signup_form", "args": ["Hello World", ":"], "ok": null}
+{"fn": "find_signup_form", "args": ["tab\tseparated", "日本語のテキスト"], "ok": null}
+{"fn": "find_signup_form", "args": ["a", "İstanbul"], "ok": null}
+{"fn": "find_signup_form", "args": ["a..b", "tab\tseparated"], "ok": null}
+{"fn": "find_signup_form", "args": ["ünïcödé", "ünïcö"], "ok": null}
+{"fn": "find_signup_form", "args": ["a.b.c", "trailing."], "ok": null}
+{"fn": "find_signup_form", "args": ["ΣΊΣΥΦΟΣtrailing.", ""], "ok": null}
+{"fn": "find_signup_form", "args": ["ELLO", "HELLO"], "ok": null}
+{"fn": "find_signup_form", "args": ["emoji 👍🏽 mix", "a..b"], "ok": null}
+{"fn": "find_signup_form", "args": ["a.b.cns:key.path", "src/a/b.ts"], "ok": null}
+{"fn": "find_signup_form", "args": ["é", "emoji 👍🏽 mixstraße"], "ok": null}
+{"fn": "find_signup_form", "args": ["", "trailing."], "ok": null}
+{"fn": "find_signup_form", "args": ["a.b.ca:b:c", "ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "find_signup_form", "args": ["S", "src/a/b.ts"], "ok": null}
+{"fn": "find_signup_form", "args": ["ra", "straße"], "ok": null}
+{"fn": "find_signup_form", "args": ["./x/**/*.jsonabc", "a😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["a.b.c", "abc"], "ok": null}
+{"fn": "find_signup_form", "args": ["ab", "./x/**/*.json"], "ok": null}
+{"fn": "find_signup_form", "args": ["ems", "{name} has {count} items"], "ok": null}
+{"fn": "find_signup_form", "args": [".leading", "😀"], "ok": null}
+{"fn": "find_signup_form", "args": ["﻿bom", ""], "ok": null}
+{"fn": "find_signup_form", "args": ["name", "key_name-1"], "ok": null}
+{"fn": "find_signup_form", "args": ["straße", "ab"], "ok": null}
+{"fn": "find_signup_form", "args": ["Hello World", "ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "find_signup_form", "args": ["src/a/b.ts", "./x/**/*.json"], "ok": null}
+{"fn": "find_signup_form", "args": ["ΥΦ", "ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "find_signup_form", "args": ["line1\nline2", "{name} has {count} items"], "ok": null}
+{"fn": "find_signup_form", "args": ["́", "é"], "ok": null}
+{"fn": "find_signup_form", "args": ["ab", "Hello World"], "ok": null}
+{"fn": "find_signup_form", "args": ["trailing.", "ail"], "ok": null}
+{"fn": "find_signup_form", "args": ["{name} has {count} items", "﻿bom"], "ok": null}
+{"fn": "find_signup_form", "args": ["emoji 👍🏽 mix", "a😀b😀chello world"], "ok": null}
+{"fn": "find_signup_form", "args": ["HELLO", "EL"], "ok": null}
+{"fn": "find_signup_form", "args": ["", "hello world"], "ok": null}
+{"fn": "find_signup_form", "args": [":", "a.b.c"], "ok": null}
+{"fn": "find_signup_form", "args": ["key_name-1", "HELLOa.b.c"], "ok": null}
+{"fn": "find_signup_form", "args": ["a..b", "key_name-1"], "ok": null}
+{"fn": "find_signup_form", "args": ["key_name-1", "a..b"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "😀ünïcödé"], "ok": null}
+{"fn": "find_signup_form", "args": ["hello", "trailing."], "ok": null}
+{"fn": "find_signup_form", "args": ["a", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "find_signup_form", "args": ["日本語のテキスト", "  padded  "], "ok": null}
+{"fn": "find_signup_form", "args": ["hello", "😀"], "ok": null}
+{"fn": "find_signup_form", "args": ["  padded  ", "a:b:c"], "ok": null}
+{"fn": "find_signup_form", "args": ["é", "hello"], "ok": null}
+{"fn": "find_signup_form", "args": ["trailing.", "ng"], "ok": null}
+{"fn": "find_signup_form", "args": ["emoji 👍🏽 mix﻿bom", "abc"], "ok": null}
+{"fn": "find_signup_form", "args": ["ns:key.path", "  padded  "], "ok": null}
+{"fn": "find_signup_form", "args": ["a:b:c", "trailing."], "ok": null}
+{"fn": "find_signup_form", "args": ["日本語のテキスト", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "find_signup_form", "args": ["straße", "HELLO"], "ok": null}
+{"fn": "find_signup_form", "args": ["ns:key.path", "key_name-1emoji 👍🏽 mix"], "ok": null}
+{"fn": "find_signup_form", "args": ["a.b.cline1\nline2", "hello"], "ok": null}
+{"fn": "find_signup_form", "args": ["c", "a😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": [":", "Hello World"], "ok": null}
+{"fn": "find_signup_form", "args": ["LDSTRA", "hello worldstraße"], "ok": null}
+{"fn": "find_signup_form", "args": ["LD", "hello world"], "ok": null}
+{"fn": "find_signup_form", "args": ["LO", "HELLO"], "ok": null}
+{"fn": "find_signup_form", "args": ["hello", "{name} has {count} items"], "ok": null}
+{"fn": "find_signup_form", "args": ["a😀b😀c", "  padded  "], "ok": null}
+{"fn": "find_signup_form", "args": ["ns:key.path", "abc"], "ok": null}
+{"fn": "find_signup_form", "args": ["😀", "trailing."], "ok": null}
+{"fn": "find_signup_form", "args": ["key_name-1", "e"], "ok": null}
+{"fn": "find_signup_form", "args": ["a.b.c", "ünïcödé"], "ok": null}
+{"fn": "find_signup_form", "args": ["./x/**/*.json", "./x/**/*.json"], "ok": null}
+{"fn": "find_signup_form", "args": ["a😀b😀c", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "find_signup_form", "args": ["HELLO", "é"], "ok": null}
+{"fn": "find_signup_form", "args": ["é", "abemoji 👍🏽 mix"], "ok": null}
+{"fn": "find_signup_form", "args": ["key_name-1", "a:b:c"], "ok": null}
+{"fn": "find_signup_form", "args": ["straße", "ünïcödé"], "ok": null}
+{"fn": "find_signup_form", "args": ["ke", "trailing.key_name-1"], "ok": null}
+{"fn": "find_signup_form", "args": ["a.b.c{name} has {count} items", "a.b.cns:key.path"], "ok": null}
+{"fn": "find_signup_form", "args": ["Hello World", "  padded  "], "ok": null}
+{"fn": "find_signup_form", "args": ["😀", "é"], "ok": null}
+{"fn": "find_signup_form", "args": ["tab\tseparated", "﻿bom"], "ok": null}
+{"fn": "find_signup_form", "args": ["src/a/b.ts", ".leading"], "ok": null}
+{"fn": "find_signup_form", "args": ["ünïcödé", "src/a/b.ts"], "ok": null}
+{"fn": "find_signup_form", "args": ["a..ba..b", ":"], "ok": null}
+{"fn": "find_signup_form", "args": [":emoji 👍🏽 mix", "straße"], "ok": null}
+{"fn": "find_signup_form", "args": ["😀", "a.b.c"], "ok": null}
+{"fn": "find_signup_form", "args": ["Hello World", "hello world"], "ok": null}
+{"fn": "find_signup_form", "args": ["key_name-1", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "find_signup_form", "args": ["héllo wörld", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["👍🏽 thumbs", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["日本語", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["é", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["straße", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["ılık ırmak", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["👨‍👩‍👧 family", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["a b", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["ΣΊΣΥΦΟΣ", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["a😀b", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["﻿bom", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["a²b x½ y①", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["aⅠb Ⅻ", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["a𐐀b 𝐀bc", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["कि ٣٤", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["Iı İi", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["K K k", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["ſ s S", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["x‍y 👨‍👩‍👧", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["a b c　d", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["١٢٣ ٤٥", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["𝟘𝟙 ²³", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["snake_case foo-bar o'neil", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["ǅungla Ǆ", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["one\r\ntwo threefour", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["café café", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["ΣΑΣ σας ς", "a..ba😀b😀c"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "héllo wörld"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "👍🏽 thumbs"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "日本語"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", ""], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "é"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "İstanbul"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "straße"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "ılık ırmak"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "👨‍👩‍👧 family"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "a b"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "a😀b"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "﻿bom"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "a²b x½ y①"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "aⅠb Ⅻ"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "a𐐀b 𝐀bc"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "कि ٣٤"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "Iı İi"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "K K k"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "ſ s S"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "x‍y 👨‍👩‍👧"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "a b c　d"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "١٢٣ ٤٥"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "𝟘𝟙 ²³"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "snake_case foo-bar o'neil"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "ǅungla Ǆ"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "one\r\ntwo threefour"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "café café"], "ok": null}
+{"fn": "find_signup_form", "args": ["İstanbul", "ΣΑΣ σας ς"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["a..b", "a:b:c"], "ok": null}
+{"fn": "find_submit_form", "args": [".leading", "éa..b"], "ok": null}
+{"fn": "find_submit_form", "args": ["a:b:c", "  padded  "], "ok": null}
+{"fn": "find_submit_form", "args": ["hello worldline1\nline2", ".leading"], "ok": null}
+{"fn": "find_submit_form", "args": ["a.b.cİstanbul", "tab\tseparated"], "ok": null}
+{"fn": "find_submit_form", "args": ["ΣΊΣΥΦΟΣ", ":{name} has {count} items"], "ok": null}
+{"fn": "find_submit_form", "args": ["abc", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "find_submit_form", "args": ["ns:key.path", ":"], "ok": null}
+{"fn": "find_submit_form", "args": ["ix", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "find_submit_form", "args": ["HELLO", ""], "ok": null}
+{"fn": "find_submit_form", "args": ["hello", "Hello World"], "ok": null}
+{"fn": "find_submit_form", "args": ["line1\nline2", "trailing."], "ok": null}
+{"fn": "find_submit_form", "args": [":", "a😀b😀c"], "ok": null}
+{"fn": "find_submit_form", "args": ["hello world", "ello world"], "ok": null}
+{"fn": "find_submit_form", "args": ["Hello World", ".leading.leading"], "ok": null}
+{"fn": "find_submit_form", "args": ["abc", "abc"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "trailing."], "ok": null}
+{"fn": "find_submit_form", "args": ["OΣΊΣΥΦΟ", "helloΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "find_submit_form", "args": ["ünïcödé", "é"], "ok": null}
+{"fn": "find_submit_form", "args": ["😀", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "find_submit_form", "args": ["hello worlda😀b😀c", "line1\nline2"], "ok": null}
+{"fn": "find_submit_form", "args": ["Hello World", "tab\tseparated"], "ok": null}
+{"fn": "find_submit_form", "args": [":", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "find_submit_form", "args": ["./x/**/*.json", "line1\nline2"], "ok": null}
+{"fn": "find_submit_form", "args": ["  padded  ", "😀"], "ok": null}
+{"fn": "find_submit_form", "args": ["a:b:ckey_name-1", "a😀b😀c"], "ok": null}
+{"fn": "find_submit_form", "args": ["﻿bomline1\nline2", "straße"], "ok": null}
+{"fn": "find_submit_form", "args": ["ji 👍🏽 ", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "find_submit_form", "args": ["İstanbul", "trailing."], "ok": null}
+{"fn": "find_submit_form", "args": ["tab\tseparated", "﻿boma:b:c"], "ok": null}
+{"fn": "find_submit_form", "args": ["{name} has {count} items", "straße"], "ok": null}
+{"fn": "find_submit_form", "args": ["line1\nline2", "line1\nline2{name} has {count} items"], "ok": null}
+{"fn": "find_submit_form", "args": ["emoji 👍🏽 mix", "a:b:c"], "ok": null}
+{"fn": "find_submit_form", "args": ["a:b:c", "line1\nline2"], "ok": null}
+{"fn": "find_submit_form", "args": ["tab\tseparated", ":"], "ok": null}
+{"fn": "find_submit_form", "args": ["/x/**", "./x/**/*.json"], "ok": null}
+{"fn": "find_submit_form", "args": ["emoji 👍🏽 mix", ":"], "ok": null}
+{"fn": "find_submit_form", "args": ["{name} has {count} items", "} ITEMS"], "ok": null}
+{"fn": "find_submit_form", "args": ["SS", "straße"], "ok": null}
+{"fn": "find_submit_form", "args": [".leading", "HELLO"], "ok": null}
+{"fn": "find_submit_form", "args": ["raßetrailing", "straßetrailing."], "ok": null}
+{"fn": "find_submit_form", "args": ["ab", "  padded  "], "ok": null}
+{"fn": "find_submit_form", "args": ["a", "trailing."], "ok": null}
+{"fn": "find_submit_form", "args": ["日本語のテキスト", "のテキ"], "ok": null}
+{"fn": "find_submit_form", "args": ["a.b.c", "ns:key.path  padded  "], "ok": null}
+{"fn": "find_submit_form", "args": ["emoji 👍🏽 mix", "😀"], "ok": null}
+{"fn": "find_submit_form", "args": ["t", "src/a/b.ts"], "ok": null}
+{"fn": "find_submit_form", "args": ["hello", "hello"], "ok": null}
+{"fn": "find_submit_form", "args": ["ab", "straße"], "ok": null}
+{"fn": "find_submit_form", "args": ["straße", "a:b:c"], "ok": null}
+{"fn": "find_submit_form", "args": ["ns:key.path", "a..b"], "ok": null}
+{"fn": "find_submit_form", "args": ["./x/**/*.json", "Hello World"], "ok": null}
+{"fn": "find_submit_form", "args": ["ab", "key_name-1"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", ":é"], "ok": null}
+{"fn": "find_submit_form", "args": ["a:b:c", "HELLO"], "ok": null}
+{"fn": "find_submit_form", "args": ["é", "é"], "ok": null}
+{"fn": "find_submit_form", "args": ["line1\nline2", "abc"], "ok": null}
+{"fn": "find_submit_form", "args": ["HELLO", "hello"], "ok": null}
+{"fn": "find_submit_form", "args": ["HELLO", "line1\nline2"], "ok": null}
+{"fn": "find_submit_form", "args": ["ΣΊΣΥΦΟΣé", "a"], "ok": null}
+{"fn": "find_submit_form", "args": ["日本語のテキスト", "😀"], "ok": null}
+{"fn": "find_submit_form", "args": ["abHello World", "ns:key.path"], "ok": null}
+{"fn": "find_submit_form", "args": ["g", "a😀b😀c.leading"], "ok": null}
+{"fn": "find_submit_form", "args": ["a", "日本語のテキスト"], "ok": null}
+{"fn": "find_submit_form", "args": ["日本語のテキスト", "a..b"], "ok": null}
+{"fn": "find_submit_form", "args": ["  padded  ", "hello world"], "ok": null}
+{"fn": "find_submit_form", "args": ["abc", "ns:key.pathline1\nline2"], "ok": null}
+{"fn": "find_submit_form", "args": ["  padded  ", "abcemoji 👍🏽 mix"], "ok": null}
+{"fn": "find_submit_form", "args": ["", "HELLO"], "ok": null}
+{"fn": "find_submit_form", "args": ["hello", "ΣΊΣΥΦΟΣa😀b😀c"], "ok": null}
+{"fn": "find_submit_form", "args": ["./x/**/*.json", "a.b.c"], "ok": null}
+{"fn": "find_submit_form", "args": ["aa😀b😀c", ""], "ok": null}
+{"fn": "find_submit_form", "args": ["abc", "a..b"], "ok": null}
+{"fn": "find_submit_form", "args": ["😀B😀", "a😀b😀c"], "ok": null}
+{"fn": "find_submit_form", "args": [":", "ab"], "ok": null}
+{"fn": "find_submit_form", "args": ["HELLO", "a:b:c"], "ok": null}
+{"fn": "find_submit_form", "args": ["😀", "{name} has {count} items"], "ok": null}
+{"fn": "find_submit_form", "args": ["a..b", "ns:key.path"], "ok": null}
+{"fn": "find_submit_form", "args": ["日本語のテキスト", ".leading"], "ok": null}
+{"fn": "find_submit_form", "args": ["hello world", "l"], "ok": null}
+{"fn": "find_submit_form", "args": ["ΣΊΣΥΦΟΣ", "ΥΦΟΣ"], "ok": null}
+{"fn": "find_submit_form", "args": ["﻿bom", "hello world"], "ok": null}
+{"fn": "find_submit_form", "args": ["hellotab\tseparated", "  padded  "], "ok": null}
+{"fn": "find_submit_form", "args": ["ab", "ab"], "ok": null}
+{"fn": "find_submit_form", "args": ["", ""], "ok": null}
+{"fn": "find_submit_form", "args": ["", "straßestraße"], "ok": null}
+{"fn": "find_submit_form", "args": ["ünïcödé😀", ":"], "ok": null}
+{"fn": "find_submit_form", "args": [".leading", ""], "ok": null}
+{"fn": "find_submit_form", "args": ["a.b.c", "./x/**/*.jsonünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["ns:key.path", "src/a/b.ts"], "ok": null}
+{"fn": "find_submit_form", "args": ["Hello World", "a.b.c"], "ok": null}
+{"fn": "find_submit_form", "args": ["{name} has {count} items./x/**/*.json", "src/a/b.ts"], "ok": null}
+{"fn": "find_submit_form", "args": ["ab", "src/a/b.tstab\tseparated"], "ok": null}
+{"fn": "find_submit_form", "args": ["é", "e"], "ok": null}
+{"fn": "find_submit_form", "args": ["\t", "tab\tseparated"], "ok": null}
+{"fn": "find_submit_form", "args": ["ab", "a"], "ok": null}
+{"fn": "find_submit_form", "args": ["line1\nline2", ".leading"], "ok": null}
+{"fn": "find_submit_form", "args": [".leadingstraße", "Hello World"], "ok": null}
+{"fn": "find_submit_form", "args": ["emoji 👍🏽 mixHello World", ":HELLO"], "ok": null}
+{"fn": "find_submit_form", "args": ["abc", "a.b.c"], "ok": null}
+{"fn": "find_submit_form", "args": ["a:b:c", "./x/**/*.json"], "ok": null}
+{"fn": "find_submit_form", "args": ["ns:key.path", "ΣΊΣΥΦΟΣline1\nline2"], "ok": null}
+{"fn": "find_submit_form", "args": [":c", "a:b:c"], "ok": null}
+{"fn": "find_submit_form", "args": ["aba.b.c", "ab"], "ok": null}
+{"fn": "find_submit_form", "args": ["a..b", "key_name-1"], "ok": null}
+{"fn": "find_submit_form", "args": ["İstanbul", "hello worldtrailing."], "ok": null}
+{"fn": "find_submit_form", "args": ["é", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "find_submit_form", "args": ["trailing.", "Hello World"], "ok": null}
+{"fn": "find_submit_form", "args": ["😀", ":"], "ok": null}
+{"fn": "find_submit_form", "args": ["{name} has {count} items", "日本語のテキスト.leading"], "ok": null}
+{"fn": "find_submit_form", "args": ["straßea", "  padded  "], "ok": null}
+{"fn": "find_submit_form", "args": [":", "İstanbul"], "ok": null}
+{"fn": "find_submit_form", "args": ["  padded  ", "a.b.c"], "ok": null}
+{"fn": "find_submit_form", "args": ["İstanbul", "hello"], "ok": null}
+{"fn": "find_submit_form", "args": ["a..bab", "é"], "ok": null}
+{"fn": "find_submit_form", "args": ["{name} has {count} itemsab", "HELLO{name} has {count} items"], "ok": null}
+{"fn": "find_submit_form", "args": ["ns:key.path", "hello world"], "ok": null}
+{"fn": "find_submit_form", "args": ["emoji 👍🏽 mixemoji 👍🏽 mix", "HELLO"], "ok": null}
+{"fn": "find_submit_form", "args": [".t", "src/a/b.ts"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "Hello World"], "ok": null}
+{"fn": "find_submit_form", "args": ["trailing.", ".leadinghello"], "ok": null}
+{"fn": "find_submit_form", "args": ["straßeİstanbul", "é"], "ok": null}
+{"fn": "find_submit_form", "args": ["ΥΦ", "ΣΊΣΥΦΟΣabc"], "ok": null}
+{"fn": "find_submit_form", "args": ["helloemoji 👍🏽 mix", "abc"], "ok": null}
+{"fn": "find_submit_form", "args": ["abcstraße", "abcstraß"], "ok": null}
+{"fn": "find_submit_form", "args": ["line1\nline2", "straße"], "ok": null}
+{"fn": "find_submit_form", "args": ["emoji 👍🏽 mix", "ns:key.path"], "ok": null}
+{"fn": "find_submit_form", "args": ["Hello Worldhello", "ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "find_submit_form", "args": ["﻿bomé", "ns:key.path"], "ok": null}
+{"fn": "find_submit_form", "args": [":", "a:b:cemoji 👍🏽 mix"], "ok": null}
+{"fn": "find_submit_form", "args": ["emoji 👍🏽 mixΣΊΣΥΦΟΣ", "line1\nline2"], "ok": null}
+{"fn": "find_submit_form", "args": ["ns:key.path{name} has {count} items", "a..b"], "ok": null}
+{"fn": "find_submit_form", "args": ["trailing.", "key_name-1"], "ok": null}
+{"fn": "find_submit_form", "args": ["hello world", "a..b"], "ok": null}
+{"fn": "find_submit_form", "args": ["{name} has {count} itemsHELLO", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["line1\nline2", "INE1\nLINE"], "ok": null}
+{"fn": "find_submit_form", "args": ["日本語のテキスト", "テキスト"], "ok": null}
+{"fn": "find_submit_form", "args": ["İstanbul", "tab\tseparatedline1\nline2"], "ok": null}
+{"fn": "find_submit_form", "args": ["a😀b😀c", "c"], "ok": null}
+{"fn": "find_submit_form", "args": [".leading", ".leading"], "ok": null}
+{"fn": "find_submit_form", "args": ["line1\nline2src/a/b.ts", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": [":ΣΊΣΥΦΟΣ", "{name} has {count} itemsabc"], "ok": null}
+{"fn": "find_submit_form", "args": ["ns:key.path", "y"], "ok": null}
+{"fn": "find_submit_form", "args": ["ΣΊΣΥΦΟΣ", "Hello World"], "ok": null}
+{"fn": "find_submit_form", "args": ["{name} has {count} items", "trailing."], "ok": null}
+{"fn": "find_submit_form", "args": ["", "{name} has {count} items"], "ok": null}
+{"fn": "find_submit_form", "args": ["src/a", "src/a/b.ts"], "ok": null}
+{"fn": "find_submit_form", "args": ["a..b", "A.."], "ok": null}
+{"fn": "find_submit_form", "args": ["{name} has {count} items", ":"], "ok": null}
+{"fn": "find_submit_form", "args": ["😀", "Hello World"], "ok": null}
+{"fn": "find_submit_form", "args": ["a.b.c", "İstanbul"], "ok": null}
+{"fn": "find_submit_form", "args": [":", "hello worldtrailing."], "ok": null}
+{"fn": "find_submit_form", "args": ["﻿bom", "日本語のテキスト"], "ok": null}
+{"fn": "find_submit_form", "args": ["hello", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "find_submit_form", "args": ["a", "ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "find_submit_form", "args": ["a..b", "﻿bom"], "ok": null}
+{"fn": "find_submit_form", "args": ["ns:key.path", "a:b:ca😀b😀c"], "ok": null}
+{"fn": "find_submit_form", "args": ["ab", "B"], "ok": null}
+{"fn": "find_submit_form", "args": ["straße", "{name} has {count} items"], "ok": null}
+{"fn": "find_submit_form", "args": [".leading", "./x/**/*.json"], "ok": null}
+{"fn": "find_submit_form", "args": ["日本語のテキスト", "日本語のテキスト"], "ok": null}
+{"fn": "find_submit_form", "args": ["line1\nline2", "é"], "ok": null}
+{"fn": "find_submit_form", "args": ["a", "a..b"], "ok": null}
+{"fn": "find_submit_form", "args": ["  padded  ", "./x/**/*.json"], "ok": null}
+{"fn": "find_submit_form", "args": ["a", "a:b:c"], "ok": null}
+{"fn": "find_submit_form", "args": ["b", "a😀b😀c"], "ok": null}
+{"fn": "find_submit_form", "args": ["ΣΊΣΥΦΟΣ{name} has {count} items", "ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "find_submit_form", "args": ["ünïcödé", "src/a/b.ts"], "ok": null}
+{"fn": "find_submit_form", "args": ["ΣΊΣΥΦΟΣ", "Υ"], "ok": null}
+{"fn": "find_submit_form", "args": [".", "a..b:"], "ok": null}
+{"fn": "find_submit_form", "args": ["ünïcödé.leading", "di"], "ok": null}
+{"fn": "find_submit_form", "args": ["Σ", "ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "find_submit_form", "args": ["trailing.a:b:c", "a.b.c"], "ok": null}
+{"fn": "find_submit_form", "args": ["a.b.c", "﻿bom"], "ok": null}
+{"fn": "find_submit_form", "args": ["line1\nline2é", ":"], "ok": null}
+{"fn": "find_submit_form", "args": ["trailing.src/a/b.ts", "a😀b😀c﻿bom"], "ok": null}
+{"fn": "find_submit_form", "args": ["straße", "abc"], "ok": null}
+{"fn": "find_submit_form", "args": [".leading", "hello"], "ok": null}
+{"fn": "find_submit_form", "args": [".leading", ":"], "ok": null}
+{"fn": "find_submit_form", "args": ["a:b:ckey_name-1", ":"], "ok": null}
+{"fn": "find_submit_form", "args": ["a😀b😀c", "abc"], "ok": null}
+{"fn": "find_submit_form", "args": ["日本語のテキスト", ""], "ok": null}
+{"fn": "find_submit_form", "args": ["SEPA", "tab\tseparated"], "ok": null}
+{"fn": "find_submit_form", "args": ["éline1\nline2", "\nLIN"], "ok": null}
+{"fn": "find_submit_form", "args": ["hello world", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["straßeemoji 👍🏽 mix", "a"], "ok": null}
+{"fn": "find_submit_form", "args": ["日本語のテキスト{name} has {count} items", "é"], "ok": null}
+{"fn": "find_submit_form", "args": ["HELLO", "abc"], "ok": null}
+{"fn": "find_submit_form", "args": ["./x/**/*.jsonΣΊΣΥΦΟΣ", "﻿bomns:key.path"], "ok": null}
+{"fn": "find_submit_form", "args": ["ünïcödé", "dé"], "ok": null}
+{"fn": "find_submit_form", "args": ["ünïcödé", "😀"], "ok": null}
+{"fn": "find_submit_form", "args": ["a..b", "trailing."], "ok": null}
+{"fn": "find_submit_form", "args": ["a:b:c", "Hello Worldabc"], "ok": null}
+{"fn": "find_submit_form", "args": ["straße", "ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "find_submit_form", "args": ["hello world", "é"], "ok": null}
+{"fn": "find_submit_form", "args": ["a:b:cab", ".leading"], "ok": null}
+{"fn": "find_submit_form", "args": ["", "line1\nline2"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "hello"], "ok": null}
+{"fn": "find_submit_form", "args": ["ΣΊΣΥΦΟΣ", "ΥΦΟ"], "ok": null}
+{"fn": "find_submit_form", "args": ["héllo wörld", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["👍🏽 thumbs", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["日本語", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["é", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["İstanbul", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["straße", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["ılık ırmak", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["👨‍👩‍👧 family", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["a b", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["ΣΊΣΥΦΟΣ", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["a😀b", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["﻿bom", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["a²b x½ y①", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["aⅠb Ⅻ", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["a𐐀b 𝐀bc", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["कि ٣٤", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["Iı İi", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["K K k", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["ſ s S", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["x‍y 👨‍👩‍👧", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["a b c　d", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["١٢٣ ٤٥", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["𝟘𝟙 ²³", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["snake_case foo-bar o'neil", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["ǅungla Ǆ", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["one\r\ntwo threefour", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["café café", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["ΣΑΣ σας ς", "ünïcödé"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "héllo wörld"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "👍🏽 thumbs"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "日本語"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", ""], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "é"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "İstanbul"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "straße"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "ılık ırmak"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "👨‍👩‍👧 family"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "a b"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "a😀b"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "﻿bom"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "a²b x½ y①"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "aⅠb Ⅻ"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "a𐐀b 𝐀bc"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "कि ٣٤"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "Iı İi"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "K K k"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "ſ s S"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "x‍y 👨‍👩‍👧"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "a b c　d"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "١٢٣ ٤٥"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "𝟘𝟙 ²³"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "snake_case foo-bar o'neil"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "ǅungla Ǆ"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "one\r\ntwo threefour"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "café café"], "ok": null}
+{"fn": "find_submit_form", "args": ["key_name-1", "ΣΑΣ σας ς"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["line1\nline2trailing.", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["HELLO", "HELLOHELLO"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a:b:c", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a..b", "Hello World日本語のテキスト"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ns:key.path", "日本語のテキスト"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["😀", "😀"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["tab\tseparated", "straße"], "ok": null}
+{"fn": "extract_challenge_form", "args": [":", "İstanbulsrc/a/b.ts"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "Hello World"], "ok": null}
+{"fn": "extract_challenge_form", "args": [":", ":"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello", ".leading"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["İstanbul", "tab\tseparated"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["h", "ns:key.path"], "ok": null}
+{"fn": "extract_challenge_form", "args": [":", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["straße", "😀a:b:c"], "ok": null}
+{"fn": "extract_challenge_form", "args": [":a.b.c", ":"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["tab\tseparated", "a😀b😀c"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ab", "trailing."], "ok": null}
+{"fn": "extract_challenge_form", "args": ["abc", "日本語のテキスト"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ΣΊΣΥΦΟΣ", "hello"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["key_name-1", "HELLOab"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["src/a/b.ts:", "a:b:c"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["スト", "日本語のテキスト"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a..b日本語のテキスト", ":"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["trailing.", "a:b:c"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "a.b.c"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ünïcödé", "ab"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["", "  padded  "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["İstanbul", "key_name-1straße"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["HELLO", "hello world"], "ok": null}
+{"fn": "extract_challenge_form", "args": [":", "line1\nline2"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["straße", "{name} has {count} items"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["key_name-1", "a.b.c"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["trailing.", "ling."], "ok": null}
+{"fn": "extract_challenge_form", "args": ["abcsrc/a/b.ts", "ΣΊΣΥΦΟΣ./x/**/*.json"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ns:key.path", "trailing.a"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["trailing.", ".leading"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["straße", "﻿bom"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["N", "straßetrailing."], "ok": null}
+{"fn": "extract_challenge_form", "args": ["src/a/b.ts", "src/a/b.ts"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a..b", "a..b"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello", "ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", ".leading:"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ELLO", "HELLO"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ab  padded  ", "a"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["﻿bom", ""], "ok": null}
+{"fn": "extract_challenge_form", "args": ["emoji 👍🏽 mix", "  padded  "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "key_name-1"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["src/a/b.ts", "ns:key.path"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["のテキス", "日本語のテキスト"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a..b", "Hello World"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["abHello World", "{name} has {count} items"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ns:key.path", "trailing."], "ok": null}
+{"fn": "extract_challenge_form", "args": ["./x/**/*.jsonünïcödé", "ns:key.path"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["trailing.ünïcödé", "hello worlda:b:c"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a", "  padded  "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["src/a/b.ts", "a/"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["abc", "C"], "ok": null}
+{"fn": "extract_challenge_form", "args": [" WORLD", "hello world"], "ok": null}
+{"fn": "extract_challenge_form", "args": [":", "é"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["s", "{name} has {count} items"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["src/a/b.ts", "Hello World"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["é", "E"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ünïcödé", "é"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["tab\tseparated", "rate"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["abc", "abc"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", " W"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["{name} has {count} itemstrailing.", ""], "ok": null}
+{"fn": "extract_challenge_form", "args": ["﻿bom", "hello world"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ΣΊΣΥΦΟΣ", "HELLO"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["HELLO", ":Hello World"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "d"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["key_name-1", "﻿bom"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["stanb", "İstanbul"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ünïcödé", "ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["﻿bom", "line1\nline2"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["./x/**/*.jsonab", "hello"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["é", "﻿boma..b"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["./x/**/*.jsonhello", "ns:key.path"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["", "hello world"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["﻿bom", "tab\tseparated"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["straße", "line1\nline2"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ünïcödé", "a:b:c"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a", "line1\nline2"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["HELLO", "ab"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["İstanbul", "U"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["src/a/b.ts", "./x/**/*.json"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ns:key.path", "hello"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["key_name-1", "trailing."], "ok": null}
+{"fn": "extract_challenge_form", "args": ["me-", "key_name-1"], "ok": null}
+{"fn": "extract_challenge_form", "args": [":", "ns:key.path"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ns:key.path", "İstanbul"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ΣΊΣΥΦΟΣ", "src/a/b.ts"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["{name} has {count} items", "ns:key.path"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["", "é"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a.b.c", "a.b.c"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["./x/**/*.json", "key_name-1İstanbul"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["﻿bom", "éhello"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["A", "ab"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a:b:c", "ab"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ab", "﻿bom"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello", "line1\nline2"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "extract_challenge_form", "args": [":", ""], "ok": null}
+{"fn": "extract_challenge_form", "args": ["{name} has {count} items", "日本語のテキスト"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ns:key.path", "a😀b😀c"], "ok": null}
+{"fn": "extract_challenge_form", "args": [":", "a:b:c"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["key_name-1", "Hello Worlda.b.c"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a..btrailing.", "a..b"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["./x/**/*.jsonünïcödé", "﻿bom"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ΣΊΣΥΦΟΣ", "Φ"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ΣΊΣΥΦΟΣ", "ΣΊ"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["emoji 👍🏽 mix", "moji "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["tab\tseparated", "src/a/b.ts"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ns:key.path", "key_name-1"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["﻿bom", "﻿"], "ok": null}
+{"fn": "extract_challenge_form", "args": [":İstanbul", "straße"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["straße", "a"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ke", "key_name-1ab"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["A", "./x/**/*.json.leading"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["emoji 👍🏽 mix", "{name} has {count} items"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["emoji 👍🏽 mix", "hello world"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["straßeünïcödé", "key_name-1"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["./x/**/*.json", "./x/**/*.json"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a:b:c", "a.b.c"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ab", "İstanbul:"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a..b", ":a:b:c"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello", "HELLO"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["日本語のテキスト", "のテキ"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["HELLO", "abc"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ab{name} has {count} items", "﻿bom"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["aé", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["", "tab\tseparated"], "ok": null}
+{"fn": "extract_challenge_form", "args": [".leading", "﻿bom"], "ok": null}
+{"fn": "extract_challenge_form", "args": [".leading", "hello"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ns:key.path", "src/a/b.ts"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["{name} has {count} items日本語のテキスト", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["日本語のテキスト", "  padded  "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["İstanbul", ""], "ok": null}
+{"fn": "extract_challenge_form", "args": [".leading", "trailing.straße"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["  padded  src/a/b.ts", "a.b.c"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ΣΊΣΥΦΟΣ", "Hello Worldline1\nline2"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["﻿bomİstanbul", "  padded  "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["", "😀"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a.b.ca:b:c", "line1\nline2"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["astraße", "src/a/b.ts"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ns:key.path", "ünïcödé"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["é", "hello world﻿bom"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a.b.c", "B"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["trailing.", "ünïcödé"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["{name} has {count} items./x/**/*.json", "trailing."], "ok": null}
+{"fn": "extract_challenge_form", "args": ["straße", "ns:key.path"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["Hello World", "HELLO"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a.b.c", "  padded  "], "ok": null}
+{"fn": "extract_challenge_form", "args": [":tab\tseparated", "a"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["﻿bomé", ":"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a", "日本語のテキスト"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["  padded  ", "a..b"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["trailing.a:b:c", "a..b"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["src/a/b.ts.leading", "a.leading"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a..b", "ünïcödé"], "ok": null}
+{"fn": "extract_challenge_form", "args": [":", "ünïcödé"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["A", "a"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["﻿b", "﻿bom"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["y.path", "ns:key.path"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["abc", "😀"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["  padded  ", "abc"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["lead", ".leading"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a:b:c", "HELLO"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["line1\nline2./x/**/*.json", "İstanbul"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["{name} has {count} items", "src/a/b.tskey_name-1"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["tab\tseparated", ":hello world"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a:b:c", "straße"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ab", "src/a/b.ts"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["emoji 👍🏽 mix", "é"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ΣΊΣΥΦΟΣ", "straße"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["aba", "trailing."], "ok": null}
+{"fn": "extract_challenge_form", "args": ["é", "́"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["trailing.", "traili"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["key_name-1", "_NAME-1"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a.b.c", ".b."], "ok": null}
+{"fn": "extract_challenge_form", "args": ["  padded  ", "hello world"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "helloa😀b😀c"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["日本語のテキスト", ""], "ok": null}
+{"fn": "extract_challenge_form", "args": ["HELLO", "İstanbulstraße"], "ok": null}
+{"fn": "extract_challenge_form", "args": [".leading", "a"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["{name} has {count} itemsemoji 👍🏽 mix", "{name} has {count} items"], "ok": null}
+{"fn": "extract_challenge_form", "args": [":straße", "E"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["trailing.", "key_name-1"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["./x/**/*.jsonabc", "emoji 👍🏽 mix"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["trailing.", "a.b.c"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ED  ", "  padded  "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["tab\tseparated", "HELLOabc"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a..b", "İstanbul"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a:b:c", "Hello World"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ab\tsep", "tab\tseparated"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["./x/**/*.json", "hello world"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["HELLO", "./x/**/*.json"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["héllo wörld", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["👍🏽 thumbs", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["日本語", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["é", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["İstanbul", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["straße", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ılık ırmak", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["👨‍👩‍👧 family", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a b", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ΣΊΣΥΦΟΣ", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a😀b", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["﻿bom", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a²b x½ y①", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["aⅠb Ⅻ", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a𐐀b 𝐀bc", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["कि ٣٤", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["Iı İi", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["K K k", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ſ s S", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["x‍y 👨‍👩‍👧", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["a b c　d", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["١٢٣ ٤٥", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["𝟘𝟙 ²³", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["snake_case foo-bar o'neil", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ǅungla Ǆ", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["one\r\ntwo threefour", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["café café", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["ΣΑΣ σας ς", "o "], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "héllo wörld"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "👍🏽 thumbs"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "日本語"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", ""], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "é"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "İstanbul"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "straße"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "ılık ırmak"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "👨‍👩‍👧 family"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "a b"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "a😀b"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "﻿bom"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "a²b x½ y①"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "aⅠb Ⅻ"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "a𐐀b 𝐀bc"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "कि ٣٤"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "Iı İi"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "K K k"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "ſ s S"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "x‍y 👨‍👩‍👧"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "a b c　d"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "١٢٣ ٤٥"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "𝟘𝟙 ²³"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "snake_case foo-bar o'neil"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "ǅungla Ǆ"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "one\r\ntwo threefour"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "café café"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["hello world", "ΣΑΣ σας ς"], "ok": null}
+{"fn": "extract_hidden_fields", "args": ["<html><body><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><form name=\"challenge\" id=\"f1\" action=\"/auth/challenge?step=2\" method=\"post\"><input type=\"hidden\" name=\"_csrf\" value=\"tok_abc_123\"><input type=\"hidden\" name=\"session_id\" value=\"sid_999\"><input type=\"text\" name=\"email\" value=\"buyer@example.com\"><input type=\"password\" name=\"pwd\" value=\"\"><input type=\"submit\" name=\"btnSubmit\" value=\"Continue\"><input type=\"button\" name=\"btnCancel\" value=\"Cancel\"><input type=\"image\" name=\"imgBtn\" value=\"Go\"><select name=\"country\"><option value=\"GB\">GB</option><option selected value=\"US\">US</option></select><select name=\"lang\"><option value=\"en_US\">EN</option><option value=\"de_DE\">DE</option></select><select name=\"empty_sel\"></select></form></body></html>"], "ok": {"_csrf": "tok_abc_123", "session_id": "sid_999"}}
+{"fn": "extract_hidden_fields", "args": ["<form method=\"POST\" action=\"https://www.paypal.com/checkoutnow/submit\"><input type=\"hidden\" name=\"a\" value=\"1\"><input type=\"text\" name=\"signup_email\" value=\"x@y.z\"><button>Agree and Pay Now</button></form>"], "ok": {"a": "1"}}
+{"fn": "extract_hidden_fields", "args": ["<div>no inputs</div>"], "ok": {}}
+{"fn": "extract_input_fields", "args": ["<html><body><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><form name=\"challenge\" id=\"f1\" action=\"/auth/challenge?step=2\" method=\"post\"><input type=\"hidden\" name=\"_csrf\" value=\"tok_abc_123\"><input type=\"hidden\" name=\"session_id\" value=\"sid_999\"><input type=\"text\" name=\"email\" value=\"buyer@example.com\"><input type=\"password\" name=\"pwd\" value=\"\"><input type=\"submit\" name=\"btnSubmit\" value=\"Continue\"><input type=\"button\" name=\"btnCancel\" value=\"Cancel\"><input type=\"image\" name=\"imgBtn\" value=\"Go\"><select name=\"country\"><option value=\"GB\">GB</option><option selected value=\"US\">US</option></select><select name=\"lang\"><option value=\"en_US\">EN</option><option value=\"de_DE\">DE</option></select><select name=\"empty_sel\"></select></form></body></html>"], "ok": {"_csrf": "tok_abc_123", "session_id": "sid_999", "email": "buyer@example.com", "pwd": ""}}
+{"fn": "extract_input_fields", "args": ["<input type=\"TEXT\" name=\"user\" value=\"alice\"><input type=\"SUBMIT\" name=\"s\" value=\"1\">"], "ok": {"user": "alice"}}
+{"fn": "extract_select_fields", "args": ["<html><body><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><form name=\"challenge\" id=\"f1\" action=\"/auth/challenge?step=2\" method=\"post\"><input type=\"hidden\" name=\"_csrf\" value=\"tok_abc_123\"><input type=\"hidden\" name=\"session_id\" value=\"sid_999\"><input type=\"text\" name=\"email\" value=\"buyer@example.com\"><input type=\"password\" name=\"pwd\" value=\"\"><input type=\"submit\" name=\"btnSubmit\" value=\"Continue\"><input type=\"button\" name=\"btnCancel\" value=\"Cancel\"><input type=\"image\" name=\"imgBtn\" value=\"Go\"><select name=\"country\"><option value=\"GB\">GB</option><option selected value=\"US\">US</option></select><select name=\"lang\"><option value=\"en_US\">EN</option><option value=\"de_DE\">DE</option></select><select name=\"empty_sel\"></select></form></body></html>"], "ok": {"country": "US", "lang": "en_US", "empty_sel": ""}}
+{"fn": "extract_select_fields", "args": ["<select name=\"s1\"><option value=\"a\">A</option></select>"], "ok": {"s1": "a"}}
+{"fn": "find_signup_form", "args": ["<html><body><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><form name=\"challenge\" id=\"f1\" action=\"/auth/challenge?step=2\" method=\"post\"><input type=\"hidden\" name=\"_csrf\" value=\"tok_abc_123\"><input type=\"hidden\" name=\"session_id\" value=\"sid_999\"><input type=\"text\" name=\"email\" value=\"buyer@example.com\"><input type=\"password\" name=\"pwd\" value=\"\"><input type=\"submit\" name=\"btnSubmit\" value=\"Continue\"><input type=\"button\" name=\"btnCancel\" value=\"Cancel\"><input type=\"image\" name=\"imgBtn\" value=\"Go\"><select name=\"country\"><option value=\"GB\">GB</option><option selected value=\"US\">US</option></select><select name=\"lang\"><option value=\"en_US\">EN</option><option value=\"de_DE\">DE</option></select><select name=\"empty_sel\"></select></form></body></html>", "https://www.paypal.com/signin"], "ok": {"$tuple": ["https://www.paypal.com/auth/challenge?step=2", {"_csrf": "tok_abc_123", "session_id": "sid_999", "email": "buyer@example.com", "pwd": "", "country": "US", "lang": "en_US", "empty_sel": ""}]}}
+{"fn": "find_signup_form", "args": ["<form method=\"POST\" action=\"https://www.paypal.com/checkoutnow/submit\"><input type=\"hidden\" name=\"a\" value=\"1\"><input type=\"text\" name=\"signup_email\" value=\"x@y.z\"><button>Agree and Pay Now</button></form>", "https://www.paypal.com/signin"], "ok": {"$tuple": ["https://www.paypal.com/checkoutnow/submit", {"a": "1", "signup_email": "x@y.z"}]}}
+{"fn": "find_signup_form", "args": ["<html><body>no signup</body></html>", "https://www.paypal.com/signin"], "ok": null}
+{"fn": "find_submit_form", "args": ["<html><body><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><form name=\"challenge\" id=\"f1\" action=\"/auth/challenge?step=2\" method=\"post\"><input type=\"hidden\" name=\"_csrf\" value=\"tok_abc_123\"><input type=\"hidden\" name=\"session_id\" value=\"sid_999\"><input type=\"text\" name=\"email\" value=\"buyer@example.com\"><input type=\"password\" name=\"pwd\" value=\"\"><input type=\"submit\" name=\"btnSubmit\" value=\"Continue\"><input type=\"button\" name=\"btnCancel\" value=\"Cancel\"><input type=\"image\" name=\"imgBtn\" value=\"Go\"><select name=\"country\"><option value=\"GB\">GB</option><option selected value=\"US\">US</option></select><select name=\"lang\"><option value=\"en_US\">EN</option><option value=\"de_DE\">DE</option></select><select name=\"empty_sel\"></select></form></body></html>", "https://www.paypal.com/signin"], "ok": {"$tuple": ["https://www.paypal.com/auth/challenge?step=2", {"_csrf": "tok_abc_123", "session_id": "sid_999"}]}}
+{"fn": "find_submit_form", "args": ["<form method=\"POST\" action=\"https://www.paypal.com/checkoutnow/submit\"><input type=\"hidden\" name=\"a\" value=\"1\"><input type=\"text\" name=\"signup_email\" value=\"x@y.z\"><button>Agree and Pay Now</button></form>", "https://www.paypal.com/signin"], "ok": {"$tuple": ["https://www.paypal.com/checkoutnow/submit", {"a": "1"}]}}
+{"fn": "find_submit_form", "args": ["<form action=\"/webapps/hermes/step2\"><input type=\"hidden\" name=\"k\" value=\"v\"><button>Confirm</button></form>", "https://www.paypal.com/signin"], "ok": {"$tuple": ["https://www.paypal.com/webapps/hermes/step2", {"k": "v"}]}}
+{"fn": "find_submit_form", "args": ["<html><body><form><input name='q'></form></body></html>", "https://www.paypal.com/signin"], "ok": null}
+{"fn": "extract_challenge_form", "args": ["<html><body><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><p>PayPal checkout billing details content block. </p><form name=\"challenge\" id=\"f1\" action=\"/auth/challenge?step=2\" method=\"post\"><input type=\"hidden\" name=\"_csrf\" value=\"tok_abc_123\"><input type=\"hidden\" name=\"session_id\" value=\"sid_999\"><input type=\"text\" name=\"email\" value=\"buyer@example.com\"><input type=\"password\" name=\"pwd\" value=\"\"><input type=\"submit\" name=\"btnSubmit\" value=\"Continue\"><input type=\"button\" name=\"btnCancel\" value=\"Cancel\"><input type=\"image\" name=\"imgBtn\" value=\"Go\"><select name=\"country\"><option value=\"GB\">GB</option><option selected value=\"US\">US</option></select><select name=\"lang\"><option value=\"en_US\">EN</option><option value=\"de_DE\">DE</option></select><select name=\"empty_sel\"></select></form></body></html>", "https://www.paypal.com/signin"], "ok": {"$tuple": ["https://www.paypal.com/auth/challenge?step=2", {"_csrf": "tok_abc_123", "session_id": "sid_999"}]}}
+{"fn": "extract_challenge_form", "args": ["<div class=\"box\"><form action=\"/auth/captcha/verify\"><input type=\"hidden\" name=\"x\" value=\"y\"></form></div>", "https://www.paypal.com/signin"], "ok": {"$tuple": ["https://www.paypal.com/auth/captcha/verify", {}]}}
+{"fn": "extract_challenge_form", "args": ["<html><body>no challenge</body></html>", "https://www.paypal.com/signin"], "ok": null}

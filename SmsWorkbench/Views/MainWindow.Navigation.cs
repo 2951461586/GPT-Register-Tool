@@ -22,6 +22,7 @@ namespace SmsWorkbench.Views
             ["paymentqualification"] = CheckPaymentQualification,
             ["paylink"] = OpenPayPalLink,
             ["batchpay"] = BatchProtocolPayment,
+            ["protocolcardpay"] = OpenProtocolCardPayment,
             ["importmail"] = ImportChataiMailbox,
             ["inbox"] = ViewInbox,
             ["changeemail"] = ChangeEmail,

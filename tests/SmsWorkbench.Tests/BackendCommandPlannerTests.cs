@@ -697,4 +697,79 @@ public sealed class BackendCommandPlannerTests
         Assert.Single(plan.TempFiles);
         Assert.Equal(BackendAccountResultKind.Liveness, plan.ResultKind);
     }
+
+    [Fact]
+    public void CreateProtocolCardPayment_QuoteMode_OmitsCardEnvironment()
+    {
+        var plan = BackendCommandPlanner.CreateProtocolCardPayment(
+            checkoutUrl: "https://checkout.example.test/c/pay/cs_live_123",
+            publishableKey: "pk_live_abc",
+            quoteOnly: true,
+            billingCountry: "jp",
+            cardJson: "{\"number\":\"4242424242424242\"}",
+            proxy: "http://user:pass@proxy.example:8080",
+            timeoutSeconds: 45);
+
+        Assert.Equal("协议卡付报价", plan.TaskName);
+        Assert.Contains("--desktop-ipc", plan.Arguments);
+        Assert.Contains("--protocol-card-quote", plan.Arguments);
+        Assert.DoesNotContain("--protocol-card-pay", plan.Arguments);
+        Assert.Contains("--checkout-url", plan.Arguments);
+        Assert.Contains("https://checkout.example.test/c/pay/cs_live_123", plan.Arguments);
+        Assert.Contains("--stripe-publishable-key", plan.Arguments);
+        Assert.Contains("pk_live_abc", plan.Arguments);
+        Assert.Contains("--checkout-country", plan.Arguments);
+        Assert.Contains("JP", plan.Arguments);
+        Assert.Contains("--proxy", plan.Arguments);
+        Assert.DoesNotContain("GPT_CARD_JSON", plan.Environment.Keys);
+    }
+
+    [Fact]
+    public void CreateProtocolCardPayment_PayMode_PassesCardJsonOnlyViaEnvironment()
+    {
+        var plan = BackendCommandPlanner.CreateProtocolCardPayment(
+            checkoutUrl: "https://checkout.example.test/c/pay/cs_live_456",
+            publishableKey: "pk_live_abc",
+            quoteOnly: false,
+            billingCountry: "US",
+            cardJson: "{\"number\":\"4242424242424242\",\"cvc\":\"123\"}",
+            email: "alice@example.com",
+            sessionFile: "C:\\sessions\\alice.json",
+            timeoutSeconds: 90);
+
+        Assert.Equal("协议卡付", plan.TaskName);
+        Assert.Contains("--desktop-ipc", plan.Arguments);
+        Assert.Contains("--protocol-card-pay", plan.Arguments);
+        Assert.Contains("--email", plan.Arguments);
+        Assert.Contains("alice@example.com", plan.Arguments);
+        Assert.Contains("--session-file", plan.Arguments);
+        Assert.Contains("C:\\sessions\\alice.json", plan.Arguments);
+        Assert.DoesNotContain(plan.Arguments, arg => arg.Contains("4242424242424242", StringComparison.Ordinal));
+        Assert.Equal("{\"number\":\"4242424242424242\",\"cvc\":\"123\"}", plan.Environment["GPT_CARD_JSON"]);
+    }
+
+    [Fact]
+    public void CreateProtocolCardPayment_ReadOnlyAndPaymentMethodId_OmitCardEnvironment()
+    {
+        var readOnlyPlan = BackendCommandPlanner.CreateProtocolCardPayment(
+            checkoutUrl: "https://checkout.example.test/checkout/oaics_test",
+            publishableKey: "pk_live_abc",
+            quoteOnly: false,
+            cardJson: "{\"number\":\"4242424242424242\"}",
+            readOnly: true);
+
+        Assert.Contains("--protocol-read-only", readOnlyPlan.Arguments);
+        Assert.DoesNotContain("GPT_CARD_JSON", readOnlyPlan.Environment.Keys);
+
+        var pmPlan = BackendCommandPlanner.CreateProtocolCardPayment(
+            checkoutUrl: "https://checkout.example.test/c/pay/cs_live_789",
+            publishableKey: "pk_live_abc",
+            quoteOnly: false,
+            paymentMethodId: "pm_test_123",
+            cardJson: "{\"number\":\"4242424242424242\"}");
+
+        Assert.Contains("--payment-method-id", pmPlan.Arguments);
+        Assert.Contains("pm_test_123", pmPlan.Arguments);
+        Assert.DoesNotContain("GPT_CARD_JSON", pmPlan.Environment.Keys);
+    }
 }

@@ -1036,6 +1036,31 @@ public sealed class DesktopWindowSmokeTests
                 option => option.Id == "direct_card");
             Assert.IsType<DataGrid>(payment.FindName("ResultsGrid"));
             payment.Close();
+
+            stage("show protocol card payment window");
+            var protocolCardViewModel = new ProtocolCardPaymentViewModel(
+                new WindowProtocolCardPaymentService(),
+                initialCheckoutUrl: "https://checkout.example.test/c/pay/cs_smoke_test",
+                initialAccountEmail: "smoke@example.com");
+            var protocolCardWindow = new ProtocolCardPaymentWindow(protocolCardViewModel);
+            protocolCardWindow.Show();
+            protocolCardWindow.UpdateLayout();
+            Assert.True(protocolCardWindow.ActualWidth >= protocolCardWindow.MinWidth);
+            Assert.True(protocolCardWindow.ActualHeight >= protocolCardWindow.MinHeight);
+            Assert.Equal(Localization.Loc.T("协议卡付 / 报价"), protocolCardWindow.Title);
+            var cardNumberBox = Assert.IsType<PasswordBox>(protocolCardWindow.FindName("CardNumberBox"));
+            var cardCvcBox = Assert.IsType<PasswordBox>(protocolCardWindow.FindName("CardCvcBox"));
+            Assert.NotNull(cardNumberBox.GetBindingExpression(PasswordBoxBinding.BoundPasswordProperty));
+            Assert.NotNull(cardCvcBox.GetBindingExpression(PasswordBoxBinding.BoundPasswordProperty));
+            cardNumberBox.Password = "4242424242424242";
+            cardCvcBox.Password = "123";
+            Assert.Equal("4242424242424242", protocolCardViewModel.CardNumber);
+            Assert.Equal("123", protocolCardViewModel.CardCvc);
+            protocolCardViewModel.ClearCardCommand.Execute(null);
+            Assert.Equal("", cardNumberBox.Password);
+            Assert.Equal("", cardCvcBox.Password);
+            protocolCardWindow.Close();
+
             stage("verify main window dialogs");
             VerifyMainWindowRegistrationAndContextMenu(fixture.Path, stage);
             stage("shutdown application");
@@ -1253,6 +1278,16 @@ public sealed class DesktopWindowSmokeTests
     private sealed class WindowPaymentBatchDialogService : IPaymentBatchDialogService
     {
         public bool ShowDialog(Window owner, IEnumerable<PaymentBatchAccount> accounts) => false;
+    }
+
+    private sealed class WindowProtocolCardPaymentService : IProtocolCardPaymentService
+    {
+        public string ResolveDefaultProxy() => "";
+
+        public Task<ProtocolCardPaymentResult> ExecuteAsync(
+            ProtocolCardPaymentRequest request,
+            CancellationToken cancellationToken)
+            => throw new NotSupportedException();
     }
 
     private sealed class WindowProxyPoolDialogService : IProxyPoolDialogService

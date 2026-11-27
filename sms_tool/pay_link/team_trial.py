@@ -22,6 +22,7 @@ from ..payment.checkout_contract import (
     CHECKOUT_PATH,
     CHECKOUT_URL,
     TEAM_TRIAL_CAMPAIGN_ID,
+    billing_currency_for,
 )
 from ..payment.wire import CURRENCY_MAP, _checkout_get, _checkout_post
 from .base import _redact_sensitive_text, safe_int
@@ -67,7 +68,7 @@ def normalize_team_workspace_name(value: Any) -> str:
 def currency_for_country(country: Any) -> str:
     """Resolve the billing currency for a 2-letter ISO country code."""
     code = str(country or "").strip().upper()
-    return str(CURRENCY_MAP.get(code) or "USD")
+    return str(CURRENCY_MAP.get(code) or billing_currency_for(code))
 
 
 def build_team_trial_checkout_payload(

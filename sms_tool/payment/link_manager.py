@@ -58,64 +58,98 @@ if TYPE_CHECKING:
         supported_payment_methods,
     )
 
-_LAZY: dict[str, str] = {
-    name: "pay_link"
-    for name in (
-        "_config_data",
-        "PaymentMethodSpec",
-        "_as_bool",
-        "_select_kwargs",
-        "_protocol_cfg",
-        "_state_path",
-        "_tail",
-        "_mask_ba_token",
-        "_redact_sensitive_text",
-        "_redact_sensitive_values",
-        "_normalize_result",
-        "_explicit_terminal_state",
-        "_canonical_terminal_state",
-        "_normalized_contract_value",
-        "_normalize_error_contract",
-        "_is_retryable_failure",
-        "_result_terminal_state",
-        "_classify_exception",
-        "_persist_run",
-        "_safe_persist_run",
-        "build_default_payment_registry",
-        "normalize_payment_method",
-        "payment_proxy_pools",
-        "payment_method_label",
-        "supported_payment_methods",
-        "register_payment_adapter",
-        "allowed_approve_countries",
-        "coerce_approve_country",
-        "parse_proxy_pool",
-        "_resolve_proxy_pool_routes",
-        "_enabled_methods",
-        "generate_payment_link",
-        "probe_payment_method",
-        "probe_team_trial_eligibility",
-        "ExtractLinkServerConfig",
-        "extract_link_via_server",
-        "extract_team_trial_link",
-        "resolve_extract_server_config",
-        "GOPAY_DEFAULT_APPROVE_COUNTRIES",
-        "PAYMENT_ADAPTERS",
-        "PAYMENT_METHODS",
-        "_LOGGER",
-        "_STATE_LOCK",
+    from .protocol_pay import (  # noqa: F401
+        CustomCheckoutProtocolClient,
+        HostedCheckoutProtocolClient,
+        ProtocolPaymentError,
+        execute_protocol_card_payment,
+        load_card_from_env_or_file,
+        pay_custom_checkout,
+        pay_team_hosted_checkout,
+        quote_team_hosted_checkout,
     )
+
+_LAZY: dict[str, str] = {
+    **{
+        name: "pay_link"
+        for name in (
+            "_config_data",
+            "PaymentMethodSpec",
+            "_as_bool",
+            "_select_kwargs",
+            "_protocol_cfg",
+            "_state_path",
+            "_tail",
+            "_mask_ba_token",
+            "_redact_sensitive_text",
+            "_redact_sensitive_values",
+            "_normalize_result",
+            "_explicit_terminal_state",
+            "_canonical_terminal_state",
+            "_normalized_contract_value",
+            "_normalize_error_contract",
+            "_is_retryable_failure",
+            "_result_terminal_state",
+            "_classify_exception",
+            "_persist_run",
+            "_safe_persist_run",
+            "build_default_payment_registry",
+            "normalize_payment_method",
+            "payment_proxy_pools",
+            "payment_method_label",
+            "supported_payment_methods",
+            "register_payment_adapter",
+            "allowed_approve_countries",
+            "coerce_approve_country",
+            "parse_proxy_pool",
+            "_resolve_proxy_pool_routes",
+            "_enabled_methods",
+            "generate_payment_link",
+            "probe_payment_method",
+            "probe_team_trial_eligibility",
+            "ExtractLinkServerConfig",
+            "extract_link_via_server",
+            "extract_team_trial_link",
+            "resolve_extract_server_config",
+            "GOPAY_DEFAULT_APPROVE_COUNTRIES",
+            "PAYMENT_ADAPTERS",
+            "PAYMENT_METHODS",
+            "_LOGGER",
+            "_STATE_LOCK",
+        )
+    },
+    **{
+        name: "protocol_pay"
+        for name in (
+            "CustomCheckoutProtocolClient",
+            "HostedCheckoutProtocolClient",
+            "ProtocolPaymentError",
+            "execute_protocol_card_payment",
+            "load_card_from_env_or_file",
+            "pay_custom_checkout",
+            "pay_team_hosted_checkout",
+            "quote_team_hosted_checkout",
+        )
+    },
 }
 
 __all__ = [
+    "CustomCheckoutProtocolClient",
     "ExtractLinkServerConfig",
+    "HostedCheckoutProtocolClient",
     "PaymentMethodSpec",
+    "ProtocolPaymentError",
     "build_default_payment_registry",
+    "execute_protocol_card_payment",
     "extract_link_via_server",
     "extract_team_trial_link",
+    "load_card_from_env_or_file",
     "normalize_payment_method",
+    "pay_custom_checkout",
+    "pay_team_hosted_checkout",
     "payment_proxy_pools",
     "payment_method_label",
+    "quote_team_hosted_checkout",
     "supported_payment_methods",
     "register_payment_adapter",
     "resolve_extract_server_config",
@@ -132,9 +166,11 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
-    if name not in _LAZY:
+    target = _LAZY.get(name)
+    if target is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    module = importlib.import_module("..pay_link", __package__)
+    module_name = "..pay_link" if target == "pay_link" else f".{target}"
+    module = importlib.import_module(module_name, __package__)
     value = getattr(module, name)
     globals()[name] = value
     return value

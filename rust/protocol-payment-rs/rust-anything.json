@@ -1,0 +1,277 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/payment/protocol_codec.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "protocol-payment-rs",
+  "exports": [
+    {
+      "name": "encode_rv_timestamp",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 86,
+      "params": [
+        {
+          "name": "rv_ts",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "rv",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "sv",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_decode_rv_timestamp_dict",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 106,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_extract_rv_build_fields_dict",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 218,
+      "params": [
+        {
+          "name": "text",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "rv_timestamp_from_script",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 259,
+      "params": [
+        {
+          "name": "text",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string | null",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_quote_from_payload_str",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 494,
+      "params": [
+        {
+          "name": "payload",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "default_currency",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "[string | null, string]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "decode_rv_timestamp",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 129,
+      "reason": "wraps _decode_rv_timestamp_dict into RVBuildFields dataclass"
+    },
+    {
+      "name": "extract_rv_build_fields",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 251,
+      "reason": "wraps _extract_rv_build_fields_dict into RVBuildFields dataclass"
+    },
+    {
+      "name": "minor_units_from_amount",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 301,
+      "reason": "uses Python Decimal exact integral check"
+    },
+    {
+      "name": "expected_amount_minor",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 374,
+      "reason": "benchmarked 0.44x (small dict crossing slower than native Python dict lookup)"
+    },
+    {
+      "name": "quote_from_payload",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 540,
+      "reason": "wraps _quote_from_payload_str into Python Decimal"
+    },
+    {
+      "name": "normalize_card",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 556,
+      "reason": "small 4-field dict validation; kept in Python"
+    },
+    {
+      "name": "scrub_card_secrets",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 577,
+      "reason": "benchmarked 0.68x (4-key replace crossing slower than native Python)"
+    },
+    {
+      "name": "billing_currency_for",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 691,
+      "reason": "trivial dict lookup"
+    },
+    {
+      "name": "billing_locale_for",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 696,
+      "reason": "trivial dict lookup"
+    },
+    {
+      "name": "billing_timezone_for",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 701,
+      "reason": "trivial dict lookup"
+    },
+    {
+      "name": "billing_address_for",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 706,
+      "reason": "uses secrets.choice/randbelow"
+    },
+    {
+      "name": "stripe_billing_details",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 724,
+      "reason": "trivial dict projection"
+    },
+    {
+      "name": "public_checkout_id",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 766,
+      "reason": "trivial string split"
+    },
+    {
+      "name": "stripe_checkout_id",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 775,
+      "reason": "trivial single regex"
+    },
+    {
+      "name": "openai_internal_checkout_id",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 780,
+      "reason": "trivial single regex"
+    },
+    {
+      "name": "processor_from_checkout_url",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 785,
+      "reason": "trivial path split"
+    },
+    {
+      "name": "intent_id_from_secret",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 798,
+      "reason": "trivial prefix split"
+    },
+    {
+      "name": "checkout_confirm_blocked",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 806,
+      "reason": "trivial set check"
+    },
+    {
+      "name": "checkout_confirm_message",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 811,
+      "reason": "small dict scan"
+    },
+    {
+      "name": "payment_intent_from_confirm",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 839,
+      "reason": "small dict lookup"
+    },
+    {
+      "name": "submission_state",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 853,
+      "reason": "small dict lookup"
+    },
+    {
+      "name": "nested_intent_status",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 860,
+      "reason": "small dict lookup"
+    },
+    {
+      "name": "payment_page_settled",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 865,
+      "reason": "small status check"
+    },
+    {
+      "name": "submission_failure_detail",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 896,
+      "reason": "benchmarked 0.91x (small dict crossing slower than native Python)"
+    },
+    {
+      "name": "decline_message",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 920,
+      "reason": "trivial dict lookup"
+    },
+    {
+      "name": "classify_stripe_outcome",
+      "file": "sms_tool/payment/protocol_codec.py",
+      "line": 927,
+      "reason": "benchmarked 0.34x (nested dict crossing slower than native Python)"
+    }
+  ]
+}

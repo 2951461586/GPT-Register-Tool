@@ -15,6 +15,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from ..kernel.native_loader import load_native_module
+
+_NATIVE_WHAM_USAGE = load_native_module("wham-usage-rs", "wham_usage_rs", "RUST_ANYTHING_UNIT_WHAM_USAGE")
+_NATIVE_PARSE_WHAM_USAGE = getattr(_NATIVE_WHAM_USAGE, "parse_wham_usage", None)
+
 WINDOW_KEYS = ("5h", "7d")
 
 #: Accepted upstream spellings for each usage window, most specific first.
@@ -31,6 +36,11 @@ _RESET_KEYS = ("resets_at", "reset_at", "reset_time", "expires_at")
 
 def parse_wham_usage(body: Any) -> dict[str, Any] | None:
     """Parse structured five-hour and seven-day usage windows."""
+    if _NATIVE_PARSE_WHAM_USAGE is not None and isinstance(body, (str, dict, type(None))):
+        try:
+            return _NATIVE_PARSE_WHAM_USAGE(body)
+        except (TypeError, ValueError):
+            pass
     if isinstance(body, str):
         try:
             body = json.loads(body)

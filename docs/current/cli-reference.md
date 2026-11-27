@@ -26,6 +26,7 @@ are omitted.
 | `--buy-cfworker-mailbox` | — | Use CF Worker temp mailboxes before registration |
 | `--buy-remail-mailbox` | — | Buy ReMail long-term mailbox before registration |
 | `--buy-smailr-mailbox` | — | Use Smailr disposable mailboxes before registration |
+| `--card-file` | value | Path to local JSON file with card fields (number, exp_month, exp_year, cvc); falls back to GPT_CARD_JSON |
 | `--cfworker-domain` | value | CF Worker mailbox domain, default cfworker_domain in config.json |
 | `--change-email` | — | Batch change ChatGPT protocol email addresses |
 | `--change-email-mailbox-file` | value | Credential pool for persistent target email providers |
@@ -37,6 +38,7 @@ are omitted.
 | `--checkout-proxy` | value | Stage 1 proxy for checkout (JP/TH exit) |
 | `--checkout-proxy-country` | choices: `US`, `GB`, `DE`, `JP`, `BR`, `TR`, `TH`, `VN`, `ID`, `IN`, `NL`, `KR`, `PL`, `CH`, `PH` | Rotate checkout proxy credentials to this exit country |
 | `--checkout-proxy-pool` | value | Checkout proxy pool; comma or newline separated |
+| `--checkout-url` | value | Stripe Hosted (cs_...) or ChatGPT Custom (oaics_...) checkout URL or session ID |
 | `--codex-export-dir` | value | Directory for Codex JSON exports |
 | `--confirm-proxy` | value | Explicit Stripe confirm proxy |
 | `--convert-format` | choices: `cpa`, `sub2api`, `cockpit`, `9router`, `codex`, `axonhub`, `codexmanager` | Output format for --convert-session-json |
@@ -93,6 +95,7 @@ are omitted.
 | `--payment-country` | value | UPI local payment-method country, e.g. IN |
 | `--payment-matrix` | value | Payment eligibility matrix as JSON text/path; defaults to protocol_payments.matrix |
 | `--payment-method`, `--payment-link-method` | choices: `paypal`, `gopay`, `go_pay`, `go-pay`, `gcash`, `grabpay`, `grab_pay`, `grab-pay`, `upi`, `upiqr`, `upi_qr`, `upi-qr`, `ideal`, `pix`, `kakao`, `kakao_pay`, `kakao-pay`, `blik`, `twint`, `direct_card`, `direct-card`, `directcard`, `direct`, `zhika`, `card`, `checkout`, `momo`, `momo_qr`, `momo-qr`, `momoqr`, `qris`, `qris_id`, `bizum`, `bizum_es`, `naver_pay`, `naverpay`, `naver-pay`, `team_trial`, `team`, `team_5`, `team-trial`, `team5`, `chatgpt_team` | Protocol payment-link method |
+| `--payment-method-id` | value | Pre-tokenized Stripe PaymentMethod ID (pm_...) to reuse in --protocol-card-pay |
 | `--payment-method-proxy` | value | Explicit payment-method creation proxy |
 | `--payment-probe-only` | — | Create Checkout and run Stripe capability detection without creating a payment method |
 | `--payment-qualification-all-methods` | — | Probe every candidate method instead of stopping at the first eligible one. Each candidate is its own Checkout create, so this is a diagnostic mode. |
@@ -110,6 +113,9 @@ are omitted.
 | `--process-paypal-ba-queue` | — | Process pending PayPal BA authorization jobs |
 | `--promotion-proxy` | value | Promotion-update proxy (promo-eligible region exit, e.g. VN/TH) for /checkout/update to make the checkout 0-due |
 | `--promotion-proxy-country`, `--update-proxy-country` | choices: `US`, `GB`, `DE`, `JP`, `BR`, `TR`, `TH`, `VN`, `ID`, `IN`, `NL`, `KR`, `PL`, `CH`, `PH` | Rotate checkout/update proxy credentials to this exit country |
+| `--protocol-card-pay` | — | Execute non-CAPTCHA Stripe Hosted (cs_) or Custom (oaics_) protocol card payment (card from --card-file or GPT_CARD_JSON) |
+| `--protocol-card-quote` | — | Read-only Stripe Hosted Checkout quote (init + billing/tax sync) for a cs_ checkout URL |
+| `--protocol-read-only` | — | Inspect/reconcile an existing oaics_ custom checkout without submitting payment |
 | `--provider-proxy` | value | Stage 2 proxy for Stripe init/PM/confirm (target country exit) |
 | `--proxy-country` | value | Target ISO country for --proxy-test/--proxy-screen |
 | `--proxy-list` | — | List the configured proxy pool (credentials masked) with cached geo/health |
@@ -153,6 +159,7 @@ are omitted.
 | `--smailr-domain` | value | Smailr mailbox domain, default smailr.default_domain in config.json |
 | `--smsbower-country` | value | SMSBower country ID for phone registration (default: from config) |
 | `--stripe-init-proxy` | value | Explicit Stripe init proxy (falls back to provider proxy) |
+| `--stripe-publishable-key` | value | Stripe publishable key (pk_live_... / pk_test_...) for --protocol-card-quote / --protocol-card-pay |
 | `--sub2api-auth-mode` | choices: `auto`, `oauth`, `agent_identity` | SUB2API credential mode; auto prefers Agent Identity for free accounts |
 | `--sub2api-concurrency` | value | SUB2API account concurrency, defaults to config or 10 |
 | `--sub2api-email` | value | SUB2API login email when no bearer token is configured |

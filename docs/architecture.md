@@ -208,11 +208,11 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 528 |
+| Module-level cross-directory edges | 531 |
 | Directory pairs | 133 |
 | Mutual pairs / minority-direction edges | 14 / 26 |
-| Delayed cross-directory edges | 319 |
-| Delayed imports in the package | 459 (baseline 459) |
+| Delayed cross-directory edges | 316 |
+| Delayed imports in the package | 456 (baseline 459) |
 | Functions at or above 150 lines | 31 (frozen, `scripts/function_length_ratchet.py`) |
 | Claimed tracked `sms_tool` modules | 303 of 303 (0 unclaimed, 38 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->
@@ -256,7 +256,7 @@ into cohesive sibling helpers (`codex/oauth_helpers.py`, `accounts/recovery_stat
 `providers/mailbox_remail_state.py`, `commands/cli_dispatch.py`,
 `paypal/reverse_protocol.py`, `payment/batch_report.py`). All 25 active boundary rules
 now have machine-validated specs under `docs/specs/` (24 specs), and
-`scripts/rust_crates_guard.py --cargo-check` verifies all 47 `rust/*-rs/` PyO3 crates in CI.
+`scripts/rust_crates_guard.py --cargo-check` verifies all 50 `rust/*-rs/` PyO3 crates in CI.
 
 **2026-11-21 — Domain relocation to 11 root modules.** The remaining 36 domain
 modules at the `sms_tool/` root were relocated into domain subpackages

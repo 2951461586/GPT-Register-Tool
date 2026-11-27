@@ -1,0 +1,356 @@
+<Window x:Class="SmsWorkbench.Views.ProtocolCardPaymentWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="clr-namespace:SmsWorkbench.Localization"
+        xmlns:local="clr-namespace:SmsWorkbench.Views"
+        Title="{loc:Tr Key='协议卡付 / 报价'}"
+        Width="920"
+        Height="740"
+        MinWidth="780"
+        MinHeight="640"
+        ResizeMode="CanResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBg}"
+        FontFamily="{StaticResource Font.Ui}"
+        FontSize="{StaticResource Type.Body.Size}"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType"
+        TextOptions.TextHintingMode="Fixed">
+  <!--
+    Non-CAPTCHA protocol card quote & payment window (Stripe Hosted cs_* and
+    ChatGPT Custom oaics_*). Raw card credentials stay in memory only and pass
+    to the backend via GPT_CARD_JSON; any 3DS/challenge aborts cleanly and
+    hands off the checkout URL to the operator's browser.
+  -->
+  <Grid Margin="20">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <!-- Header -->
+    <Grid Grid.Row="0" Margin="0,0,0,12">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto"/>
+      </Grid.ColumnDefinitions>
+      <StackPanel Grid.Column="0">
+        <TextBlock Text="{loc:Tr Key='协议卡付 / 报价'}"
+                   FontSize="{StaticResource Type.Title.Size}"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextMain}"/>
+        <TextBlock Text="{loc:Tr Key='非验证码直连：支持 Stripe Hosted (cs_) 与 Custom (oaics_) 结账，遇 3DS/人机挑战自动中止交还浏览器'}"
+                   FontSize="{StaticResource Type.Caption.Size}"
+                   Foreground="{DynamicResource TextSub}"
+                   Margin="0,3,0,0"
+                   TextWrapping="Wrap"/>
+      </StackPanel>
+      <Border Grid.Column="1"
+              Background="{DynamicResource Surface.Block}"
+              CornerRadius="{StaticResource Corner.Md}"
+              Padding="10,5"
+              VerticalAlignment="Center"
+              Margin="12,0,0,0">
+        <TextBlock Text="{Binding BoundAccountSummary}"
+                   FontSize="{StaticResource Type.Caption.Size}"
+                   Foreground="{DynamicResource TextSub}"/>
+      </Border>
+    </Grid>
+
+    <!-- Card 1: Checkout Session & Route -->
+    <Border Grid.Row="1"
+            Margin="0,0,0,10"
+            Padding="16,14"
+            CornerRadius="{StaticResource Corner.Xl}"
+            Background="{DynamicResource Surface.Card}">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,10">
+          <TextBlock Text="{loc:Tr Key='结账链接 (cs_ / oaics_)'}" Style="{StaticResource FieldLabel}"/>
+          <TextBox x:Name="CheckoutUrlBox"
+                   Text="{Binding CheckoutUrl, UpdateSourceTrigger=PropertyChanged}"
+                   FontFamily="{StaticResource Font.Mono}"
+                   FontSize="{StaticResource Type.Mono.Size}"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="2.1*"/>
+            <ColumnDefinition Width="1.1*"/>
+            <ColumnDefinition Width="1.7*"/>
+            <ColumnDefinition Width="0.7*"/>
+          </Grid.ColumnDefinitions>
+
+          <StackPanel Grid.Column="0" Margin="0,0,8,0">
+            <TextBlock Text="{loc:Tr Key='Stripe 公钥 (pk_...)'}" Style="{StaticResource FieldLabel}"/>
+            <TextBox x:Name="PublishableKeyBox"
+                     Text="{Binding PublishableKey, UpdateSourceTrigger=PropertyChanged}"
+                     FontFamily="{StaticResource Font.Mono}"
+                     FontSize="{StaticResource Type.Mono.Size}"/>
+          </StackPanel>
+
+          <StackPanel Grid.Column="1" Margin="0,0,8,0">
+            <TextBlock Text="{loc:Tr Key='账单国家'}" Style="{StaticResource FieldLabel}"/>
+            <ComboBox ItemsSource="{Binding BillingCountryOptions}"
+                      DisplayMemberPath="DisplayName"
+                      SelectedItem="{Binding SelectedCountry}"/>
+          </StackPanel>
+
+          <StackPanel Grid.Column="2" Margin="0,0,8,0">
+            <TextBlock Text="{loc:Tr Key='出口代理（可选）'}" Style="{StaticResource FieldLabel}"/>
+            <TextBox Text="{Binding Proxy, UpdateSourceTrigger=PropertyChanged}"
+                     FontFamily="{StaticResource Font.Mono}"
+                     FontSize="{StaticResource Type.Mono.Size}"/>
+          </StackPanel>
+
+          <StackPanel Grid.Column="3">
+            <TextBlock Text="{loc:Tr Key='超时秒'}" Style="{StaticResource FieldLabel}"/>
+            <TextBox Text="{Binding TimeoutText, UpdateSourceTrigger=PropertyChanged}"/>
+          </StackPanel>
+        </Grid>
+
+        <CheckBox Grid.Row="2"
+                  Content="{loc:Tr Key='仅只读核账（不创建支付方式，不扣款）'}"
+                  IsChecked="{Binding ReadOnlyMode}"/>
+      </Grid>
+    </Border>
+
+    <!-- Card 2: In-Memory Payment Credentials -->
+    <Border Grid.Row="2"
+            Margin="0,0,0,10"
+            Padding="16,14"
+            CornerRadius="{StaticResource Corner.Xl}"
+            Background="{DynamicResource Surface.Card}">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,8">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="{loc:Tr Key='支付凭据（查询报价或只读核账可留空）'}"
+                     Style="{StaticResource Text.Subtitle}"
+                     VerticalAlignment="Center"/>
+          <Button Grid.Column="1"
+                  Style="{StaticResource GhostToolbarButton}"
+                  Command="{Binding ClearCardCommand}">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <Path Style="{StaticResource CompactIconPath}" Data="{StaticResource Glyph.ClearLog}"/>
+              <TextBlock Text="{loc:Tr Key='清空卡信息'}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+        </Grid>
+
+        <Grid Grid.Row="1" Margin="0,0,0,8">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="2*"/>
+            <ColumnDefinition Width="0.65*"/>
+            <ColumnDefinition Width="0.75*"/>
+            <ColumnDefinition Width="0.75*"/>
+            <ColumnDefinition Width="1.55*"/>
+          </Grid.ColumnDefinitions>
+
+          <StackPanel Grid.Column="0" Margin="0,0,8,0">
+            <TextBlock Text="{loc:Tr Key='卡号 (PAN)'}" Style="{StaticResource FieldLabel}"/>
+            <PasswordBox x:Name="CardNumberBox"
+                         local:PasswordBoxBinding.BoundPassword="{Binding CardNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         FontFamily="{StaticResource Font.Mono}"/>
+          </StackPanel>
+
+          <StackPanel Grid.Column="1" Margin="0,0,8,0">
+            <TextBlock Text="{loc:Tr Key='月 (MM)'}" Style="{StaticResource FieldLabel}"/>
+            <TextBox Text="{Binding CardExpMonth, UpdateSourceTrigger=PropertyChanged}"
+                     FontFamily="{StaticResource Font.Mono}"
+                     FontSize="{StaticResource Type.Mono.Size}"/>
+          </StackPanel>
+
+          <StackPanel Grid.Column="2" Margin="0,0,8,0">
+            <TextBlock Text="{loc:Tr Key='年 (YY/YYYY)'}" Style="{StaticResource FieldLabel}"/>
+            <TextBox Text="{Binding CardExpYear, UpdateSourceTrigger=PropertyChanged}"
+                     FontFamily="{StaticResource Font.Mono}"
+                     FontSize="{StaticResource Type.Mono.Size}"/>
+          </StackPanel>
+
+          <StackPanel Grid.Column="3" Margin="0,0,8,0">
+            <TextBlock Text="CVC" Style="{StaticResource FieldLabel}"/>
+            <PasswordBox x:Name="CardCvcBox"
+                         local:PasswordBoxBinding.BoundPassword="{Binding CardCvc, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         FontFamily="{StaticResource Font.Mono}"/>
+          </StackPanel>
+
+          <StackPanel Grid.Column="4">
+            <TextBlock Text="{loc:Tr Key='或已有 PaymentMethod ID (pm_...)'}" Style="{StaticResource FieldLabel}"/>
+            <TextBox Text="{Binding PaymentMethodId, UpdateSourceTrigger=PropertyChanged}"
+                     FontFamily="{StaticResource Font.Mono}"
+                     FontSize="{StaticResource Type.Mono.Size}"/>
+          </StackPanel>
+        </Grid>
+
+        <TextBlock Grid.Row="2"
+                   Text="{loc:Tr Key='卡号与 CVC 仅通过子进程环境变量传递，不落盘、不写入命令行参数、不写日志，执行后自动清空内存。'}"
+                   FontSize="{StaticResource Type.Caption.Size}"
+                   Foreground="{DynamicResource TextMuted}"
+                   TextWrapping="Wrap"/>
+      </Grid>
+    </Border>
+
+    <!-- Card 3: Quote & Execution Result -->
+    <Border Grid.Row="3"
+            Margin="0,0,0,12"
+            Padding="16,14"
+            CornerRadius="{StaticResource Corner.Xl}"
+            Background="{DynamicResource Surface.Card}">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,6">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock Text="{loc:Tr Key='执行结果'}"
+                       Style="{StaticResource Text.Subtitle}"
+                       VerticalAlignment="Center"/>
+            <Border Style="{StaticResource StatusBadge}"
+                    Tag="{Binding ResultBadgeSeverity}"
+                    Margin="10,0,0,0"
+                    Visibility="{Binding HasResult, Converter={StaticResource BooleanToVisibilityConverter}}">
+              <TextBlock Style="{StaticResource StatusBadgeText}"
+                         Text="{Binding ResultBadgeText}"
+                         TextTrimming="CharacterEllipsis"/>
+            </Border>
+            <TextBlock Text="{Binding AmountSummary}"
+                       FontFamily="{StaticResource Font.Mono}"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextMain}"
+                       VerticalAlignment="Center"
+                       Margin="10,0,0,0"/>
+            <TextBlock Text="{Binding ResultModeText}"
+                       FontFamily="{StaticResource Font.Mono}"
+                       FontSize="{StaticResource Type.Caption.Size}"
+                       Foreground="{DynamicResource TextMuted}"
+                       VerticalAlignment="Center"
+                       Margin="10,0,0,0"
+                       TextTrimming="CharacterEllipsis"/>
+          </StackPanel>
+
+          <Button Grid.Column="1"
+                  Style="{StaticResource GhostToolbarButton}"
+                  Command="{Binding CopyResultJsonCommand}">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <Path Style="{StaticResource CompactIconPath}" Data="{StaticResource Glyph.Copy}"/>
+              <TextBlock Text="{loc:Tr Key='复制结果'}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+        </Grid>
+
+        <TextBlock Grid.Row="1"
+                   Text="{Binding ResultMessage}"
+                   Foreground="{DynamicResource TextSub}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,8"
+                   Visibility="{Binding HasResult, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+        <!-- Manual browser handoff banner on 3DS / challenge -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource BadgeWarnBg}"
+                CornerRadius="{StaticResource Corner.Lg}"
+                Padding="12,8"
+                Margin="0,0,0,8"
+                Visibility="{Binding HasChallengeUrl, Converter={StaticResource BooleanToVisibilityConverter}}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+              <Path Style="{StaticResource CompactIconPath}"
+                    Stroke="{DynamicResource BadgeWarnFg}"
+                    Data="{StaticResource Glyph.AlertTriangle}"
+                    VerticalAlignment="Center"/>
+              <TextBlock Text="{loc:Tr Key='检测到 3DS 或人机验证挑战，协议引擎已安全中止，请在浏览器手动完成。'}"
+                         Foreground="{DynamicResource BadgeWarnFg}"
+                         Margin="8,0,12,0"
+                         TextWrapping="Wrap"
+                         VerticalAlignment="Center"/>
+            </StackPanel>
+            <Button Grid.Column="1"
+                    Style="{StaticResource SecondaryButton}"
+                    Command="{Binding OpenCheckoutUrlCommand}"
+                    Height="28"
+                    Padding="10,0">
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Path Style="{StaticResource CompactIconPath}" Data="{StaticResource Glyph.OpenExternal}"/>
+                <TextBlock Text="{loc:Tr Key='在浏览器打开结账页'}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+          </Grid>
+        </Border>
+
+        <TextBox Grid.Row="3"
+                 Style="{StaticResource MultilineTextBox}"
+                 IsReadOnly="True"
+                 Text="{Binding ResultJson, Mode=OneWay}"
+                 Background="{DynamicResource Surface.Terminal}"
+                 FontFamily="{StaticResource Font.Mono}"
+                 FontSize="{StaticResource Type.Mono.Size}"
+                 Padding="10,8"
+                 TextWrapping="NoWrap"
+                 VerticalScrollBarVisibility="Auto"
+                 HorizontalScrollBarVisibility="Auto"/>
+      </Grid>
+    </Border>
+
+    <!-- Footer -->
+    <Grid Grid.Row="4">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto"/>
+      </Grid.ColumnDefinitions>
+      <TextBlock Grid.Column="0"
+                 Text="{Binding StatusText}"
+                 Foreground="{DynamicResource TextSub}"
+                 TextWrapping="Wrap"
+                 VerticalAlignment="Center"
+                 Margin="0,0,12,0"/>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+        <Button Content="{loc:Tr Key='查询报价'}"
+                Style="{StaticResource SecondaryButton}"
+                Command="{Binding QuoteCommand}"
+                MinWidth="92"/>
+        <Button Content="{loc:Tr Key='执行协议支付'}"
+                Style="{StaticResource PrimaryButton}"
+                Command="{Binding PayCommand}"
+                MinWidth="112"/>
+        <Button Content="{loc:Tr Key='取消'}"
+                Style="{StaticResource SecondaryButton}"
+                Command="{Binding CancelRunCommand}"
+                Visibility="{Binding IsRunning, Converter={StaticResource BooleanToVisibilityConverter}}"
+                MinWidth="72"/>
+        <Button Content="{loc:Tr Key='关闭'}"
+                Style="{StaticResource SecondaryButton}"
+                Click="CloseButton_Click"
+                MinWidth="72"/>
+      </StackPanel>
+    </Grid>
+  </Grid>
+</Window>

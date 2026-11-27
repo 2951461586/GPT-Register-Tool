@@ -478,14 +478,7 @@ def main():
     if args.export_codex_json:
         _export_codex_json(args)
         return
-    if args.list_payment_methods:
-        _list_payment_methods()
-        return
-    if args.test_payment_proxies:
-        _test_payment_proxies(args)
-        return
-    if args.extract_payment_link:
-        _extract_payment_link(args)
+    if _dispatch_payment_cli(args):
         return
     if args.generate_ba_link:
         _generate_ba_link(args)
@@ -947,6 +940,26 @@ def _test_payment_proxies(args):
 
 def _extract_payment_link(args):
     return payment_commands.extract_payment_link(args, _payment_command_context())
+
+
+def _dispatch_payment_cli(args) -> bool:
+    if args.list_payment_methods:
+        _list_payment_methods()
+        return True
+    if args.test_payment_proxies:
+        _test_payment_proxies(args)
+        return True
+    if args.extract_payment_link:
+        _extract_payment_link(args)
+        return True
+    if getattr(args, "protocol_card_quote", False) or getattr(args, "protocol_card_pay", False):
+        _protocol_card_payment(args)
+        return True
+    return False
+
+
+def _protocol_card_payment(args):
+    return payment_commands.protocol_card_payment(args, _payment_command_context())
 
 
 def _convert_session_json(args):

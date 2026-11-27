@@ -461,6 +461,71 @@ namespace SmsWorkbench
                 ResultKind: BackendAccountResultKind.PaymentQualification);
         }
 
+        /// <summary>
+        /// Non-CAPTCHA protocol card quote (<c>--protocol-card-quote</c>) or
+        /// payment execution (<c>--protocol-card-pay</c>) for Stripe Hosted
+        /// (<c>cs_*</c>) and ChatGPT Custom (<c>oaics_*</c>) checkout URLs.
+        /// <para>
+        /// Raw card JSON is passed exclusively through the <c>GPT_CARD_JSON</c>
+        /// child-process environment variable and never enters <c>Arguments</c>.
+        /// Proxy routes use <see cref="AppendProxy"/> so
+        /// <c>ProxyArgumentTransport</c> strips credentials from child
+        /// <c>argv</c> before process creation.
+        /// </para>
+        /// </summary>
+        public static BackendCommandPlan CreateProtocolCardPayment(
+            string checkoutUrl,
+            string publishableKey,
+            bool quoteOnly,
+            string billingCountry = "US",
+            string paymentMethodId = "",
+            string? cardJson = null,
+            bool readOnly = false,
+            string proxy = "",
+            string email = "",
+            string sessionFile = "",
+            int timeoutSeconds = 60)
+        {
+            string url = RequireArgument(checkoutUrl, nameof(checkoutUrl)).Trim();
+            string pk = RequireArgument(publishableKey, nameof(publishableKey)).Trim();
+            int clampedTimeout = Math.Clamp(timeoutSeconds, 5, 300);
+            string isoCountry = CountryOrEmpty(billingCountry);
+            if (isoCountry.Length == 0) isoCountry = "US";
+
+            var args = new List<string>
+            {
+                "--desktop-ipc",
+                quoteOnly ? "--protocol-card-quote" : "--protocol-card-pay",
+                "--checkout-url", url,
+                "--stripe-publishable-key", pk,
+                "--checkout-country", isoCountry,
+                "--refresh-timeout", Count(clampedTimeout),
+            };
+
+            string pmId = (paymentMethodId ?? "").Trim();
+            if (pmId.Length > 0)
+                args.AddRange(new[] { "--payment-method-id", pmId });
+            if (!quoteOnly && readOnly)
+                args.Add("--protocol-read-only");
+
+            string accountEmail = (email ?? "").Trim();
+            if (accountEmail.Length > 0)
+                args.AddRange(new[] { "--email", accountEmail });
+            AppendSessionFile(args, sessionFile);
+            AppendProxy(args, proxy);
+
+            var environment = new Dictionary<string, string>();
+            string cardPayload = (cardJson ?? "").Trim();
+            if (!quoteOnly && !readOnly && pmId.Length == 0 && cardPayload.Length > 0)
+                environment["GPT_CARD_JSON"] = cardPayload;
+
+            return new BackendCommandPlan(
+                quoteOnly ? "协议卡付报价" : "协议卡付",
+                args,
+                EnvironmentVariables: environment,
+                TimeoutMilliseconds: Math.Max(60_000, (clampedTimeout + 30) * 1000));
+        }
+
         // ── Proxy pool administration ──────────────────────────────────
 
         /// <summary>Read the configured pool (masked) for one lane.</summary>
