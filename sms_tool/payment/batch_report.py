@@ -18,9 +18,17 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..kernel.paths import runtime_file
-from ..kernel.sanitizer import sanitize as _canonical_sanitize, sanitize_text as sanitize_text
+from ..kernel.sanitizer import load_native_module, sanitize as _canonical_sanitize, sanitize_text as sanitize_text
 from .catalog import PAYMENT_CATALOG
 from .contracts import PaymentResult, as_bool, payment_history_metadata, payment_retry_allowed
+
+_NATIVE_BATCH_REPORT_PARSE = load_native_module(
+    "batch-report-parse-rs",
+    "batch_report_parse_rs",
+    "RUST_ANYTHING_UNIT_BATCH_REPORT_PARSE",
+)
+_NATIVE_ACCOUNT_REF = getattr(_NATIVE_BATCH_REPORT_PARSE, "account_ref", None)
+_NATIVE_SAFE_BATCH_ID = getattr(_NATIVE_BATCH_REPORT_PARSE, "safe_batch_id", None)
 
 
 def _normalize_payment_method(value: Any) -> str:
@@ -243,10 +251,14 @@ def unique_emails(emails: list[str]) -> list[str]:
 
 
 def account_ref(email: str) -> str:
+    if _NATIVE_ACCOUNT_REF is not None and (email is None or isinstance(email, str)):
+        return _NATIVE_ACCOUNT_REF(email)
     return hashlib.sha256(str(email or "").strip().lower().encode("utf-8")).hexdigest()[:16]
 
 
 def safe_batch_id(value: str) -> str:
+    if _NATIVE_SAFE_BATCH_ID is not None and (value is None or isinstance(value, str)):
+        return _NATIVE_SAFE_BATCH_ID(value)
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value or "").strip())[:80]
 
 

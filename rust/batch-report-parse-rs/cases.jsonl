@@ -1,0 +1,466 @@
+{"fn": "safe_batch_id", "args": ["straße"], "ok": "stra_e"}
+{"fn": "safe_batch_id", "args": ["a"], "ok": "a"}
+{"fn": "safe_batch_id", "args": ["hello"], "ok": "hello"}
+{"fn": "safe_batch_id", "args": ["src/a/b.ts"], "ok": "src_a_b.ts"}
+{"fn": "safe_batch_id", "args": ["ünïcödé"], "ok": "_n_c_d_"}
+{"fn": "safe_batch_id", "args": ["a.b.c"], "ok": "a.b.c"}
+{"fn": "safe_batch_id", "args": [":"], "ok": "_"}
+{"fn": "safe_batch_id", "args": [".leading"], "ok": ".leading"}
+{"fn": "safe_batch_id", "args": ["HELLO"], "ok": "HELLO"}
+{"fn": "safe_batch_id", "args": ["İstanbul"], "ok": "_stanbul"}
+{"fn": "safe_batch_id", "args": [".leading﻿bom"], "ok": ".leading_bom"}
+{"fn": "safe_batch_id", "args": ["trailing."], "ok": "trailing."}
+{"fn": "safe_batch_id", "args": ["ΣΊΣΥΦΟΣ"], "ok": "_"}
+{"fn": "safe_batch_id", "args": ["a:b:c"], "ok": "a_b_c"}
+{"fn": "safe_batch_id", "args": ["key_name-1"], "ok": "key_name-1"}
+{"fn": "safe_batch_id", "args": ["ns:key.path﻿bom"], "ok": "ns_key.path_bom"}
+{"fn": "safe_batch_id", "args": [""], "ok": ""}
+{"fn": "safe_batch_id", "args": ["  padded  "], "ok": "padded"}
+{"fn": "safe_batch_id", "args": ["é"], "ok": "e_"}
+{"fn": "safe_batch_id", "args": ["emoji 👍🏽 mixab"], "ok": "emoji_mixab"}
+{"fn": "safe_batch_id", "args": ["a..b"], "ok": "a..b"}
+{"fn": "safe_batch_id", "args": ["tab\tseparated"], "ok": "tab_separated"}
+{"fn": "safe_batch_id", "args": ["{name} has {count} items"], "ok": "_name_has_count_items"}
+{"fn": "safe_batch_id", "args": ["﻿bom"], "ok": "_bom"}
+{"fn": "safe_batch_id", "args": ["ab"], "ok": "ab"}
+{"fn": "safe_batch_id", "args": ["éé"], "ok": "e_e_"}
+{"fn": "safe_batch_id", "args": ["abc"], "ok": "abc"}
+{"fn": "safe_batch_id", "args": ["a😀b😀c"], "ok": "a_b_c"}
+{"fn": "safe_batch_id", "args": ["ns:key.path"], "ok": "ns_key.path"}
+{"fn": "safe_batch_id", "args": ["a..ba..b"], "ok": "a..ba..b"}
+{"fn": "safe_batch_id", "args": ["./x/**/*.jsonkey_name-1"], "ok": "._x_.jsonkey_name-1"}
+{"fn": "safe_batch_id", "args": ["./x/**/*.jsonabc"], "ok": "._x_.jsonabc"}
+{"fn": "safe_batch_id", "args": ["日本語のテキスト"], "ok": "_"}
+{"fn": "safe_batch_id", "args": ["line1\nline2"], "ok": "line1_line2"}
+{"fn": "safe_batch_id", "args": ["😀ns:key.path"], "ok": "_ns_key.path"}
+{"fn": "safe_batch_id", "args": ["😀"], "ok": "_"}
+{"fn": "safe_batch_id", "args": ["a:b:ctrailing."], "ok": "a_b_ctrailing."}
+{"fn": "safe_batch_id", "args": ["key_name-1tab\tseparated"], "ok": "key_name-1tab_separated"}
+{"fn": "safe_batch_id", "args": ["key_name-1é"], "ok": "key_name-1e_"}
+{"fn": "safe_batch_id", "args": ["hello worlda:b:c"], "ok": "hello_worlda_b_c"}
+{"fn": "safe_batch_id", "args": ["./x/**/*.jsona.b.c"], "ok": "._x_.jsona.b.c"}
+{"fn": "safe_batch_id", "args": ["İstanbulHELLO"], "ok": "_stanbulHELLO"}
+{"fn": "safe_batch_id", "args": ["ΣΊΣΥΦΟΣa😀b😀c"], "ok": "_a_b_c"}
+{"fn": "safe_batch_id", "args": ["hello world"], "ok": "hello_world"}
+{"fn": "safe_batch_id", "args": ["emoji 👍🏽 mix"], "ok": "emoji_mix"}
+{"fn": "safe_batch_id", "args": ["./x/**/*.json"], "ok": "._x_.json"}
+{"fn": "safe_batch_id", "args": ["Hello World"], "ok": "Hello_World"}
+{"fn": "safe_batch_id", "args": ["a😀b😀ca..b"], "ok": "a_b_ca..b"}
+{"fn": "safe_batch_id", "args": ["aa..b"], "ok": "aa..b"}
+{"fn": "safe_batch_id", "args": ["emoji 👍🏽 mixa:b:c"], "ok": "emoji_mixa_b_c"}
+{"fn": "safe_batch_id", "args": [":Hello World"], "ok": "_Hello_World"}
+{"fn": "safe_batch_id", "args": ["abcns:key.path"], "ok": "abcns_key.path"}
+{"fn": "safe_batch_id", "args": ["İstanbulstraße"], "ok": "_stanbulstra_e"}
+{"fn": "safe_batch_id", "args": ["éa.b.c"], "ok": "e_a.b.c"}
+{"fn": "safe_batch_id", "args": ["tab\tseparatedabc"], "ok": "tab_separatedabc"}
+{"fn": "safe_batch_id", "args": ["a😀b😀cabc"], "ok": "a_b_cabc"}
+{"fn": "safe_batch_id", "args": ["hello world日本語のテキスト"], "ok": "hello_world_"}
+{"fn": "safe_batch_id", "args": ["aa.b.c"], "ok": "aa.b.c"}
+{"fn": "safe_batch_id", "args": ["hello worldemoji 👍🏽 mix"], "ok": "hello_worldemoji_mix"}
+{"fn": "safe_batch_id", "args": ["ns:key.path{name} has {count} items"], "ok": "ns_key.path_name_has_count_items"}
+{"fn": "safe_batch_id", "args": ["straßeİstanbul"], "ok": "stra_e_stanbul"}
+{"fn": "safe_batch_id", "args": ["hello worldtrailing."], "ok": "hello_worldtrailing."}
+{"fn": "safe_batch_id", "args": ["./x/**/*.jsonline1\nline2"], "ok": "._x_.jsonline1_line2"}
+{"fn": "safe_batch_id", "args": ["a.b.ctrailing."], "ok": "a.b.ctrailing."}
+{"fn": "safe_batch_id", "args": ["Hello Worlda"], "ok": "Hello_Worlda"}
+{"fn": "safe_batch_id", "args": ["Hello World﻿bom"], "ok": "Hello_World_bom"}
+{"fn": "safe_batch_id", "args": ["{name} has {count} itemssrc/a/b.ts"], "ok": "_name_has_count_itemssrc_a_b.ts"}
+{"fn": "safe_batch_id", "args": ["﻿bomsrc/a/b.ts"], "ok": "_bomsrc_a_b.ts"}
+{"fn": "safe_batch_id", "args": ["hello world:"], "ok": "hello_world_"}
+{"fn": "safe_batch_id", "args": ["abcHELLO"], "ok": "abcHELLO"}
+{"fn": "safe_batch_id", "args": ["abchello world"], "ok": "abchello_world"}
+{"fn": "safe_batch_id", "args": ["emoji 👍🏽 mixa.b.c"], "ok": "emoji_mixa.b.c"}
+{"fn": "safe_batch_id", "args": ["emoji 👍🏽 mixkey_name-1"], "ok": "emoji_mixkey_name-1"}
+{"fn": "safe_batch_id", "args": ["ünïcödéa"], "ok": "_n_c_d_a"}
+{"fn": "safe_batch_id", "args": ["abİstanbul"], "ok": "ab_stanbul"}
+{"fn": "safe_batch_id", "args": ["{name} has {count} itemsline1\nline2"], "ok": "_name_has_count_itemsline1_line2"}
+{"fn": "safe_batch_id", "args": ["a.b.ca..b"], "ok": "a.b.ca..b"}
+{"fn": "safe_batch_id", "args": ["a..ba:b:c"], "ok": "a..ba_b_c"}
+{"fn": "safe_batch_id", "args": ["{name} has {count} itemshello"], "ok": "_name_has_count_itemshello"}
+{"fn": "safe_batch_id", "args": ["a.b.cemoji 👍🏽 mix"], "ok": "a.b.cemoji_mix"}
+{"fn": "safe_batch_id", "args": ["hello  padded  "], "ok": "hello_padded"}
+{"fn": "safe_batch_id", "args": ["ns:key.path.leading"], "ok": "ns_key.path.leading"}
+{"fn": "safe_batch_id", "args": ["éabc"], "ok": "e_abc"}
+{"fn": "safe_batch_id", "args": ["line1\nline2日本語のテキスト"], "ok": "line1_line2_"}
+{"fn": "safe_batch_id", "args": ["HELLOabc"], "ok": "HELLOabc"}
+{"fn": "safe_batch_id", "args": ["a:b:cab"], "ok": "a_b_cab"}
+{"fn": "safe_batch_id", "args": ["日本語のテキストHELLO"], "ok": "_HELLO"}
+{"fn": "safe_batch_id", "args": ["ΣΊΣΥΦΟΣ:"], "ok": "_"}
+{"fn": "safe_batch_id", "args": ["a..bhello world"], "ok": "a..bhello_world"}
+{"fn": "safe_batch_id", "args": ["straßeabc"], "ok": "stra_eabc"}
+{"fn": "safe_batch_id", "args": ["tab\tseparated😀"], "ok": "tab_separated_"}
+{"fn": "safe_batch_id", "args": ["src/a/b.ts.leading"], "ok": "src_a_b.ts.leading"}
+{"fn": "safe_batch_id", "args": ["  padded  :"], "ok": "padded_"}
+{"fn": "safe_batch_id", "args": ["ΣΊΣΥΦΟΣ日本語のテキスト"], "ok": "_"}
+{"fn": "safe_batch_id", "args": ["aab"], "ok": "aab"}
+{"fn": "safe_batch_id", "args": ["a:b:c  padded  "], "ok": "a_b_c_padded"}
+{"fn": "safe_batch_id", "args": ["aabc"], "ok": "aabc"}
+{"fn": "safe_batch_id", "args": ["éΣΊΣΥΦΟΣ"], "ok": "e_"}
+{"fn": "safe_batch_id", "args": ["straßeemoji 👍🏽 mix"], "ok": "stra_eemoji_mix"}
+{"fn": "safe_batch_id", "args": ["ns:key.pathabc"], "ok": "ns_key.pathabc"}
+{"fn": "safe_batch_id", "args": ["hello worlda..b"], "ok": "hello_worlda..b"}
+{"fn": "safe_batch_id", "args": ["hello worldHello World"], "ok": "hello_worldHello_World"}
+{"fn": "safe_batch_id", "args": ["  padded  😀"], "ok": "padded_"}
+{"fn": "safe_batch_id", "args": ["Hello World  padded  "], "ok": "Hello_World_padded"}
+{"fn": "safe_batch_id", "args": ["trailing.a:b:c"], "ok": "trailing.a_b_c"}
+{"fn": "safe_batch_id", "args": ["helloHELLO"], "ok": "helloHELLO"}
+{"fn": "safe_batch_id", "args": ["trailing.abc"], "ok": "trailing.abc"}
+{"fn": "safe_batch_id", "args": ["  padded  İstanbul"], "ok": "padded_stanbul"}
+{"fn": "safe_batch_id", "args": ["a:b:cé"], "ok": "a_b_ce_"}
+{"fn": "safe_batch_id", "args": ["a:b:ca😀b😀c"], "ok": "a_b_ca_b_c"}
+{"fn": "safe_batch_id", "args": ["İstanbulkey_name-1"], "ok": "_stanbulkey_name-1"}
+{"fn": "safe_batch_id", "args": ["./x/**/*.jsona😀b😀c"], "ok": "._x_.jsona_b_c"}
+{"fn": "safe_batch_id", "args": ["a..btab\tseparated"], "ok": "a..btab_separated"}
+{"fn": "safe_batch_id", "args": ["HELLOemoji 👍🏽 mix"], "ok": "HELLOemoji_mix"}
+{"fn": "safe_batch_id", "args": ["a.b.cHELLO"], "ok": "a.b.cHELLO"}
+{"fn": "safe_batch_id", "args": ["﻿boma😀b😀c"], "ok": "_boma_b_c"}
+{"fn": "safe_batch_id", "args": ["😀ünïcödé"], "ok": "_n_c_d_"}
+{"fn": "safe_batch_id", "args": ["hellotrailing."], "ok": "hellotrailing."}
+{"fn": "safe_batch_id", "args": ["{name} has {count} itemsstraße"], "ok": "_name_has_count_itemsstra_e"}
+{"fn": "safe_batch_id", "args": [".leadingünïcödé"], "ok": ".leading_n_c_d_"}
+{"fn": "safe_batch_id", "args": ["tab\tseparatedΣΊΣΥΦΟΣ"], "ok": "tab_separated_"}
+{"fn": "safe_batch_id", "args": ["éhello"], "ok": "e_hello"}
+{"fn": "safe_batch_id", "args": ["Hello Worldabc"], "ok": "Hello_Worldabc"}
+{"fn": "safe_batch_id", "args": ["﻿bom﻿bom"], "ok": "_bom_bom"}
+{"fn": "safe_batch_id", "args": ["akey_name-1"], "ok": "akey_name-1"}
+{"fn": "safe_batch_id", "args": ["a:b:ca..b"], "ok": "a_b_ca..b"}
+{"fn": "safe_batch_id", "args": ["HELLOa:b:c"], "ok": "HELLOa_b_c"}
+{"fn": "safe_batch_id", "args": ["a:b:cns:key.path"], "ok": "a_b_cns_key.path"}
+{"fn": "safe_batch_id", "args": ["hello worldkey_name-1"], "ok": "hello_worldkey_name-1"}
+{"fn": "safe_batch_id", "args": ["trailing.line1\nline2"], "ok": "trailing.line1_line2"}
+{"fn": "safe_batch_id", "args": ["{name} has {count} items😀"], "ok": "_name_has_count_items_"}
+{"fn": "safe_batch_id", "args": ["src/a/b.tsstraße"], "ok": "src_a_b.tsstra_e"}
+{"fn": "safe_batch_id", "args": ["éline1\nline2"], "ok": "e_line1_line2"}
+{"fn": "safe_batch_id", "args": ["emoji 👍🏽 mixstraße"], "ok": "emoji_mixstra_e"}
+{"fn": "safe_batch_id", "args": ["İstanbultrailing."], "ok": "_stanbultrailing."}
+{"fn": "safe_batch_id", "args": ["  padded  src/a/b.ts"], "ok": "padded_src_a_b.ts"}
+{"fn": "safe_batch_id", "args": ["src/a/b.ts:"], "ok": "src_a_b.ts_"}
+{"fn": "safe_batch_id", "args": ["HELLOtab\tseparated"], "ok": "HELLOtab_separated"}
+{"fn": "safe_batch_id", "args": [":a:b:c"], "ok": "_a_b_c"}
+{"fn": "safe_batch_id", "args": ["日本語のテキストline1\nline2"], "ok": "_line1_line2"}
+{"fn": "safe_batch_id", "args": ["ns:key.pathΣΊΣΥΦΟΣ"], "ok": "ns_key.path_"}
+{"fn": "safe_batch_id", "args": [":ns:key.path"], "ok": "_ns_key.path"}
+{"fn": "safe_batch_id", "args": ["./x/**/*.jsontrailing."], "ok": "._x_.jsontrailing."}
+{"fn": "safe_batch_id", "args": ["line1\nline2İstanbul"], "ok": "line1_line2_stanbul"}
+{"fn": "safe_batch_id", "args": ["a..bHello World"], "ok": "a..bHello_World"}
+{"fn": "safe_batch_id", "args": ["HELLO日本語のテキスト"], "ok": "HELLO_"}
+{"fn": "safe_batch_id", "args": ["straßea😀b😀c"], "ok": "stra_ea_b_c"}
+{"fn": "safe_batch_id", "args": ["./x/**/*.jsonns:key.path"], "ok": "._x_.jsonns_key.path"}
+{"fn": "safe_batch_id", "args": ["日本語のテキスト./x/**/*.json"], "ok": "_._x_.json"}
+{"fn": "safe_batch_id", "args": ["helloa..b"], "ok": "helloa..b"}
+{"fn": "safe_batch_id", "args": ["hello worldns:key.path"], "ok": "hello_worldns_key.path"}
+{"fn": "safe_batch_id", "args": ["éünïcödé"], "ok": "e_n_c_d_"}
+{"fn": "safe_batch_id", "args": ["étrailing."], "ok": "e_trailing."}
+{"fn": "safe_batch_id", "args": [".leadingHELLO"], "ok": ".leadingHELLO"}
+{"fn": "safe_batch_id", "args": ["{name} has {count} itemsHELLO"], "ok": "_name_has_count_itemsHELLO"}
+{"fn": "safe_batch_id", "args": ["ans:key.path"], "ok": "ans_key.path"}
+{"fn": "safe_batch_id", "args": ["tab\tseparateda"], "ok": "tab_separateda"}
+{"fn": "safe_batch_id", "args": ["ab﻿bom"], "ok": "ab_bom"}
+{"fn": "safe_batch_id", "args": ["abcİstanbul"], "ok": "abc_stanbul"}
+{"fn": "safe_batch_id", "args": ["a😀b😀c{name} has {count} items"], "ok": "a_b_c_name_has_count_items"}
+{"fn": "safe_batch_id", "args": ["ΣΊΣΥΦΟΣ  padded  "], "ok": "_padded"}
+{"fn": "safe_batch_id", "args": ["trailing.:"], "ok": "trailing._"}
+{"fn": "safe_batch_id", "args": ["./x/**/*.jsonhello world"], "ok": "._x_.jsonhello_world"}
+{"fn": "safe_batch_id", "args": ["a..bkey_name-1"], "ok": "a..bkey_name-1"}
+{"fn": "safe_batch_id", "args": ["a.b.c  padded  "], "ok": "a.b.c_padded"}
+{"fn": "safe_batch_id", "args": ["﻿bom:"], "ok": "_bom_"}
+{"fn": "safe_batch_id", "args": ["a:b:ca"], "ok": "a_b_ca"}
+{"fn": "safe_batch_id", "args": ["tab\tseparatedhello world"], "ok": "tab_separatedhello_world"}
+{"fn": "safe_batch_id", "args": ["İstanbul:"], "ok": "_stanbul_"}
+{"fn": "safe_batch_id", "args": ["😀😀"], "ok": "_"}
+{"fn": "safe_batch_id", "args": ["HELLOΣΊΣΥΦΟΣ"], "ok": "HELLO_"}
+{"fn": "safe_batch_id", "args": ["trailing.a"], "ok": "trailing.a"}
+{"fn": "safe_batch_id", "args": [".leadingemoji 👍🏽 mix"], "ok": ".leadingemoji_mix"}
+{"fn": "safe_batch_id", "args": ["key_name-1ΣΊΣΥΦΟΣ"], "ok": "key_name-1_"}
+{"fn": "safe_batch_id", "args": ["é.leading"], "ok": "e_.leading"}
+{"fn": "safe_batch_id", "args": ["  padded  tab\tseparated"], "ok": "padded_tab_separated"}
+{"fn": "safe_batch_id", "args": ["ünïcödé😀"], "ok": "_n_c_d_"}
+{"fn": "safe_batch_id", "args": ["  padded  a..b"], "ok": "padded_a..b"}
+{"fn": "safe_batch_id", "args": ["ünïcödékey_name-1"], "ok": "_n_c_d_key_name-1"}
+{"fn": "safe_batch_id", "args": ["{name} has {count} itemsa:b:c"], "ok": "_name_has_count_itemsa_b_c"}
+{"fn": "safe_batch_id", "args": ["abc﻿bom"], "ok": "abc_bom"}
+{"fn": "safe_batch_id", "args": ["trailing.a.b.c"], "ok": "trailing.a.b.c"}
+{"fn": "safe_batch_id", "args": ["hello worldline1\nline2"], "ok": "hello_worldline1_line2"}
+{"fn": "safe_batch_id", "args": ["helloa😀b😀c"], "ok": "helloa_b_c"}
+{"fn": "safe_batch_id", "args": ["  padded  hello world"], "ok": "padded_hello_world"}
+{"fn": "safe_batch_id", "args": ["key_name-1a😀b😀c"], "ok": "key_name-1a_b_c"}
+{"fn": "safe_batch_id", "args": [".leadingtab\tseparated"], "ok": ".leadingtab_separated"}
+{"fn": "safe_batch_id", "args": ["HELLOa..b"], "ok": "HELLOa..b"}
+{"fn": "safe_batch_id", "args": ["{name} has {count} itemstrailing."], "ok": "_name_has_count_itemstrailing."}
+{"fn": "safe_batch_id", "args": ["  padded  a😀b😀c"], "ok": "padded_a_b_c"}
+{"fn": "safe_batch_id", "args": ["abé"], "ok": "abe_"}
+{"fn": "safe_batch_id", "args": ["﻿bomtab\tseparated"], "ok": "_bomtab_separated"}
+{"fn": "safe_batch_id", "args": ["a:b:cHELLO"], "ok": "a_b_cHELLO"}
+{"fn": "safe_batch_id", "args": ["ns:key.pathİstanbul"], "ok": "ns_key.path_stanbul"}
+{"fn": "safe_batch_id", "args": ["emoji 👍🏽 mixa"], "ok": "emoji_mixa"}
+{"fn": "safe_batch_id", "args": ["a..b./x/**/*.json"], "ok": "a..b._x_.json"}
+{"fn": "safe_batch_id", "args": ["line1\nline2src/a/b.ts"], "ok": "line1_line2src_a_b.ts"}
+{"fn": "safe_batch_id", "args": ["İstanbulünïcödé"], "ok": "_stanbul_n_c_d_"}
+{"fn": "safe_batch_id", "args": ["emoji 👍🏽 mixhello world"], "ok": "emoji_mixhello_world"}
+{"fn": "safe_batch_id", "args": ["key_name-1abc"], "ok": "key_name-1abc"}
+{"fn": "safe_batch_id", "args": ["héllo wörld"], "ok": "h_llo_w_rld"}
+{"fn": "safe_batch_id", "args": ["👍🏽 thumbs"], "ok": "_thumbs"}
+{"fn": "safe_batch_id", "args": ["日本語"], "ok": "_"}
+{"fn": "safe_batch_id", "args": ["ılık ırmak"], "ok": "_l_k_rmak"}
+{"fn": "safe_batch_id", "args": ["👨‍👩‍👧 family"], "ok": "_family"}
+{"fn": "safe_batch_id", "args": ["a b"], "ok": "a_b"}
+{"fn": "safe_batch_id", "args": ["a😀b"], "ok": "a_b"}
+{"fn": "safe_batch_id", "args": ["a²b x½ y①"], "ok": "a_b_x_y_"}
+{"fn": "safe_batch_id", "args": ["aⅠb Ⅻ"], "ok": "a_b_"}
+{"fn": "safe_batch_id", "args": ["a𐐀b 𝐀bc"], "ok": "a_b_bc"}
+{"fn": "safe_batch_id", "args": ["कि ٣٤"], "ok": "_"}
+{"fn": "safe_batch_id", "args": ["Iı İi"], "ok": "I_i"}
+{"fn": "safe_batch_id", "args": ["K K k"], "ok": "K_k"}
+{"fn": "safe_batch_id", "args": ["ſ s S"], "ok": "_s_S"}
+{"fn": "safe_batch_id", "args": ["x‍y 👨‍👩‍👧"], "ok": "x_y_"}
+{"fn": "safe_batch_id", "args": ["a b c　d"], "ok": "a_b_c_d"}
+{"fn": "safe_batch_id", "args": ["١٢٣ ٤٥"], "ok": "_"}
+{"fn": "safe_batch_id", "args": ["𝟘𝟙 ²³"], "ok": "_"}
+{"fn": "safe_batch_id", "args": ["snake_case foo-bar o'neil"], "ok": "snake_case_foo-bar_o_neil"}
+{"fn": "safe_batch_id", "args": ["ǅungla Ǆ"], "ok": "_ungla_"}
+{"fn": "safe_batch_id", "args": ["one\r\ntwo threefour"], "ok": "one_two_three_four"}
+{"fn": "safe_batch_id", "args": ["café café"], "ok": "cafe_caf_"}
+{"fn": "safe_batch_id", "args": ["ΣΑΣ σας ς"], "ok": "_"}
+{"fn": "account_ref", "args": ["a:b:c"], "ok": "b0ee04f880c4ff42"}
+{"fn": "account_ref", "args": ["HELLO"], "ok": "2cf24dba5fb0a30e"}
+{"fn": "account_ref", "args": ["Hello World"], "ok": "b94d27b9934d3e08"}
+{"fn": "account_ref", "args": ["日本語のテキスト"], "ok": "d4192d3b01dfa9f5"}
+{"fn": "account_ref", "args": ["trailing."], "ok": "44c12a4e432eba3f"}
+{"fn": "account_ref", "args": ["./x/**/*.json"], "ok": "018071a777fc8b56"}
+{"fn": "account_ref", "args": ["ΣΊΣΥΦΟΣ"], "ok": "50dc2b4cf4de0361"}
+{"fn": "account_ref", "args": ["straße"], "ok": "787f4770613d3824"}
+{"fn": "account_ref", "args": ["aba:b:c"], "ok": "72fa22a2e5ef6144"}
+{"fn": "account_ref", "args": ["﻿bom"], "ok": "2623148f0d047ef6"}
+{"fn": "account_ref", "args": [""], "ok": "e3b0c44298fc1c14"}
+{"fn": "account_ref", "args": ["ünïcödé"], "ok": "b09ad3e278dfb341"}
+{"fn": "account_ref", "args": ["ns:key.path  padded  "], "ok": "5a44fcf6b57b82cd"}
+{"fn": "account_ref", "args": ["İstanbul"], "ok": "4a4df120f7d1f3c2"}
+{"fn": "account_ref", "args": ["a..b"], "ok": "f62b42414c514fa6"}
+{"fn": "account_ref", "args": ["line1\nline2"], "ok": "683376e290829b48"}
+{"fn": "account_ref", "args": [".leading"], "ok": "9c74491a21e8fc7a"}
+{"fn": "account_ref", "args": ["emoji 👍🏽 mixtab\tseparated"], "ok": "944c115de90f27c7"}
+{"fn": "account_ref", "args": ["{name} has {count} items"], "ok": "42ff2ad309da81ff"}
+{"fn": "account_ref", "args": ["src/a/b.ts"], "ok": "eb7041468cb32fea"}
+{"fn": "account_ref", "args": ["abc"], "ok": "ba7816bf8f01cfea"}
+{"fn": "account_ref", "args": ["😀a:b:c"], "ok": "5bd4ac44702e0282"}
+{"fn": "account_ref", "args": ["a.b.c"], "ok": "845e30448809e2bc"}
+{"fn": "account_ref", "args": ["é"], "ok": "bf12767b0f2a56b2"}
+{"fn": "account_ref", "args": ["hello world"], "ok": "b94d27b9934d3e08"}
+{"fn": "account_ref", "args": ["ns:key.path"], "ok": "090ed4bc851381c0"}
+{"fn": "account_ref", "args": ["emoji 👍🏽 mix"], "ok": "7839fd7a65ab6e7d"}
+{"fn": "account_ref", "args": ["trailing.line1\nline2"], "ok": "136fc2a13f23b8f2"}
+{"fn": "account_ref", "args": ["ünïcödéab"], "ok": "f665373df402e7c6"}
+{"fn": "account_ref", "args": ["key_name-1"], "ok": "4184db5447df2761"}
+{"fn": "account_ref", "args": ["aa.b.c"], "ok": "ad60b06dfa77da38"}
+{"fn": "account_ref", "args": ["./x/**/*.jsona..b"], "ok": "a8805af4485ccd0f"}
+{"fn": "account_ref", "args": ["😀"], "ok": "f0443a342c5ef547"}
+{"fn": "account_ref", "args": ["tab\tseparated"], "ok": "737304a727e038b1"}
+{"fn": "account_ref", "args": ["HELLO:"], "ok": "47cd78ab5f984852"}
+{"fn": "account_ref", "args": ["a:b:cstraße"], "ok": "59f45930c60bb307"}
+{"fn": "account_ref", "args": [":"], "ok": "e7ac0786668e0ff0"}
+{"fn": "account_ref", "args": ["trailing.tab\tseparated"], "ok": "5a1fa01045ca4ffc"}
+{"fn": "account_ref", "args": ["ns:key.pathstraße"], "ok": "3485c08ace6fed32"}
+{"fn": "account_ref", "args": ["Hello World{name} has {count} items"], "ok": "455ce17b4c9b357f"}
+{"fn": "account_ref", "args": ["a😀b😀c"], "ok": "3b0fa9d763b5cb38"}
+{"fn": "account_ref", "args": ["étab\tseparated"], "ok": "04026c4c1aae8ffb"}
+{"fn": "account_ref", "args": ["ab"], "ok": "fb8e20fc2e4c3f24"}
+{"fn": "account_ref", "args": ["tab\tseparatedtab\tseparated"], "ok": "5df42ebd767778ed"}
+{"fn": "account_ref", "args": ["é  padded  "], "ok": "daebb9e9e2e3b098"}
+{"fn": "account_ref", "args": ["  padded  é"], "ok": "6b2aa665d6bf375e"}
+{"fn": "account_ref", "args": ["hello world:"], "ok": "b428736be48e0b84"}
+{"fn": "account_ref", "args": ["hello"], "ok": "2cf24dba5fb0a30e"}
+{"fn": "account_ref", "args": ["a:b:ca:b:c"], "ok": "df94251479d645f4"}
+{"fn": "account_ref", "args": ["ns:key.path.leading"], "ok": "4d6a325c9cf840bb"}
+{"fn": "account_ref", "args": ["trailing.hello world"], "ok": "2c9722f9075b7fa2"}
+{"fn": "account_ref", "args": ["  padded  "], "ok": "c7f9b538b93ce513"}
+{"fn": "account_ref", "args": ["src/a/b.tsabc"], "ok": "3524ed55a7d6cfc9"}
+{"fn": "account_ref", "args": ["  padded  tab\tseparated"], "ok": "0f9c51136dd3f9e9"}
+{"fn": "account_ref", "args": ["a{name} has {count} items"], "ok": "004dd37540568fc4"}
+{"fn": "account_ref", "args": ["a"], "ok": "ca978112ca1bbdca"}
+{"fn": "account_ref", "args": ["line1\nline2line1\nline2"], "ok": "9d85bc284583d7e4"}
+{"fn": "account_ref", "args": ["ünïcödéHello World"], "ok": "aa699099b5f43847"}
+{"fn": "account_ref", "args": ["İstanbulemoji 👍🏽 mix"], "ok": "b0fdb46312cb19ad"}
+{"fn": "account_ref", "args": ["ΣΊΣΥΦΟΣ./x/**/*.json"], "ok": "eb09910fd0479d67"}
+{"fn": "account_ref", "args": ["  padded  key_name-1"], "ok": "b5c5eb1208b2ae84"}
+{"fn": "account_ref", "args": ["straßetrailing."], "ok": "702b953dc05a1989"}
+{"fn": "account_ref", "args": ["straßeHello World"], "ok": "95dbe90c92caca0b"}
+{"fn": "account_ref", "args": ["İstanbulünïcödé"], "ok": "834eff5d740c8472"}
+{"fn": "account_ref", "args": ["straße{name} has {count} items"], "ok": "57fa7c3e9268672b"}
+{"fn": "account_ref", "args": ["a.b.cline1\nline2"], "ok": "ee48b38735b186d3"}
+{"fn": "account_ref", "args": ["{name} has {count} itemskey_name-1"], "ok": "027c2debc7ff4312"}
+{"fn": "account_ref", "args": ["Hello World日本語のテキスト"], "ok": "3ed05c5d43c3be97"}
+{"fn": "account_ref", "args": ["﻿bomabc"], "ok": "925f7ba1cd07c157"}
+{"fn": "account_ref", "args": ["İstanbulHello World"], "ok": "2f74eabce64c5dae"}
+{"fn": "account_ref", "args": ["a.b.cünïcödé"], "ok": "a3e7df80956dc6a1"}
+{"fn": "account_ref", "args": ["a..bhello"], "ok": "305bb473073577c5"}
+{"fn": "account_ref", "args": ["hello world日本語のテキスト"], "ok": "3ed05c5d43c3be97"}
+{"fn": "account_ref", "args": ["﻿boma😀b😀c"], "ok": "908e927cc15244a4"}
+{"fn": "account_ref", "args": ["aΣΊΣΥΦΟΣ"], "ok": "8bdeec9ebfbb06ec"}
+{"fn": "account_ref", "args": ["abcünïcödé"], "ok": "d8b38d5ca8ce73e0"}
+{"fn": "account_ref", "args": ["line1\nline2é"], "ok": "308985b8e6f81cfd"}
+{"fn": "account_ref", "args": ["straßea:b:c"], "ok": "6df43e250eda9ec2"}
+{"fn": "account_ref", "args": ["key_name-1İstanbul"], "ok": "811093613498e44e"}
+{"fn": "account_ref", "args": ["ns:key.pathİstanbul"], "ok": "6ed4a5d2eaab9999"}
+{"fn": "account_ref", "args": [":a.b.c"], "ok": "919a6f245f24cb9d"}
+{"fn": "account_ref", "args": ["﻿boma"], "ok": "f73b3fc0fd909876"}
+{"fn": "account_ref", "args": ["a😀b😀cabc"], "ok": "a0a278ee6280ef6a"}
+{"fn": "account_ref", "args": ["a.b.c  padded  "], "ok": "450f5fd2e645fe69"}
+{"fn": "account_ref", "args": ["hello worldkey_name-1"], "ok": "6736b620677a5837"}
+{"fn": "account_ref", "args": ["tab\tseparateda..b"], "ok": "791f88f12a6b19eb"}
+{"fn": "account_ref", "args": ["HELLOstraße"], "ok": "77b47a19dc837341"}
+{"fn": "account_ref", "args": ["abcHello World"], "ok": "78ecfbc5c4f4bd0d"}
+{"fn": "account_ref", "args": ["a.b.cstraße"], "ok": "a7541fb444e380be"}
+{"fn": "account_ref", "args": ["emoji 👍🏽 mixa"], "ok": "39d8c198f98d26b8"}
+{"fn": "account_ref", "args": ["日本語のテキストHELLO"], "ok": "1d9e309f9bf56235"}
+{"fn": "account_ref", "args": ["HELLOa.b.c"], "ok": "82a92ff06a85fe31"}
+{"fn": "account_ref", "args": ["ns:key.path😀"], "ok": "1b4618aad6f38ff8"}
+{"fn": "account_ref", "args": ["tab\tseparatedHELLO"], "ok": "bb2314ef821ec9d9"}
+{"fn": "account_ref", "args": ["{name} has {count} itemssrc/a/b.ts"], "ok": "507c2a38a18d55dd"}
+{"fn": "account_ref", "args": ["emoji 👍🏽 mixns:key.path"], "ok": "f509a4f559cebb89"}
+{"fn": "account_ref", "args": ["aé"], "ok": "f7e7d9d8707d8947"}
+{"fn": "account_ref", "args": ["abcstraße"], "ok": "51da8770f42838fb"}
+{"fn": "account_ref", "args": ["a:b:cİstanbul"], "ok": "5297a4844291881e"}
+{"fn": "account_ref", "args": ["aHello World"], "ok": "454762ad58134de1"}
+{"fn": "account_ref", "args": ["{name} has {count} itemsİstanbul"], "ok": "2b037798290c8b13"}
+{"fn": "account_ref", "args": [":key_name-1"], "ok": "e3a31baa8a0c0ec9"}
+{"fn": "account_ref", "args": ["abchello"], "ok": "2cb9c710242d0e38"}
+{"fn": "account_ref", "args": ["straße😀"], "ok": "3c4644aa5117c97b"}
+{"fn": "account_ref", "args": ["straße  padded  "], "ok": "affc563e3a52f757"}
+{"fn": "account_ref", "args": ["key_name-1é"], "ok": "05409b6f97fa7cf3"}
+{"fn": "account_ref", "args": ["./x/**/*.jsonhello world"], "ok": "70fd61a8af54d0d7"}
+{"fn": "account_ref", "args": [".leading  padded  "], "ok": "824bdc01af08c811"}
+{"fn": "account_ref", "args": [":é"], "ok": "649b7c9cc046687c"}
+{"fn": "account_ref", "args": ["abc:"], "ok": "16a3ed4144494134"}
+{"fn": "account_ref", "args": ["trailing.ns:key.path"], "ok": "470701f318310f1a"}
+{"fn": "account_ref", "args": ["tab\tseparatedtrailing."], "ok": "d9171fc7ae2d876d"}
+{"fn": "account_ref", "args": ["﻿bom.leading"], "ok": "229daee164a80231"}
+{"fn": "account_ref", "args": ["tab\tseparated﻿bom"], "ok": "b09d805e740872c5"}
+{"fn": "account_ref", "args": ["HELLOkey_name-1"], "ok": "7c0017642fc7ced4"}
+{"fn": "account_ref", "args": ["a😀b😀csrc/a/b.ts"], "ok": "8bf872c35b56ea0e"}
+{"fn": "account_ref", "args": ["  padded  src/a/b.ts"], "ok": "0cf2c9234c92b590"}
+{"fn": "account_ref", "args": ["😀﻿bom"], "ok": "1e902d91b6e9fcfd"}
+{"fn": "account_ref", "args": ["ünïcödé.leading"], "ok": "9a76001dc3d659b0"}
+{"fn": "account_ref", "args": ["ab  padded  "], "ok": "1ae1ee5d0d822e1c"}
+{"fn": "account_ref", "args": ["key_name-1emoji 👍🏽 mix"], "ok": "e26ac5e8dce4be20"}
+{"fn": "account_ref", "args": ["ΣΊΣΥΦΟΣΣΊΣΥΦΟΣ"], "ok": "9c1995e41a15ad37"}
+{"fn": "account_ref", "args": ["ünïcödé{name} has {count} items"], "ok": "367ccb930f64de5c"}
+{"fn": "account_ref", "args": ["ünïcödé:"], "ok": "3a6f533de428c35d"}
+{"fn": "account_ref", "args": ["line1\nline2ünïcödé"], "ok": "de73236391d456e1"}
+{"fn": "account_ref", "args": ["ünïcödéline1\nline2"], "ok": "96e20cd31dd32fba"}
+{"fn": "account_ref", "args": [".leadingHello World"], "ok": "ca0597dccee1e850"}
+{"fn": "account_ref", "args": ["trailing.ΣΊΣΥΦΟΣ"], "ok": "94c909b3348e0322"}
+{"fn": "account_ref", "args": ["ns:key.path./x/**/*.json"], "ok": "524003e854859c2a"}
+{"fn": "account_ref", "args": ["İstanbul:"], "ok": "0bf2c879e2e52ce8"}
+{"fn": "account_ref", "args": ["😀Hello World"], "ok": "d9e04a895a4d61b0"}
+{"fn": "account_ref", "args": ["ΣΊΣΥΦΟΣHELLO"], "ok": "a0b0491f18b2ae2b"}
+{"fn": "account_ref", "args": ["straßeemoji 👍🏽 mix"], "ok": "64253d7cd34accd7"}
+{"fn": "account_ref", "args": ["emoji 👍🏽 mixa.b.c"], "ok": "054b79a4e2f3f74c"}
+{"fn": "account_ref", "args": ["a😀b😀chello world"], "ok": "8a16dfe229648501"}
+{"fn": "account_ref", "args": ["a😀b😀c./x/**/*.json"], "ok": "6d2f1585b11e7815"}
+{"fn": "account_ref", "args": ["a..bns:key.path"], "ok": "7c4cadf94178ed9c"}
+{"fn": "account_ref", "args": ["日本語のテキスト日本語のテキスト"], "ok": "f932d28cc2d9b6ca"}
+{"fn": "account_ref", "args": ["a.leading"], "ok": "6c635cde10d67149"}
+{"fn": "account_ref", "args": ["line1\nline2ns:key.path"], "ok": "c7202533db04de74"}
+{"fn": "account_ref", "args": ["key_name-1日本語のテキスト"], "ok": "3845444d13ed6179"}
+{"fn": "account_ref", "args": ["a:b:ca.b.c"], "ok": "80a776a5b2a8ce03"}
+{"fn": "account_ref", "args": ["a:b:c{name} has {count} items"], "ok": "3058f640517eea94"}
+{"fn": "account_ref", "args": ["a.b.ckey_name-1"], "ok": "c42a206177e431f3"}
+{"fn": "account_ref", "args": ["./x/**/*.jsona:b:c"], "ok": "7fad00c171c1c87f"}
+{"fn": "account_ref", "args": ["İstanbulns:key.path"], "ok": "e68ce2672c0bdded"}
+{"fn": "account_ref", "args": ["日本語のテキストkey_name-1"], "ok": "93a8b67984de5abd"}
+{"fn": "account_ref", "args": ["﻿bom{name} has {count} items"], "ok": "f3372e78048a42bb"}
+{"fn": "account_ref", "args": ["a😀b😀c{name} has {count} items"], "ok": "5b00e48c81470ae5"}
+{"fn": "account_ref", "args": ["😀src/a/b.ts"], "ok": "23f8b55ad3fe80fb"}
+{"fn": "account_ref", "args": ["İstanbulline1\nline2"], "ok": "cf146ccac51805df"}
+{"fn": "account_ref", "args": ["tab\tseparatedé"], "ok": "0855ece38dd254be"}
+{"fn": "account_ref", "args": ["trailing.ünïcödé"], "ok": "cee1f69b75b7ce5a"}
+{"fn": "account_ref", "args": ["tab\tseparateda.b.c"], "ok": "c4b238a5d2e291eb"}
+{"fn": "account_ref", "args": ["Hello Worldsrc/a/b.ts"], "ok": "9c177f0c0fc271b2"}
+{"fn": "account_ref", "args": ["emoji 👍🏽 mixİstanbul"], "ok": "9e68b5fc24cc2c99"}
+{"fn": "account_ref", "args": ["abcemoji 👍🏽 mix"], "ok": "40858ea1a34b4b35"}
+{"fn": "account_ref", "args": ["abc😀"], "ok": "90e58f5f0fff026a"}
+{"fn": "account_ref", "args": [".leading:"], "ok": "e9ac6dfcbbb512ee"}
+{"fn": "account_ref", "args": ["Hello Worldé"], "ok": "7c8517ba5dcff9b8"}
+{"fn": "account_ref", "args": ["abhello"], "ok": "04f5e058959c4749"}
+{"fn": "account_ref", "args": ["a..bhello world"], "ok": "8113baa6b922a88a"}
+{"fn": "account_ref", "args": ["a.b.cemoji 👍🏽 mix"], "ok": "82cb7a3609d714ac"}
+{"fn": "account_ref", "args": ["ünïcödéHELLO"], "ok": "9921db23c0f47571"}
+{"fn": "account_ref", "args": ["a:b:ca..b"], "ok": "b851aaa96e24ab60"}
+{"fn": "account_ref", "args": ["line1\nline2hello"], "ok": "cd37eccc3e8494f3"}
+{"fn": "account_ref", "args": ["straßea😀b😀c"], "ok": "6f4eeaf424c28f6e"}
+{"fn": "account_ref", "args": ["é{name} has {count} items"], "ok": "a885922178d9a804"}
+{"fn": "account_ref", "args": ["abctab\tseparated"], "ok": "6308f6904e0b8912"}
+{"fn": "account_ref", "args": ["key_name-1a.b.c"], "ok": "f63428748909484c"}
+{"fn": "account_ref", "args": ["﻿bomtab\tseparated"], "ok": "c4bfbfac21f6ae58"}
+{"fn": "account_ref", "args": ["./x/**/*.jsona.b.c"], "ok": "f204d8493a9f9ddb"}
+{"fn": "account_ref", "args": ["ab.leading"], "ok": "d81a6faac2dc867f"}
+{"fn": "account_ref", "args": ["src/a/b.tssrc/a/b.ts"], "ok": "62b887f7bb9fc8e1"}
+{"fn": "account_ref", "args": ["src/a/b.tsHELLO"], "ok": "5a36d16254d5fe49"}
+{"fn": "account_ref", "args": ["ünïcödéemoji 👍🏽 mix"], "ok": "d36df45882e2dd1d"}
+{"fn": "account_ref", "args": ["a..bİstanbul"], "ok": "9976935cbe714141"}
+{"fn": "account_ref", "args": [":ns:key.path"], "ok": "9d531c4cfe83ff06"}
+{"fn": "account_ref", "args": ["hello world./x/**/*.json"], "ok": "361d20e2ab750ae6"}
+{"fn": "account_ref", "args": ["a..b{name} has {count} items"], "ok": "5a4d2ffda1334b21"}
+{"fn": "account_ref", "args": [".leadingabc"], "ok": "be1588f0e7023b0f"}
+{"fn": "account_ref", "args": ["emoji 👍🏽 mixline1\nline2"], "ok": "ef5f5dbac6cc05fb"}
+{"fn": "account_ref", "args": ["a..btrailing."], "ok": "519f79af59afab3b"}
+{"fn": "account_ref", "args": ["hello worldtrailing."], "ok": "f879dcd279d572be"}
+{"fn": "account_ref", "args": ["abc﻿bom"], "ok": "72c16adf0d100c3e"}
+{"fn": "account_ref", "args": ["{name} has {count} itemsns:key.path"], "ok": "b3fe720fdd2b99f7"}
+{"fn": "account_ref", "args": ["日本語のテキストstraße"], "ok": "6ebc6f73da150950"}
+{"fn": "account_ref", "args": ["{name} has {count} itemsa😀b😀c"], "ok": "b35188f3ffdc003b"}
+{"fn": "account_ref", "args": ["abkey_name-1"], "ok": "15a840aa771a5639"}
+{"fn": "account_ref", "args": ["a.b.c日本語のテキスト"], "ok": "4e0a700951b2dd2b"}
+{"fn": "account_ref", "args": [".leadingsrc/a/b.ts"], "ok": "33faf3bbbeeec7d7"}
+{"fn": "account_ref", "args": ["a./x/**/*.json"], "ok": "deff3c7602205cc1"}
+{"fn": "account_ref", "args": ["src/a/b.tsa:b:c"], "ok": "2a7fc5449eb13221"}
+{"fn": "account_ref", "args": ["abc日本語のテキスト"], "ok": "64236f4a0e284c2b"}
+{"fn": "account_ref", "args": ["straßeHELLO"], "ok": "ccee866e9487c74b"}
+{"fn": "account_ref", "args": ["a😀b😀c😀"], "ok": "2dce5c030f9a52f0"}
+{"fn": "account_ref", "args": ["{name} has {count} itemsemoji 👍🏽 mix"], "ok": "7b3fb954ed9f24b4"}
+{"fn": "account_ref", "args": ["日本語のテキスト﻿bom"], "ok": "f8d2eaf205be88c3"}
+{"fn": "account_ref", "args": ["a.b.c{name} has {count} items"], "ok": "f1521620aebc19e6"}
+{"fn": "account_ref", "args": ["İstanbultab\tseparated"], "ok": "1b3aefc5b8d11872"}
+{"fn": "account_ref", "args": ["héllo wörld"], "ok": "a1003f7d04a41157"}
+{"fn": "account_ref", "args": ["👍🏽 thumbs"], "ok": "2752e65dacf50732"}
+{"fn": "account_ref", "args": ["日本語"], "ok": "77710aedc74ecfa3"}
+{"fn": "account_ref", "args": ["ılık ırmak"], "ok": "60dc09d56c2ba920"}
+{"fn": "account_ref", "args": ["👨‍👩‍👧 family"], "ok": "bb5f3770a5817fd9"}
+{"fn": "account_ref", "args": ["a b"], "ok": "9507017c6d887511"}
+{"fn": "account_ref", "args": ["a😀b"], "ok": "6fba5b2ea783ded0"}
+{"fn": "account_ref", "args": ["a²b x½ y①"], "ok": "a950cdbd5ee71632"}
+{"fn": "account_ref", "args": ["aⅠb Ⅻ"], "ok": "a6bd720e7227c195"}
+{"fn": "account_ref", "args": ["a𐐀b 𝐀bc"], "ok": "901e5d60bb2b3613"}
+{"fn": "account_ref", "args": ["कि ٣٤"], "ok": "9dc1759d14c77f74"}
+{"fn": "account_ref", "args": ["Iı İi"], "ok": "63f5caba109c4f3b"}
+{"fn": "account_ref", "args": ["K K k"], "ok": "50c472282a4f3650"}
+{"fn": "account_ref", "args": ["ſ s S"], "ok": "af8e32d1e0691f92"}
+{"fn": "account_ref", "args": ["x‍y 👨‍👩‍👧"], "ok": "c7928a54bec381d8"}
+{"fn": "account_ref", "args": ["a b c　d"], "ok": "256164abe23ff018"}
+{"fn": "account_ref", "args": ["١٢٣ ٤٥"], "ok": "35315cd5ab81b9ca"}
+{"fn": "account_ref", "args": ["𝟘𝟙 ²³"], "ok": "46afe9729d82fb09"}
+{"fn": "account_ref", "args": ["snake_case foo-bar o'neil"], "ok": "0598d49c834526c6"}
+{"fn": "account_ref", "args": ["ǅungla Ǆ"], "ok": "05d1eed9ad0c41b6"}
+{"fn": "account_ref", "args": ["one\r\ntwo threefour"], "ok": "fced7d1dddd848c1"}
+{"fn": "account_ref", "args": ["café café"], "ok": "886a02e53758efe9"}
+{"fn": "account_ref", "args": ["ΣΑΣ σας ς"], "ok": "c8c7f0589724d6ac"}
+{"fn": "safe_batch_id", "args": [null], "ok": ""}
+{"fn": "safe_batch_id", "args": [""], "ok": ""}
+{"fn": "safe_batch_id", "args": ["   "], "ok": ""}
+{"fn": "safe_batch_id", "args": ["batch-2026.11.28_01"], "ok": "batch-2026.11.28_01"}
+{"fn": "safe_batch_id", "args": ["  hello world / foo:bar@baz  "], "ok": "hello_world_foo_bar_baz"}
+{"fn": "safe_batch_id", "args": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "ok": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+{"fn": "safe_batch_id", "args": ["中文批次#123!!!test"], "ok": "_123_test"}
+{"fn": "safe_batch_id", "args": ["---...___"], "ok": "---...___"}
+{"fn": "safe_batch_id", "args": ["x  y\tz\nw"], "ok": "x_y_z_w"}
+{"fn": "safe_batch_id", "args": ["paypal_2026-11-28T00:30:00Z+08:00"], "ok": "paypal_2026-11-28T00_30_00Z_08_00"}
+{"fn": "safe_batch_id", "args": ["!!!"], "ok": "_"}
+{"fn": "safe_batch_id", "args": ["A_B-C.D 1/2/3/4/A_B-C.D 1/2/3/4/A_B-C.D 1/2/3/4/A_B-C.D 1/2/3/4/A_B-C.D 1/2/3/4/A_B-C.D 1/2/3/4/A_B-C.D 1/2/3/4/A_B-C.D 1/2/3/4/A_B-C.D 1/2/3/4/A_B-C.D 1/2/3/4/A_B-C.D 1/2/3/4/A_B-C.D 1/2/3/4/A_B-C.D 1/2/3/4/A_B-C.D 1/2/3/4/A_B-C.D 1/2/3/4/"], "ok": "A_B-C.D_1_2_3_4_A_B-C.D_1_2_3_4_A_B-C.D_1_2_3_4_A_B-C.D_1_2_3_4_A_B-C.D_1_2_3_4_"}
+{"fn": "account_ref", "args": [null], "ok": "e3b0c44298fc1c14"}
+{"fn": "account_ref", "args": [""], "ok": "e3b0c44298fc1c14"}
+{"fn": "account_ref", "args": ["   "], "ok": "e3b0c44298fc1c14"}
+{"fn": "account_ref", "args": ["user@example.com"], "ok": "b4c9a289323b21a0"}
+{"fn": "account_ref", "args": ["  USER@Example.COM \t "], "ok": "b4c9a289323b21a0"}
+{"fn": "account_ref", "args": ["sample-1@test.org"], "ok": "75881ec71a2cd371"}
+{"fn": "account_ref", "args": ["中文@example.com"], "ok": "5927863b75a1911d"}
+{"fn": "account_ref", "args": ["a+b@sub.domain.co"], "ok": "0db5359274652a76"}

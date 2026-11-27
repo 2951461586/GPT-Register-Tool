@@ -1,0 +1,255 @@
+{"fn": "_browser_failure_class", "args": ["a.b.cemoji 👍🏽 mix"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["İstanbul"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["./x/**/*.json"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ns:key.path"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a😀b😀c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["é"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ns:key.patha..b"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["abc"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [":"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["trailing."], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["src/a/b.ts"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["Hello World"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a.b.c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["line1\nline2"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["日本語のテキスト"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["😀{name} has {count} items"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["hello worldtab\tseparated"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ΣΊΣΥΦΟΣ"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["line1\nline2ünïcödé"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["HELLO"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["{name} has {count} items"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["HELLOkey_name-1"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["hello world"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["{name} has {count} itemshello"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a..b"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ab"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["  padded  {name} has {count} items"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["straße"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a..b  padded  "], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["hello"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["﻿bom"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [":abc"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["key_name-1"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["Hello World./x/**/*.json"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["  padded  "], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["emoji 👍🏽 mix"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["abhello"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["tab\tseparateda"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a:b:c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [".leading"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ab:"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a..b{name} has {count} items"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["HELLO😀"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["emoji 👍🏽 mixa:b:c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a.b.ca.b.c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ünïcödéa:b:c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [""], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ünïcödé"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["éns:key.path"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [".leading{name} has {count} items"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["hello worldns:key.path"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["line1\nline2emoji 👍🏽 mix"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["trailing../x/**/*.json"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["Hello World.leading"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a😀b😀cünïcödé"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["line1\nline2İstanbul"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["HELLOstraße"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["tab\tseparated"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["key_name-1é"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["tab\tseparateda:b:c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a..bHELLO"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["İstanbulabc"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["😀"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["tab\tseparatedtrailing."], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ünïcödéemoji 👍🏽 mix"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["éa"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["éİstanbul"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["helloé"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ab﻿bom"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["aba..b"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["line1\nline2line1\nline2"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [":a..b"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ΣΊΣΥΦΟΣline1\nline2"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["hello日本語のテキスト"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["hello worldé"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["{name} has {count} itemsa"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["abc.leading"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [".leadingstraße"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["key_name-1İstanbul"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a:b:cİstanbul"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["line1\nline2ΣΊΣΥΦΟΣ"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["tab\tseparatedns:key.path"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["abc  padded  "], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a😀b😀cemoji 👍🏽 mix"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["key_name-1ns:key.path"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["emoji 👍🏽 mixa"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["😀src/a/b.ts"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["é./x/**/*.json"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ünïcödéHello World"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["tab\tseparated😀"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ΣΊΣΥΦΟΣtab\tseparated"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [".leadingtrailing."], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["./x/**/*.jsonabc"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["tab\tseparated:"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["tab\tseparatedab"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["  padded  Hello World"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [".leadingline1\nline2"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ünïcödé:"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a.b.cİstanbul"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["abab"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["tab\tseparateda.b.c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ns:key.pathstraße"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["{name} has {count} itemsHello World"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ns:key.patha😀b😀c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["src/a/b.ts.leading"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["abcünïcödé"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["  padded  a..b"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["key_name-1hello"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["straße./x/**/*.json"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["straßetab\tseparated"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["key_name-1line1\nline2"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["﻿bomHello World"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["日本語のテキストa.b.c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a.b.ctrailing."], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["HELLOa.b.c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [".leadingHELLO"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["abc{name} has {count} items"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [":ünïcödé"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["﻿bomΣΊΣΥΦΟΣ"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ünïcödéab"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["hello worlda😀b😀c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["emoji 👍🏽 mixa..b"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["emoji 👍🏽 mix.leading"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a:b:ca.b.c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["İstanbultrailing."], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["trailing.hello"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a.b.ctab\tseparated"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["line1\nline2a.b.c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["  padded  HELLO"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [".leading  padded  "], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["trailing.İstanbul"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ésrc/a/b.ts"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["  padded  .leading"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["tab\tseparatedemoji 👍🏽 mix"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["hello worldemoji 👍🏽 mix"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ns:key.path{name} has {count} items"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [":straße"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ékey_name-1"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["日本語のテキストa😀b😀c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["😀a"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["src/a/b.tshello"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["  padded  😀"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["line1\nline2😀"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["Hello Worldé"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["straßeİstanbul"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["Hello Worldabc"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [":a:b:c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["tab\tseparatedkey_name-1"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a.b.cstraße"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["﻿bomünïcödé"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["{name} has {count} itemsabc"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a:"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ns:key.pathHello World"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["HELLOemoji 👍🏽 mix"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["{name} has {count} items./x/**/*.json"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["straßeHELLO"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["aHELLO"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["😀abc"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["aba:b:c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [".leadingé"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a:b:cline1\nline2"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["éHELLO"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a..bline1\nline2"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["{name} has {count} itemsΣΊΣΥΦΟΣ"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ns:key.pathns:key.path"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["éhello"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["İstanbul  padded  "], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a😀b😀cHello World"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["aab"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["  padded  a😀b😀c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a😀b😀ctrailing."], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["İstanbulns:key.path"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["emoji 👍🏽 mixsrc/a/b.ts"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["key_name-1tab\tseparated"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["日本語のテキストİstanbul"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["line1\nline2é"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["abchello world"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["日本語のテキストtrailing."], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["é{name} has {count} items"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a😀b😀ca😀b😀c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["😀ünïcödé"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["hello worlda..b"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["atab\tseparated"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["tab\tseparated日本語のテキスト"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["abcab"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["日本語のテキストns:key.path"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [":HELLO"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["src/a/b.tsab"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["İstanbula😀b😀c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["line1\nline2abc"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["HELLOa"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["./x/**/*.jsonemoji 👍🏽 mix"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["﻿boma😀b😀c"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["line1\nline2{name} has {count} items"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["😀HELLO"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["hello worldhello"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [".leadinghello"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [".leadingtab\tseparated"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [":hello world"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["héllo wörld"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["👍🏽 thumbs"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["日本語"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["ılık ırmak"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["👨‍👩‍👧 family"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a b"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a😀b"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a²b x½ y①"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["aⅠb Ⅻ"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["a𐐀b 𝐀bc"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["कि ٣٤"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [null], "ok": "network"}
+{"fn": "_browser_failure_class", "args": [""], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["   "], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["registration_cancelled"], "ok": "cancelled"}
+{"fn": "_browser_failure_class", "args": ["BROWSER_REGISTRATION_CANCELLED"], "ok": "cancelled"}
+{"fn": "_browser_failure_class", "args": ["browser_session_rate_limited"], "ok": "rate_limit"}
+{"fn": "_browser_failure_class", "args": ["http_rate_limit_429"], "ok": "rate_limit"}
+{"fn": "_browser_failure_class", "args": ["browser_existing_account"], "ok": "account"}
+{"fn": "_browser_failure_class", "args": ["browser_session_account_not_linked"], "ok": "account"}
+{"fn": "_browser_failure_class", "args": ["email_otp_timeout"], "ok": "mailbox"}
+{"fn": "_browser_failure_class", "args": ["otp_rejected"], "ok": "mailbox"}
+{"fn": "_browser_failure_class", "args": ["mailbox_auth_invalid"], "ok": "mailbox"}
+{"fn": "_browser_failure_class", "args": ["browser_email_otp_missing"], "ok": "mailbox"}
+{"fn": "_browser_failure_class", "args": ["browser_unexpected_identity_provider"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["manual_challenge_required"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_session_email_mismatch"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_session_access_token_missing"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_session_unauthorized"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_session_forbidden"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_session_access_denied"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_session_oauth_callback_failed"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_session_token_refresh_failed"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_chatgpt_context_unavailable"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_profile_submit_timeout"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_profile_create_failed"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_passwordless_otp_state_unknown"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["otp_restart_state"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_registration_state_unknown"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_email_verification_stuck"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_email_field_not_editable"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_auth_state_drift"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_email_value_mismatch"], "ok": "auth_state"}
+{"fn": "_browser_failure_class", "args": ["browser_proxy_blocked"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["browser_proxy_country_mismatch"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["browser_dependency_missing"], "ok": "configuration"}
+{"fn": "_browser_failure_class", "args": ["roxy_api_key_missing"], "ok": "configuration"}
+{"fn": "_browser_failure_class", "args": ["workspace_id_missing"], "ok": "configuration"}
+{"fn": "_browser_failure_class", "args": ["debug_address_missing"], "ok": "configuration"}
+{"fn": "_browser_failure_class", "args": ["browser_session_endpoint_unavailable"], "ok": "configuration"}
+{"fn": "_browser_failure_class", "args": ["invalid_config_value"], "ok": "configuration"}
+{"fn": "_browser_failure_class", "args": ["unsupported_driver_camoufox"], "ok": "configuration"}
+{"fn": "_browser_failure_class", "args": ["unknown_network_timeout"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["中文错误码_proxy_blocked"], "ok": "network"}
+{"fn": "_browser_failure_class", "args": ["İ_RATE_LIMIT"], "ok": "rate_limit"}

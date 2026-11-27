@@ -1,0 +1,234 @@
+{"fn": "is_transient_transport_error", "args": ["HELLOstraße"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["日本語のテキスト"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["hello world"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["key_name-1"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["﻿bom{name} has {count} items"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["HELLO"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["HELLO{name} has {count} items"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ΣΊΣΥΦΟΣhello world"], "ok": false}
+{"fn": "is_transient_transport_error", "args": [":"], "ok": false}
+{"fn": "is_transient_transport_error", "args": [""], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["straße"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a.b.ctrailing."], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a:b:c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a😀b😀c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["hello"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["trailing.ab"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["emoji 👍🏽 mixstraße"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["  padded  hello world"], "ok": false}
+{"fn": "is_transient_transport_error", "args": [".leadingtab\tseparated"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a.b.c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["trailing."], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["hello worldsrc/a/b.ts"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["İstanbul"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a😀b😀ctab\tseparated"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["emoji 👍🏽 mix"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ns:key.path"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ab"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["trailing..leading"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["abΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["é.leading"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["straße日本語のテキスト"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["./x/**/*.json"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["{name} has {count} items"], "ok": false}
+{"fn": "is_transient_transport_error", "args": [".leading"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["src/a/b.ts"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["aΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["Hello World"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["emoji 👍🏽 mixemoji 👍🏽 mix"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a😀b😀cstraße"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["key_name-1ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a  padded  "], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a.b.c😀"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["  padded  "], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["key_name-1a:b:c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["line1\nline2"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["abc"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["﻿bom"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["😀:"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["{name} has {count} items😀"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["Hello World.leading"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["  padded  İstanbul"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["hello:"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ünïcödé"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["trailing.trailing."], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["😀"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a..ba.b.c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["é"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a..b日本語のテキスト"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["tab\tseparated"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a..b"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["HELLOΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["line1\nline2ab"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["src/a/b.ts./x/**/*.json"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["line1\nline2:"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["abstraße"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["line1\nline2hello"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ünïcödéİstanbul"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["line1\nline2./x/**/*.json"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a:b:csrc/a/b.ts"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a😀b😀csrc/a/b.ts"], "ok": false}
+{"fn": "is_transient_transport_error", "args": [".leading{name} has {count} items"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["İstanbul﻿bom"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["hello world  padded  "], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["line1\nline2日本語のテキスト"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["hello world日本語のテキスト"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["::"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["straßea:b:c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["tab\tseparated  padded  "], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a.b.ckey_name-1"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["emoji 👍🏽 mixtab\tseparated"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["emoji 👍🏽 mixa"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["key_name-1hello"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["emoji 👍🏽 mixünïcödé"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["emoji 👍🏽 mixa:b:c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["emoji 👍🏽 mixHello World"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["İstanbul😀"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a😀b😀c.leading"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["key_name-1emoji 👍🏽 mix"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["{name} has {count} items  padded  "], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ns:key.pathİstanbul"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["﻿bomünïcödé"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["😀ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["  padded  emoji 👍🏽 mix"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["src/a/b.tsünïcödé"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["İstanbul  padded  "], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ünïcödéa"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["abc﻿bom"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["abcline1\nline2"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a..b./x/**/*.json"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ns:key.pathHello World"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["😀key_name-1"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["src/a/b.ts😀"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["line1\nline2ns:key.path"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["  padded  HELLO"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["{name} has {count} itemsİstanbul"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["hello worldhello"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["trailing.:"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["./x/**/*.json:"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a:b:ca:b:c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["😀ab"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["  padded  ns:key.path"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a.b.cHello World"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["éa😀b😀c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["HELLOa"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a..btab\tseparated"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["line1\nline2😀"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ns:key.pathünïcödé"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["😀a:b:c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["éemoji 👍🏽 mix"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["﻿bomΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["./x/**/*.jsonemoji 👍🏽 mix"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["trailing.src/a/b.ts"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["atrailing."], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ans:key.path"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["hello worldHELLO"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["  padded  line1\nline2"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["line1\nline2emoji 👍🏽 mix"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["hello worldtab\tseparated"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a😀b😀ca"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["日本語のテキストsrc/a/b.ts"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["akey_name-1"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ünïcödéline1\nline2"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["日本語のテキスト./x/**/*.json"], "ok": false}
+{"fn": "is_transient_transport_error", "args": [":ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a:b:c  padded  "], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["abcemoji 👍🏽 mix"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["İstanbulabc"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ünïcödé😀"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a.b.chello"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ünïcödékey_name-1"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["./x/**/*.jsonkey_name-1"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["aba:b:c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a:b:c日本語のテキスト"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["﻿bom  padded  "], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a..bΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["İstanbultab\tseparated"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["İstanbula"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["Hello Worlda.b.c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": [".leadinga..b"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a..ba😀b😀c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["﻿bomab"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["trailing.é"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["src/a/b.tsé"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["hello worldΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["Hello Worldline1\nline2"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["hello worldns:key.path"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["./x/**/*.json{name} has {count} items"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["straßeHELLO"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["hellotrailing."], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a😀b😀cabc"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["key_name-1HELLO"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["😀.leading"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["aba😀b😀c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["İstanbula.b.c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["étab\tseparated"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["﻿bom:"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["﻿bom﻿bom"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["  padded  :"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ΣΊΣΥΦΟΣa"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["abchello"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["{name} has {count} itemsline1\nline2"], "ok": false}
+{"fn": "is_transient_transport_error", "args": [":a..b"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["tab\tseparated./x/**/*.json"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["éa..b"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["日本語のテキストa😀b😀c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["line1\nline2İstanbul"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["Hello Worldkey_name-1"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ns:key.patha..b"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ΣΊΣΥΦΟΣhello"], "ok": false}
+{"fn": "is_transient_transport_error", "args": [":hello world"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["key_name-1straße"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["./x/**/*.jsonİstanbul"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["hellosrc/a/b.ts"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["src/a/b.tstab\tseparated"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["日本語のテキスト.leading"], "ok": false}
+{"fn": "is_transient_transport_error", "args": [":Hello World"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["src/a/b.tssrc/a/b.ts"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a:b:cstraße"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a😀b😀cünïcödé"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["aa:b:c"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["./x/**/*.jsonabc"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["./x/**/*.json😀"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a:b:cünïcödé"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a:b:cHELLO"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["trailing.straße"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["😀a"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a.b.ctab\tseparated"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["helloé"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["héllo wörld"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["👍🏽 thumbs"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["日本語"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["ılık ırmak"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["👨‍👩‍👧 family"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a b"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a😀b"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a²b x½ y①"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["aⅠb Ⅻ"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["a𐐀b 𝐀bc"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["कि ٣٤"], "ok": false}
+{"fn": "is_transient_transport_error", "args": [null], "ok": false}
+{"fn": "is_transient_transport_error", "args": [""], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["   "], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["OK"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["HTTP 400 Bad Request"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["account_deactivated"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["curl: (35) TLS connect error: OPENSSL_internal"], "ok": true}
+{"fn": "is_transient_transport_error", "args": ["curl: (7) Failed to connect to host port 443"], "ok": true}
+{"fn": "is_transient_transport_error", "args": ["curl: (28) Operation timed out after 30001 ms"], "ok": true}
+{"fn": "is_transient_transport_error", "args": ["curl: (52) Empty reply from server"], "ok": true}
+{"fn": "is_transient_transport_error", "args": ["curl: (56) Proxy CONNECT aborted"], "ok": true}
+{"fn": "is_transient_transport_error", "args": ["ConnectionError: Connection reset by peer"], "ok": true}
+{"fn": "is_transient_transport_error", "args": ["ConnectionRefusedError: [WinError 10061] connection refused"], "ok": true}
+{"fn": "is_transient_transport_error", "args": ["ConnectionAbortedError: connection aborted"], "ok": true}
+{"fn": "is_transient_transport_error", "args": ["ReadTimeout: request timeout reached"], "ok": true}
+{"fn": "is_transient_transport_error", "args": ["ProxyError: unable to tunnel through proxy"], "ok": true}
+{"fn": "is_transient_transport_error", "args": ["Page.goto: NS_ERROR_ABORT at https://chatgpt.com/"], "ok": true}
+{"fn": "is_transient_transport_error", "args": ["Error: Navigation aborted by frame detach"], "ok": true}
+{"fn": "is_transient_transport_error", "args": ["OPENSSL_INTERNAL handshake failure"], "ok": true}
+{"fn": "is_transient_transport_error", "args": ["ValueError: invalid json body"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["HTTP 429 Too Many Requests"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["HTTP 403 Forbidden"], "ok": false}
+{"fn": "is_transient_transport_error", "args": ["TLS CONNECT ERROR on socket"], "ok": true}

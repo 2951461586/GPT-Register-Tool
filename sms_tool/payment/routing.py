@@ -202,10 +202,8 @@ class PaymentRoutePlanner:
         proxy_state: Any = None,
         selector: Callable[[list[str], str, str], tuple[str, list[dict[str, Any]]]] | None = None,
         rotator: Callable[[str, str], str] | None = None,
-        lease_owner: Any = "",
     ) -> None:
         self.config = config
-        self.lease_owner = str(lease_owner or "").strip()
         _protocol_raw: object = config.get("protocol_payments")
         self.protocol: Mapping[str, Any] = _protocol_raw if isinstance(_protocol_raw, Mapping) else {}
         if proxy_state is None:

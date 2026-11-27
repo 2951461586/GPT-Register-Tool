@@ -1,0 +1,73 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/payment/batch_report.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "batch-report-parse-rs",
+  "exports": [
+    {
+      "name": "safe_batch_id",
+      "file": "sms_tool/payment/batch_report.py",
+      "line": 249,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "account_ref",
+      "file": "sms_tool/payment/batch_report.py",
+      "line": 245,
+      "params": [
+        {
+          "name": "email",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "unique_emails",
+      "file": "sms_tool/payment/batch_report.py",
+      "line": 234,
+      "reason": "benchmarked at 0.41x due to PyO3 list-of-strings crossing cost"
+    },
+    {
+      "name": "build_report",
+      "file": "sms_tool/payment/batch_report.py",
+      "line": 30,
+      "reason": "stays in Python (clock and nested report dict assembly)"
+    },
+    {
+      "name": "batch_counts",
+      "file": "sms_tool/payment/batch_report.py",
+      "line": 70,
+      "reason": "stays in Python (nested Python dict iteration)"
+    },
+    {
+      "name": "write_checkpoint",
+      "file": "sms_tool/payment/batch_report.py",
+      "line": 345,
+      "reason": "stays in Python (filesystem I/O)"
+    }
+  ]
+}

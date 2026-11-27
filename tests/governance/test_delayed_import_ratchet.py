@@ -96,7 +96,7 @@ def test_reason_is_startup_for_the_cli_seam():
     classify = delayed_import_ratchet.classify
     assert classify("sms_tool/cli.py", "sms_tool.mailbox.router") == "startup"
     assert classify("sms_tool/commands/payment.py", "sms_tool.payment.batch") == "startup"
-    assert classify("sms_tool/cli_parsers/payment.py", "sms_tool.paypal_link.gen_link") == "startup"
+    assert classify("sms_tool/cli_parsers/payment.py", "sms_tool.pay_link.extract_server") == "startup"
 
 
 def test_reason_is_startup_for_a_heavy_target():

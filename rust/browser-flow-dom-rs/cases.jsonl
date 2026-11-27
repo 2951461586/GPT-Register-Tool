@@ -1,0 +1,950 @@
+{"fn": "_is_openai_auth_url", "args": ["日本語のテキスト"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": [":"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["tab\tseparated"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["é"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ns:key.path"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["straße"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a😀b😀c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["İstanbul"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": [":ab"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["key_name-1"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["line1\nline2"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["./x/**/*.json"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["hello"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["abc"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["﻿bom"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["Hello World"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": [".leading"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["emoji 👍🏽 mix"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["  padded  "], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["abcΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ünïcödétrailing."], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ab日本語のテキスト"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["HELLO"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["  padded  tab\tseparated"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["src/a/b.ts"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["İstanbulemoji 👍🏽 mix"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["trailing.Hello World"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": [""], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["İstanbultab\tseparated"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a:"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ab"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["{name} has {count} items"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a:b:c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["HELLO日本語のテキスト"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["hello world"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["key_name-1key_name-1"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a:b:cünïcödé"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": [".leadinga"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a.b.c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["abcsrc/a/b.ts"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["helloünïcödé"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["./x/**/*.jsonHELLO"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["日本語のテキストtrailing."], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["trailing."], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["日本語のテキストa:b:c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["Hello Worldab"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["HELLOünïcödé"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ns:key.pathns:key.path"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a:b:cHELLO"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["./x/**/*.jsontrailing."], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ünïcödé"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["😀"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a:b:c😀"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["src/a/b.tsns:key.path"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["aba:b:c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ΣΊΣΥΦΟΣünïcödé"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": [".leadinga😀b😀c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["abcünïcödé"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["trailing.{name} has {count} items"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a😀b😀ckey_name-1"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["abcé"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a😀b😀cİstanbul"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["tab\tseparated日本語のテキスト"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["hello worldünïcödé"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["emoji 👍🏽 mix😀"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a😀b😀c.leading"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["HELLOkey_name-1"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": [":hello"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["İstanbula..b"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a..b"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a.b.chello world"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ns:key.pathhello"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["HELLOHello World"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a.b.cHELLO"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["./x/**/*.jsonkey_name-1"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["HELLO😀"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": [":Hello World"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": [":  padded  "], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a..bstraße"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a..bHello World"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["😀./x/**/*.json"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["trailing.ns:key.path"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["emoji 👍🏽 mixtab\tseparated"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["😀  padded  "], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["key_name-1trailing."], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["line1\nline2﻿bom"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["trailing.trailing."], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["  padded  ünïcödé"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["abc😀"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["tab\tseparated{name} has {count} items"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["key_name-1a.b.c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["HELLOstraße"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["src/a/b.tsabc"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ns:key.path.leading"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ns:key.pathstraße"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["日本語のテキストhello world"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a:b:cHello World"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["日本語のテキストa..b"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["﻿bomemoji 👍🏽 mix"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["tab\tseparatedtab\tseparated"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": [":.leading"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["./x/**/*.jsonabc"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["./x/**/*.json.leading"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["src/a/b.tstab\tseparated"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["éΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["emoji 👍🏽 mixhello"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["éhello world"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["HELLOİstanbul"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a..ba😀b😀c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a😀b😀cHELLO"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["Hello World./x/**/*.json"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["aemoji 👍🏽 mix"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["İstanbulline1\nline2"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["emoji 👍🏽 mixa😀b😀c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a..bHELLO"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["hello world.leading"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["src/a/b.tsa"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["İstanbul{name} has {count} items"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["hello worldstraße"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["emoji 👍🏽 mixhello world"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["😀ab"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a:b:c:"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["﻿bom﻿bom"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["﻿bomünïcödé"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["straßestraße"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["aa😀b😀c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ababc"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["  padded  ab"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["emoji 👍🏽 mixabc"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["  padded  :"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["hello worldkey_name-1"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a..b﻿bom"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["HELLOé"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["  padded  {name} has {count} items"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["./x/**/*.json:"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["straße{name} has {count} items"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["﻿boma:b:c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["hello worldΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["src/a/b.tsa..b"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a:b:c./x/**/*.json"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a..bhello world"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["straßeline1\nline2"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a.b.cemoji 👍🏽 mix"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["atrailing."], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["helloemoji 👍🏽 mix"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["aab"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["éab"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["éa:b:c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a..babc"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["trailing.ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a.b.cHello World"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["./x/**/*.jsonhello world"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["{name} has {count} itemsHELLO"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["😀HELLO"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["😀ünïcödé"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["﻿bom:"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["helloab"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ns:key.pathsrc/a/b.ts"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["HELLO.leading"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["line1\nline2a:b:c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["{name} has {count} items.leading"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a.b.ca😀b😀c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ünïcödéa:b:c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["straßekey_name-1"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["key_name-1emoji 👍🏽 mix"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["line1\nline2HELLO"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["日本語のテキストtab\tseparated"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["emoji 👍🏽 mixab"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["tab\tseparated.leading"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a.b.c﻿bom"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["key_name-1Hello World"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["straßeé"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["  padded  a😀b😀c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": [":line1\nline2"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["helloHELLO"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["helloa.b.c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["aHello World"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a:b:ca.b.c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["abc.leading"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ΣΊΣΥΦΟΣsrc/a/b.ts"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["tab\tseparateda..b"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a:b:ctab\tseparated"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["abhello"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["line1\nline2ab"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["tab\tseparatedns:key.path"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["hello:"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["hello world😀"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["﻿bomhello world"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": [".leading./x/**/*.json"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["src/a/b.ts{name} has {count} items"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["{name} has {count} itemshello"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ΣΊΣΥΦΟΣstraße"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ns:key.path:"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ünïcödéΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["trailing.a..b"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a.b.ca.b.c"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["line1\nline2src/a/b.ts"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["straßens:key.path"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["héllo wörld"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["👍🏽 thumbs"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["日本語"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ılık ırmak"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["👨‍👩‍👧 family"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a b"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a😀b"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a²b x½ y①"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["aⅠb Ⅻ"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["a𐐀b 𝐀bc"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["कि ٣٤"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a.b.c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["straße"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": [":"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["hello"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["İstanbul"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ünïcödé"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["line1\nline2"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a😀b😀c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["😀"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a:b:c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["key_name-1"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["helloİstanbul"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["HELLOab"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["HELLO"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": [".leadinghello"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["Hello World"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["trailing."], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["abc"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ns:key.pathkey_name-1"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["./x/**/*.jsonHello World"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": [""], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ab"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a.leading"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["  padded  "], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a😀b😀chello"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["./x/**/*.json"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ns:key.path"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["﻿boma"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["aline1\nline2"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a..bhello"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["tab\tseparated"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["straßetrailing."], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["Hello Worldhello"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["straßeİstanbul"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ünïcödéa"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": [".leadingΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["é"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["./x/**/*.jsona..b"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["hello world"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["日本語のテキスト"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["abemoji 👍🏽 mix"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["  padded  ab"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["aa..b"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["emoji 👍🏽 mix"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["src/a/b.ts"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["😀é"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["abcİstanbul"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["abchello"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a:b:ctrailing."], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["{name} has {count} items"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a..b"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["﻿bomkey_name-1"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["line1\nline2😀"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": [".leading"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a.b.c.leading"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["tab\tseparateda..b"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["﻿bom"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["  padded  a.b.c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["emoji 👍🏽 mixabc"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a.b.ca.b.c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["helloline1\nline2"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["emoji 👍🏽 mix:"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["atab\tseparated"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["tab\tseparated﻿bom"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a:b:ca😀b😀c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a:b:c./x/**/*.json"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["key_name-1ab"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ΣΊΣΥΦΟΣ﻿bom"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": [".leadingtab\tseparated"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["日本語のテキスト  padded  "], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["tab\tseparated😀"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["  padded  ünïcödé"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["HELLOns:key.path"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ΣΊΣΥΦΟΣkey_name-1"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": [".leadingabc"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["key_name-1ns:key.path"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["abtrailing."], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["{name} has {count} items.leading"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["emoji 👍🏽 mixhello world"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ΣΊΣΥΦΟΣHello World"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["{name} has {count} itemsünïcödé"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": [":a:b:c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["key_name-1trailing."], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["hello worldabc"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["hello worldline1\nline2"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["trailing.a.b.c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a😀b😀cstraße"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["trailing..leading"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ns:key.pathab"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a:b:ctab\tseparated"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["İstanbulé"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["trailing.﻿bom"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["line1\nline2line1\nline2"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a  padded  "], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["日本語のテキストemoji 👍🏽 mix"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ésrc/a/b.ts"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["😀a..b"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["{name} has {count} itemsa😀b😀c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["trailing.ünïcödé"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a😀b😀cünïcödé"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["line1\nline2emoji 👍🏽 mix"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ünïcödéhello world"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["src/a/b.tsHELLO"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["hellohello"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["abé"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["helloab"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a.b.cstraße"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["straße  padded  "], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["src/a/b.ts:"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["helloé"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["src/a/b.ts日本語のテキスト"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a..b  padded  "], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["line1\nline2trailing."], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["日本語のテキスト😀"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["😀line1\nline2"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["line1\nline2  padded  "], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["straßeab"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": [".leadingtrailing."], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["hello.leading"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["日本語のテキスト日本語のテキスト"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["İstanbulabc"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["abca.b.c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["İstanbula"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ünïcödéa.b.c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a😀b😀c﻿bom"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["  padded  ﻿bom"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ns:key.pathünïcödé"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["éa:b:c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["straßestraße"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ΣΊΣΥΦΟΣa😀b😀c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["abc😀"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["./x/**/*.jsonünïcödé"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ünïcödéİstanbul"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["straßeé"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["Hello World😀"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["HELLOabc"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["line1\nline2a😀b😀c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a..bHELLO"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["Hello WorldΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["abca..b"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": [":a..b"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ns:key.pathemoji 👍🏽 mix"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["abctab\tseparated"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["key_name-1:"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["straße:"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["Hello World  padded  "], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["abkey_name-1"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["{name} has {count} itemsHello World"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": [":ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["line1\nline2hello world"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["éé"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a😀b😀cHELLO"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["hello worldhello"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a😀b😀ca.b.c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["日本語のテキストa:b:c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["emoji 👍🏽 mixtab\tseparated"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ünïcödé.leading"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["﻿bomünïcödé"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["İstanbul.leading"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ΣΊΣΥΦΟΣa"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["hello worldstraße"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["abckey_name-1"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["abca:b:c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ünïcödéHELLO"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a.b.cab"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["İstanbulİstanbul"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ünïcödé{name} has {count} items"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["hello:"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["src/a/b.tskey_name-1"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": [":😀"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["trailing.tab\tseparated"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["﻿bom.leading"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": [".leadingns:key.path"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["atrailing."], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["abcns:key.path"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["  padded  日本語のテキスト"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["Hello Worlda.b.c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["trailing.line1\nline2"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["key_name-1İstanbul"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["😀ns:key.path"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["helloa"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["key_name-1a"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["  padded  .leading"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["key_name-1hello"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["aemoji 👍🏽 mix"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["./x/**/*.jsonabc"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a日本語のテキスト"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a.b.c﻿bom"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["Hello World./x/**/*.json"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a:b:ca:b:c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ahello"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ab  padded  "], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["é./x/**/*.json"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a﻿bom"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": [":abc"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["aa😀b😀c"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["line1\nline2src/a/b.ts"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["Hello World.leading"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["héllo wörld"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["👍🏽 thumbs"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["日本語"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["ılık ırmak"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["👨‍👩‍👧 family"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a b"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a😀b"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a²b x½ y①"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["aⅠb Ⅻ"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["a𐐀b 𝐀bc"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["कि ٣٤"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ünïcödé"], "ok": false}
+{"fn": "_session_context_closed", "args": ["﻿bom"], "ok": false}
+{"fn": "_session_context_closed", "args": ["😀"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a:b:cİstanbul"], "ok": false}
+{"fn": "_session_context_closed", "args": ["é"], "ok": false}
+{"fn": "_session_context_closed", "args": ["hello"], "ok": false}
+{"fn": "_session_context_closed", "args": ["key_name-1"], "ok": false}
+{"fn": "_session_context_closed", "args": ["hello./x/**/*.json"], "ok": false}
+{"fn": "_session_context_closed", "args": [".leading"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ns:key.path"], "ok": false}
+{"fn": "_session_context_closed", "args": ["{name} has {count} items"], "ok": false}
+{"fn": "_session_context_closed", "args": ["./x/**/*.json"], "ok": false}
+{"fn": "_session_context_closed", "args": ["abc日本語のテキスト"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a:b:c"], "ok": false}
+{"fn": "_session_context_closed", "args": ["  padded  "], "ok": false}
+{"fn": "_session_context_closed", "args": ["Hello World"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a.b.c"], "ok": false}
+{"fn": "_session_context_closed", "args": ["line1\nline2"], "ok": false}
+{"fn": "_session_context_closed", "args": ["Hello Worlda.b.c"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a😀b😀c"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a"], "ok": false}
+{"fn": "_session_context_closed", "args": ["日本語のテキスト"], "ok": false}
+{"fn": "_session_context_closed", "args": ["abc"], "ok": false}
+{"fn": "_session_context_closed", "args": ["HELLO"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a..bΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a:b:c😀"], "ok": false}
+{"fn": "_session_context_closed", "args": ["src/a/b.ts"], "ok": false}
+{"fn": "_session_context_closed", "args": ["hello world"], "ok": false}
+{"fn": "_session_context_closed", "args": ["tab\tseparated"], "ok": false}
+{"fn": "_session_context_closed", "args": [".leading./x/**/*.json"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ns:key.pathünïcödé"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a:b:cemoji 👍🏽 mix"], "ok": false}
+{"fn": "_session_context_closed", "args": [":ab"], "ok": false}
+{"fn": "_session_context_closed", "args": ["İstanbul"], "ok": false}
+{"fn": "_session_context_closed", "args": [":"], "ok": false}
+{"fn": "_session_context_closed", "args": [""], "ok": false}
+{"fn": "_session_context_closed", "args": ["straße"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ab"], "ok": false}
+{"fn": "_session_context_closed", "args": ["emoji 👍🏽 mix"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a.b.cstraße"], "ok": false}
+{"fn": "_session_context_closed", "args": ["Hello Worldhello"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a..btab\tseparated"], "ok": false}
+{"fn": "_session_context_closed", "args": ["日本語のテキスト😀"], "ok": false}
+{"fn": "_session_context_closed", "args": [":é"], "ok": false}
+{"fn": "_session_context_closed", "args": ["HELLOtab\tseparated"], "ok": false}
+{"fn": "_session_context_closed", "args": ["trailing."], "ok": false}
+{"fn": "_session_context_closed", "args": ["ns:key.patha..b"], "ok": false}
+{"fn": "_session_context_closed", "args": [":ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_session_context_closed", "args": ["  padded  hello"], "ok": false}
+{"fn": "_session_context_closed", "args": ["line1\nline2a😀b😀c"], "ok": false}
+{"fn": "_session_context_closed", "args": ["src/a/b.ts.leading"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ünïcödéİstanbul"], "ok": false}
+{"fn": "_session_context_closed", "args": ["emoji 👍🏽 mixa..b"], "ok": false}
+{"fn": "_session_context_closed", "args": ["HELLO.leading"], "ok": false}
+{"fn": "_session_context_closed", "args": ["{name} has {count} itemsa..b"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a..b"], "ok": false}
+{"fn": "_session_context_closed", "args": ["emoji 👍🏽 mix{name} has {count} items"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ΣΊΣΥΦΟΣtab\tseparated"], "ok": false}
+{"fn": "_session_context_closed", "args": ["abca:b:c"], "ok": false}
+{"fn": "_session_context_closed", "args": ["HELLOns:key.path"], "ok": false}
+{"fn": "_session_context_closed", "args": ["  padded  a.b.c"], "ok": false}
+{"fn": "_session_context_closed", "args": [".leading{name} has {count} items"], "ok": false}
+{"fn": "_session_context_closed", "args": ["Hello Worlda..b"], "ok": false}
+{"fn": "_session_context_closed", "args": ["Hello Worldline1\nline2"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a😀b😀cΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_session_context_closed", "args": ["{name} has {count} items./x/**/*.json"], "ok": false}
+{"fn": "_session_context_closed", "args": [".leadingtrailing."], "ok": false}
+{"fn": "_session_context_closed", "args": ["﻿boma..b"], "ok": false}
+{"fn": "_session_context_closed", "args": ["hello world😀"], "ok": false}
+{"fn": "_session_context_closed", "args": ["helloa:b:c"], "ok": false}
+{"fn": "_session_context_closed", "args": ["😀日本語のテキスト"], "ok": false}
+{"fn": "_session_context_closed", "args": ["﻿bom日本語のテキスト"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ns:key.pathkey_name-1"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a😀b😀cHello World"], "ok": false}
+{"fn": "_session_context_closed", "args": ["Hello WorldHELLO"], "ok": false}
+{"fn": "_session_context_closed", "args": ["😀emoji 👍🏽 mix"], "ok": false}
+{"fn": "_session_context_closed", "args": ["HELLOa"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ΣΊΣΥΦΟΣa..b"], "ok": false}
+{"fn": "_session_context_closed", "args": ["./x/**/*.jsona..b"], "ok": false}
+{"fn": "_session_context_closed", "args": ["key_name-1😀"], "ok": false}
+{"fn": "_session_context_closed", "args": ["atrailing."], "ok": false}
+{"fn": "_session_context_closed", "args": ["İstanbulkey_name-1"], "ok": false}
+{"fn": "_session_context_closed", "args": ["  padded  tab\tseparated"], "ok": false}
+{"fn": "_session_context_closed", "args": ["key_name-1./x/**/*.json"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ünïcödéemoji 👍🏽 mix"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a😀b😀c.leading"], "ok": false}
+{"fn": "_session_context_closed", "args": ["  padded  line1\nline2"], "ok": false}
+{"fn": "_session_context_closed", "args": ["é😀"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a😀b😀ca:b:c"], "ok": false}
+{"fn": "_session_context_closed", "args": ["tab\tseparatedtrailing."], "ok": false}
+{"fn": "_session_context_closed", "args": ["straße:"], "ok": false}
+{"fn": "_session_context_closed", "args": ["hello worldline1\nline2"], "ok": false}
+{"fn": "_session_context_closed", "args": ["İstanbulHello World"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a:b:cline1\nline2"], "ok": false}
+{"fn": "_session_context_closed", "args": ["src/a/b.tsline1\nline2"], "ok": false}
+{"fn": "_session_context_closed", "args": ["﻿bomabc"], "ok": false}
+{"fn": "_session_context_closed", "args": ["line1\nline2:"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a..ba.b.c"], "ok": false}
+{"fn": "_session_context_closed", "args": [":Hello World"], "ok": false}
+{"fn": "_session_context_closed", "args": ["emoji 👍🏽 mix日本語のテキスト"], "ok": false}
+{"fn": "_session_context_closed", "args": ["absrc/a/b.ts"], "ok": false}
+{"fn": "_session_context_closed", "args": ["HELLO  padded  "], "ok": false}
+{"fn": "_session_context_closed", "args": ["trailing.  padded  "], "ok": false}
+{"fn": "_session_context_closed", "args": ["src/a/b.tskey_name-1"], "ok": false}
+{"fn": "_session_context_closed", "args": ["hello world  padded  "], "ok": false}
+{"fn": "_session_context_closed", "args": ["ΣΊΣΥΦΟΣa:b:c"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a:b:ctrailing."], "ok": false}
+{"fn": "_session_context_closed", "args": ["éhello"], "ok": false}
+{"fn": "_session_context_closed", "args": ["﻿bomhello world"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ΣΊΣΥΦΟΣa"], "ok": false}
+{"fn": "_session_context_closed", "args": ["Hello World😀"], "ok": false}
+{"fn": "_session_context_closed", "args": ["{name} has {count} items{name} has {count} items"], "ok": false}
+{"fn": "_session_context_closed", "args": ["  padded  hello world"], "ok": false}
+{"fn": "_session_context_closed", "args": [".leadinghello"], "ok": false}
+{"fn": "_session_context_closed", "args": [":.leading"], "ok": false}
+{"fn": "_session_context_closed", "args": ["straße😀"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ΣΊΣΥΦΟΣab"], "ok": false}
+{"fn": "_session_context_closed", "args": ["./x/**/*.json日本語のテキスト"], "ok": false}
+{"fn": "_session_context_closed", "args": [".leading  padded  "], "ok": false}
+{"fn": "_session_context_closed", "args": ["  padded  {name} has {count} items"], "ok": false}
+{"fn": "_session_context_closed", "args": ["HELLOline1\nline2"], "ok": false}
+{"fn": "_session_context_closed", "args": ["﻿bomsrc/a/b.ts"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a:b:ca:b:c"], "ok": false}
+{"fn": "_session_context_closed", "args": ["😀key_name-1"], "ok": false}
+{"fn": "_session_context_closed", "args": ["😀hello world"], "ok": false}
+{"fn": "_session_context_closed", "args": ["aa..b"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ns:key.path./x/**/*.json"], "ok": false}
+{"fn": "_session_context_closed", "args": ["{name} has {count} items日本語のテキスト"], "ok": false}
+{"fn": "_session_context_closed", "args": ["😀ab"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ns:key.path日本語のテキスト"], "ok": false}
+{"fn": "_session_context_closed", "args": ["tab\tseparated😀"], "ok": false}
+{"fn": "_session_context_closed", "args": [":emoji 👍🏽 mix"], "ok": false}
+{"fn": "_session_context_closed", "args": [":hello world"], "ok": false}
+{"fn": "_session_context_closed", "args": ["hello worlda"], "ok": false}
+{"fn": "_session_context_closed", "args": ["tab\tseparateda"], "ok": false}
+{"fn": "_session_context_closed", "args": ["key_name-1line1\nline2"], "ok": false}
+{"fn": "_session_context_closed", "args": ["line1\nline2{name} has {count} items"], "ok": false}
+{"fn": "_session_context_closed", "args": [":HELLO"], "ok": false}
+{"fn": "_session_context_closed", "args": ["emoji 👍🏽 mixns:key.path"], "ok": false}
+{"fn": "_session_context_closed", "args": ["line1\nline2ab"], "ok": false}
+{"fn": "_session_context_closed", "args": ["日本語のテキストa:b:c"], "ok": false}
+{"fn": "_session_context_closed", "args": ["HELLOabc"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a..babc"], "ok": false}
+{"fn": "_session_context_closed", "args": ["tab\tseparatedns:key.path"], "ok": false}
+{"fn": "_session_context_closed", "args": ["abemoji 👍🏽 mix"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ns:key.pathstraße"], "ok": false}
+{"fn": "_session_context_closed", "args": ["helloünïcödé"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a:b:cHello World"], "ok": false}
+{"fn": "_session_context_closed", "args": ["Hello Worldab"], "ok": false}
+{"fn": "_session_context_closed", "args": ["aba:b:c"], "ok": false}
+{"fn": "_session_context_closed", "args": ["﻿bomé"], "ok": false}
+{"fn": "_session_context_closed", "args": ["éabc"], "ok": false}
+{"fn": "_session_context_closed", "args": [".leadinga"], "ok": false}
+{"fn": "_session_context_closed", "args": ["emoji 👍🏽 mixΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_session_context_closed", "args": ["./x/**/*.jsona"], "ok": false}
+{"fn": "_session_context_closed", "args": [".leadingünïcödé"], "ok": false}
+{"fn": "_session_context_closed", "args": ["emoji 👍🏽 mixstraße"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ΣΊΣΥΦΟΣhello world"], "ok": false}
+{"fn": "_session_context_closed", "args": ["İstanbul日本語のテキスト"], "ok": false}
+{"fn": "_session_context_closed", "args": ["trailing.ns:key.path"], "ok": false}
+{"fn": "_session_context_closed", "args": [".leading.leading"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ünïcödéhello"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ns:key.patha.b.c"], "ok": false}
+{"fn": "_session_context_closed", "args": ["key_name-1ns:key.path"], "ok": false}
+{"fn": "_session_context_closed", "args": ["src/a/b.tsabc"], "ok": false}
+{"fn": "_session_context_closed", "args": ["emoji 👍🏽 mixHELLO"], "ok": false}
+{"fn": "_session_context_closed", "args": ["hello worlda..b"], "ok": false}
+{"fn": "_session_context_closed", "args": ["straße.leading"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ns:key.patha:b:c"], "ok": false}
+{"fn": "_session_context_closed", "args": ["astraße"], "ok": false}
+{"fn": "_session_context_closed", "args": ["éhello world"], "ok": false}
+{"fn": "_session_context_closed", "args": ["Hello World﻿bom"], "ok": false}
+{"fn": "_session_context_closed", "args": ["Hello World:"], "ok": false}
+{"fn": "_session_context_closed", "args": ["  padded  key_name-1"], "ok": false}
+{"fn": "_session_context_closed", "args": ["straßeé"], "ok": false}
+{"fn": "_session_context_closed", "args": ["İstanbulhello world"], "ok": false}
+{"fn": "_session_context_closed", "args": ["HELLO日本語のテキスト"], "ok": false}
+{"fn": "_session_context_closed", "args": ["abcemoji 👍🏽 mix"], "ok": false}
+{"fn": "_session_context_closed", "args": ["abc:"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ΣΊΣΥΦΟΣa😀b😀c"], "ok": false}
+{"fn": "_session_context_closed", "args": ["trailing.HELLO"], "ok": false}
+{"fn": "_session_context_closed", "args": ["tab\tseparatedemoji 👍🏽 mix"], "ok": false}
+{"fn": "_session_context_closed", "args": ["hello{name} has {count} items"], "ok": false}
+{"fn": "_session_context_closed", "args": ["trailing.:"], "ok": false}
+{"fn": "_session_context_closed", "args": ["aé"], "ok": false}
+{"fn": "_session_context_closed", "args": ["key_name-1a"], "ok": false}
+{"fn": "_session_context_closed", "args": ["{name} has {count} itemstab\tseparated"], "ok": false}
+{"fn": "_session_context_closed", "args": ["abstraße"], "ok": false}
+{"fn": "_session_context_closed", "args": ["日本語のテキストemoji 👍🏽 mix"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a./x/**/*.json"], "ok": false}
+{"fn": "_session_context_closed", "args": ["  padded  trailing."], "ok": false}
+{"fn": "_session_context_closed", "args": ["ab{name} has {count} items"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ünïcödéHello World"], "ok": false}
+{"fn": "_session_context_closed", "args": ["İstanbul{name} has {count} items"], "ok": false}
+{"fn": "_session_context_closed", "args": ["HELLOé"], "ok": false}
+{"fn": "_session_context_closed", "args": ["abc﻿bom"], "ok": false}
+{"fn": "_session_context_closed", "args": ["hello worldtrailing."], "ok": false}
+{"fn": "_session_context_closed", "args": ["straße{name} has {count} items"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ünïcödé{name} has {count} items"], "ok": false}
+{"fn": "_session_context_closed", "args": ["héllo wörld"], "ok": false}
+{"fn": "_session_context_closed", "args": ["👍🏽 thumbs"], "ok": false}
+{"fn": "_session_context_closed", "args": ["日本語"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ılık ırmak"], "ok": false}
+{"fn": "_session_context_closed", "args": ["👨‍👩‍👧 family"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a b"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a😀b"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a²b x½ y①"], "ok": false}
+{"fn": "_session_context_closed", "args": ["aⅠb Ⅻ"], "ok": false}
+{"fn": "_session_context_closed", "args": ["a𐐀b 𝐀bc"], "ok": false}
+{"fn": "_session_context_closed", "args": ["कि ٣٤"], "ok": false}
+{"fn": "_terminal_session_error", "args": [0.0, "a:b:c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2.0, "trailing."], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-0"}, "./x/**/*.jsonHELLO"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-0"}, "trailing."], "ok": ""}
+{"fn": "_terminal_session_error", "args": [9007199254740992.0, ".leadingab"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-2.5, ""], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1.0, "trailing."], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000000, "aa"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-0"}, ".leading"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1.0, "./x/**/*.json"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "NaN"}, "😀"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-1, "Hello Worldline1\nline2"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [9007199254740992.0, "ns:key.path"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000.0, "abHello World"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1.0, "ünïcödé"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [100, "a..b"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.5, "ns:key.path"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [10.0, "a:b:c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-1.0, "abc"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-2.5, "Hello World"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-0"}, "日本語のテキストabc"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "Infinity"}, "Hello World"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "Infinity"}, "hello"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "Infinity"}, "tab\tseparated.leading"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [9007199254740992.0, ".leading"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-0"}, "é"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [42.0, "HELLO"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.5, "hellostraße"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2.0, "İstanbul"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-0"}, "line1\nline2"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-2.5, "日本語のテキストΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [9007199254740992.0, "İstanbul"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.5, "hello world"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-1.0, "Hello World"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [9007199254740992.0, "Hello World"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0, "a😀b😀c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "tab\tseparated"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [9007199254740992.0, "a😀b😀c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000000.0, "İstanbul"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [3, "key_name-1"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "ünïcödé"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [100.0, "emoji 👍🏽 mix"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "Infinity"}, "ünïcödé"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-0"}, "straße"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.5, "key_name-1"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1.0, "abc"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "NaN"}, "line1\nline2"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [42, "hello"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [100.0, "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000.0, "ab"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [42.0, "😀key_name-1"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [42, "a"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2147483648.0, "a.b.c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "NaN"}, "a..b"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "Infinity"}, "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000000, "straßeHELLO"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [10.0, "a.b.c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.5, "Hello World"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [42.0, "ünïcödé"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.5, "Hello Worlda..b"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [3.0, "emoji 👍🏽 mix"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000000.0, "İstanbula:b:c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-0"}, "a..b"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [100, ":"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2.0, "abc"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [42.0, "é"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [100.0, "a"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-Infinity"}, "./x/**/*.json"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2147483648.0, "emoji 👍🏽 mixa😀b😀c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "Infinity"}, "a:b:c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [3.0, ".leading"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2147483648, "src/a/b.ts"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [42.0, "HELLOline1\nline2"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-1.0, "hello worldtrailing."], "ok": ""}
+{"fn": "_terminal_session_error", "args": [10.0, "emoji 👍🏽 mix"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2147483648, "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [3.0, ""], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-Infinity"}, "Hello World"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-2.5, "trailing."], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1, "src/a/b.ts"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-0"}, "  padded  "], "ok": ""}
+{"fn": "_terminal_session_error", "args": [100.0, "😀a.b.c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [42.0, "src/a/b.ts"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000, "straße"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-2.5, "  padded  "], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-Infinity"}, "hello world"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.5, "tab\tseparated"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [42, "﻿bomkey_name-1"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.5, ""], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.5, "日本語のテキスト{name} has {count} items"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000000.0, "日本語のテキスト"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-1, "straßea"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [10.0, "HELLO"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-1.0, "{name} has {count} items"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000.0, "a.b.c﻿bom"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.5, "abc"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000.0, ".leading"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1.0, "HELLO"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [100.0, "a:b:csrc/a/b.ts"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.5, "a"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [10.0, "line1\nline2emoji 👍🏽 mix"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1.0, "straße"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [3.0, ":"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0, "line1\nline2hello"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "Infinity"}, "aba"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1.0, "a"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000.0, "HELLO"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-2.5, "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000000.0, "  padded  "], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-2.5, "straße"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2147483648.0, "ünïcödé"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-1, "HELLO{name} has {count} items"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-Infinity"}, "a.b.c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-2.5, "HELLO"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [9007199254740992.0, "abc"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-2.5, "abhello"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.5, "a.b.c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2147483648.0, "日本語のテキスト"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [100.0, "trailing."], "ok": ""}
+{"fn": "_terminal_session_error", "args": [9007199254740992.0, "a"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "NaN"}, "trailing."], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "日本語のテキスト"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [3.0, "  padded  "], "ok": ""}
+{"fn": "_terminal_session_error", "args": [42, "hello worlda..b"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-2.5, "key_name-1"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1.0, "abcİstanbul"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [3.0, "{name} has {count} items"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2147483648, "ab"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-Infinity"}, "HELLO"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [10.0, "😀"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2.0, "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2, ":"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "Infinity"}, "é"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000000.0, "emoji 👍🏽 mix"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-1.0, "😀"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2147483648, ""], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-Infinity"}, "{name} has {count} items😀"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-1.0, "a:b:c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [10.0, "key_name-1"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [42, "日本語のテキスト"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "Infinity"}, "﻿bomtrailing."], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1.0, "a.b.c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [100.0, "{name} has {count} itemsΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-0"}, "ns:key.path"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-0"}, "ab"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, ""], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2.0, "Hello World"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.5, "emoji 👍🏽 mix"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.5, "é"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-2.5, "src/a/b.ts"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "NaN"}, "{name} has {count} items"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "NaN"}, "ab"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-2.5, ":a..b"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [42.0, "a..b"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-2.5, "tab\tseparated"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "NaN"}, ".leading"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "HELLO"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "Infinity"}, "a😀b😀c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-Infinity"}, ":Hello World"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2147483648, "a..b"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000000.0, "straße"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [100.0, "Hello Worlda😀b😀c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-Infinity"}, "{name} has {count} items"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-2.5, "ns:key.path"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [100.0, "a:b:c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-Infinity"}, "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000000.0, "ünïcödé"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-2.5, "Hello World.leading"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2.0, "key_name-1"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-0"}, ""], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.5, "hello"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000, ":"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-0"}, "hello"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-0"}, "hello world"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, ":﻿bom"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-1, "tab\tseparated"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2147483648.0, "﻿bom"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [10.0, "emoji 👍🏽 mixtrailing."], "ok": ""}
+{"fn": "_terminal_session_error", "args": [10.0, "日本語のテキスト"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2147483648, "helloline1\nline2"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2.0, "日本語のテキストünïcödé"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [100.0, "日本語のテキスト"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-Infinity"}, "hello"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0, ".leading"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-Infinity"}, "abc"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000000.0, "a😀b😀csrc/a/b.ts"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "src/a/b.ts"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-Infinity"}, "key_name-1"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "line1\nline2"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [10.0, "﻿bom"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "NaN"}, "tab\tseparated"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-2.5, "hello"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-1.0, "straße"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2.0, "tab\tseparated"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2147483648.0, "line1\nline2"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2147483648, "straße"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1000.0, "﻿bom"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [10.0, "hello worldΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [2.0, ""], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-0"}, "ünïcödé"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [-7.5, "a:b:c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.1, "a:b:c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.30000000000000004, "a:b:c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1e+21, "a:b:c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1e-07, "a:b:c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [5e-324, "a:b:c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [1.7976931348623157e+308, "a:b:c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [9007199254740992.0, "a:b:c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [{"$num": "-0"}, "a:b:c"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "héllo wörld"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "👍🏽 thumbs"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0, "日本語"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "é"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "İstanbul"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "straße"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0, "ılık ırmak"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "👨‍👩‍👧 family"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "a b"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0, "a😀b"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "﻿bom"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "a²b x½ y①"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "aⅠb Ⅻ"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0, "a𐐀b 𝐀bc"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0.0, "कि ٣٤"], "ok": ""}
+{"fn": "_is_openai_auth_url", "args": [null], "ok": false}
+{"fn": "_is_openai_auth_url", "args": [""], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["   "], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["about:blank"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["chatgpt.com"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["//chatgpt.com/auth/login"], "ok": true}
+{"fn": "_is_openai_auth_url", "args": ["https://chatgpt.com/"], "ok": true}
+{"fn": "_is_openai_auth_url", "args": ["https://CHATGPT.COM:443/backend-api/me"], "ok": true}
+{"fn": "_is_openai_auth_url", "args": ["https://sub.chatgpt.com/auth"], "ok": true}
+{"fn": "_is_openai_auth_url", "args": ["https://openai.com/"], "ok": true}
+{"fn": "_is_openai_auth_url", "args": ["https://auth.openai.com/log-in"], "ok": true}
+{"fn": "_is_openai_auth_url", "args": ["https://a.b.openai.com/x?y=1#z"], "ok": true}
+{"fn": "_is_openai_auth_url", "args": ["https://notchatgpt.com/"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["https://evil-openai.com/"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["https://chatgpt.com.evil.org/"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["https://accounts.google.com/o/oauth2"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["http://login.microsoftonline.com/common"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["ftp://accounts.google.com/"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["javascript:void(0)"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["http://[::1]:8080/login"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["http://[bad-ipv6:80"], "error": "ValueError: Invalid IPv6 URL"}
+{"fn": "_is_openai_auth_url", "args": ["http://[not-ipv6]:80"], "error": "ValueError: 'not-ipv6' does not appear to be an IPv4 or IPv6 address"}
+{"fn": "_is_openai_auth_url", "args": ["http://[127.0.0.1]:80"], "error": "ValueError: An IPv4 address cannot be in brackets"}
+{"fn": "_is_openai_auth_url", "args": ["  \thttps://auth.openai.com\r\n"], "ok": true}
+{"fn": "_is_openai_auth_url", "args": ["https://user:pass@auth.openai.com/login"], "ok": true}
+{"fn": "_is_openai_auth_url", "args": ["https://chatgpt.com:notaport/x"], "ok": true}
+{"fn": "_is_openai_auth_url", "args": ["HTTP://OPENAI.COM./x"], "ok": false}
+{"fn": "_is_openai_auth_url", "args": ["https://appleid.apple.com/auth/authorize"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": [null], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": [""], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["   "], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["about:blank"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["chatgpt.com"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["//chatgpt.com/auth/login"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["https://chatgpt.com/"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["https://CHATGPT.COM:443/backend-api/me"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["https://sub.chatgpt.com/auth"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["https://openai.com/"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["https://auth.openai.com/log-in"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["https://a.b.openai.com/x?y=1#z"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["https://notchatgpt.com/"], "ok": true}
+{"fn": "_unexpected_identity_provider", "args": ["https://evil-openai.com/"], "ok": true}
+{"fn": "_unexpected_identity_provider", "args": ["https://chatgpt.com.evil.org/"], "ok": true}
+{"fn": "_unexpected_identity_provider", "args": ["https://accounts.google.com/o/oauth2"], "ok": true}
+{"fn": "_unexpected_identity_provider", "args": ["http://login.microsoftonline.com/common"], "ok": true}
+{"fn": "_unexpected_identity_provider", "args": ["ftp://accounts.google.com/"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["javascript:void(0)"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["http://[::1]:8080/login"], "ok": true}
+{"fn": "_unexpected_identity_provider", "args": ["http://[bad-ipv6:80"], "error": "ValueError: Invalid IPv6 URL"}
+{"fn": "_unexpected_identity_provider", "args": ["http://[not-ipv6]:80"], "error": "ValueError: 'not-ipv6' does not appear to be an IPv4 or IPv6 address"}
+{"fn": "_unexpected_identity_provider", "args": ["http://[127.0.0.1]:80"], "error": "ValueError: An IPv4 address cannot be in brackets"}
+{"fn": "_unexpected_identity_provider", "args": ["  \thttps://auth.openai.com\r\n"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["https://user:pass@auth.openai.com/login"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["https://chatgpt.com:notaport/x"], "ok": false}
+{"fn": "_unexpected_identity_provider", "args": ["HTTP://OPENAI.COM./x"], "ok": true}
+{"fn": "_unexpected_identity_provider", "args": ["https://appleid.apple.com/auth/authorize"], "ok": true}
+{"fn": "_session_context_closed", "args": [null], "ok": false}
+{"fn": "_session_context_closed", "args": [""], "ok": false}
+{"fn": "_session_context_closed", "args": ["Target page, context or browser has been closed"], "ok": true}
+{"fn": "_session_context_closed", "args": ["Error: target closed while waiting"], "ok": true}
+{"fn": "_session_context_closed", "args": ["Browser context closed unexpectedly"], "ok": true}
+{"fn": "_session_context_closed", "args": ["BROWSER HAS BEEN CLOSED"], "ok": true}
+{"fn": "_session_context_closed", "args": ["No Such Window: target window already closed"], "ok": true}
+{"fn": "_session_context_closed", "args": ["invalid session id: session deleted"], "ok": true}
+{"fn": "_session_context_closed", "args": ["session deleted because of page crash"], "ok": true}
+{"fn": "_session_context_closed", "args": ["NoSuchWindowException: Message"], "ok": true}
+{"fn": "_session_context_closed", "args": ["InvalidSessionIdException: boom"], "ok": true}
+{"fn": "_session_context_closed", "args": ["TargetClosedError: page closed"], "ok": true}
+{"fn": "_session_context_closed", "args": ["TimeoutError: Locator.wait_for timed out"], "ok": false}
+{"fn": "_session_context_closed", "args": ["ConnectionResetError: peer reset"], "ok": false}
+{"fn": "_session_context_closed", "args": ["中文异常: target closed"], "ok": true}
+{"fn": "_terminal_session_error", "args": [200, ""], "ok": ""}
+{"fn": "_terminal_session_error", "args": [200, "oauth_account_not_linked"], "ok": "browser_session_account_not_linked"}
+{"fn": "_terminal_session_error", "args": [200, "OAuth-Account Not Linked"], "ok": "browser_session_account_not_linked"}
+{"fn": "_terminal_session_error", "args": [200, "access_denied"], "ok": "browser_session_access_denied"}
+{"fn": "_terminal_session_error", "args": [200, "ACCESS-DENIED"], "ok": "browser_session_access_denied"}
+{"fn": "_terminal_session_error", "args": [200, "session_required"], "ok": "browser_session_unauthorized"}
+{"fn": "_terminal_session_error", "args": [200, "RefreshAccessTokenError"], "ok": "browser_session_token_refresh_failed"}
+{"fn": "_terminal_session_error", "args": [200, "oauth_callback_error"], "ok": "browser_session_oauth_callback_failed"}
+{"fn": "_terminal_session_error", "args": [200, "OAuthCreateAccount"], "ok": "browser_session_oauth_callback_failed"}
+{"fn": "_terminal_session_error", "args": [200, "email-create-account"], "ok": "browser_session_oauth_callback_failed"}
+{"fn": "_terminal_session_error", "args": [429, ""], "ok": "browser_session_rate_limited"}
+{"fn": "_terminal_session_error", "args": [429, "rate_limited"], "ok": "browser_session_rate_limited"}
+{"fn": "_terminal_session_error", "args": [401, ""], "ok": "browser_session_unauthorized"}
+{"fn": "_terminal_session_error", "args": [403, "forbidden"], "ok": "browser_session_forbidden"}
+{"fn": "_terminal_session_error", "args": [404, "not_found"], "ok": "browser_session_endpoint_unavailable"}
+{"fn": "_terminal_session_error", "args": [405, "method_not_allowed"], "ok": "browser_session_endpoint_unavailable"}
+{"fn": "_terminal_session_error", "args": [500, "internal"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [502, "bad_gateway"], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0, ""], "ok": ""}
+{"fn": "_terminal_session_error", "args": [0, null], "ok": ""}
+{"fn": "_terminal_session_error", "args": [401, "access_denied"], "ok": "browser_session_access_denied"}

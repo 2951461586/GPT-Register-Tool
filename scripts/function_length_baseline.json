@@ -23,7 +23,7 @@
     "sms_tool/commands/registration.py::_persist_registration_result_core": 210,
     "sms_tool/commands/registration.py::run_target_at200": 155,
     "sms_tool/config/schema.py::validate_config": 364,
-    "sms_tool/payment/batch.py::_run_one_row": 361,
+    "sms_tool/payment/batch.py::_run_one_row": 354,
     "sms_tool/payment/batch.py::run_payment_batch": 216,
     "sms_tool/payment/capability.py::payment_method_capability_probe": 247,
     "sms_tool/payment/routing.py::PaymentRoutePlanner.plan": 231,

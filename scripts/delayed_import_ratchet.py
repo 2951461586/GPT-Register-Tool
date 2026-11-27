@@ -117,7 +117,6 @@ HEAVY_TARGETS: frozenset[str] = frozenset(
         "camoufox",
         "nodriver",
         "selenium",
-        "browserforge",
         "cloakbrowser",
         "qrcode",
         "psutil",

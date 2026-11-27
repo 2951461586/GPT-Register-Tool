@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from ...kernel.sanitizer import sanitize_text
+from ...kernel.sanitizer import load_native_module, sanitize_text
 from ..base import BrowserRegistrationError
 from collections.abc import Mapping
 from typing import Any
@@ -11,6 +11,16 @@ from urllib.parse import urlsplit
 
 
 _LOGGER = logging.getLogger(__name__)
+
+_NATIVE_BROWSER_FLOW_DOM = load_native_module(
+    "browser-flow-dom-rs",
+    "browser_flow_dom_rs",
+    "RUST_ANYTHING_UNIT_BROWSER_FLOW_DOM",
+)
+_NATIVE_IS_OPENAI_AUTH_URL = getattr(_NATIVE_BROWSER_FLOW_DOM, "_is_openai_auth_url", None)
+_NATIVE_UNEXPECTED_IDP = getattr(_NATIVE_BROWSER_FLOW_DOM, "_unexpected_identity_provider", None)
+_NATIVE_SESSION_CONTEXT_CLOSED = getattr(_NATIVE_BROWSER_FLOW_DOM, "_session_context_closed", None)
+_NATIVE_TERMINAL_SESSION_ERROR = getattr(_NATIVE_BROWSER_FLOW_DOM, "_terminal_session_error", None)
 
 EMAIL_SELECTORS = (
     "input[type='email']",
@@ -55,6 +65,8 @@ def _hard_proxy_block(page) -> bool:
 
 
 def _is_openai_auth_url(url: str) -> bool:
+    if _NATIVE_IS_OPENAI_AUTH_URL is not None and (url is None or isinstance(url, str)):
+        return _NATIVE_IS_OPENAI_AUTH_URL(url)
     parsed = urlsplit(str(url or ""))
     host = str(parsed.hostname or "").lower()
     return (
@@ -63,6 +75,8 @@ def _is_openai_auth_url(url: str) -> bool:
 
 
 def _unexpected_identity_provider(url: str) -> bool:
+    if _NATIVE_UNEXPECTED_IDP is not None and (url is None or isinstance(url, str)):
+        return _NATIVE_UNEXPECTED_IDP(url)
     parsed = urlsplit(str(url or ""))
     return parsed.scheme in {"http", "https"} and bool(parsed.hostname) and not _is_openai_auth_url(url)
 
@@ -262,6 +276,8 @@ def _session_error_marker(body: Mapping[str, Any]) -> str:
 
 
 def _session_context_closed(value: str) -> bool:
+    if _NATIVE_SESSION_CONTEXT_CLOSED is not None and (value is None or isinstance(value, str)):
+        return _NATIVE_SESSION_CONTEXT_CLOSED(value)
     text = str(value or "").lower()
     return any(
         marker in text
@@ -281,6 +297,13 @@ def _session_context_closed(value: str) -> bool:
 
 
 def _terminal_session_error(status: int, error_marker: str) -> str:
+    if (
+        _NATIVE_TERMINAL_SESSION_ERROR is not None
+        and isinstance(status, (int, float))
+        and not isinstance(status, bool)
+        and (error_marker is None or isinstance(error_marker, str))
+    ):
+        return _NATIVE_TERMINAL_SESSION_ERROR(status, error_marker)
     marker = str(error_marker or "").lower().replace("_", "").replace("-", "").replace(" ", "")
     if "oauthaccountnotlinked" in marker:
         return "browser_session_account_not_linked"

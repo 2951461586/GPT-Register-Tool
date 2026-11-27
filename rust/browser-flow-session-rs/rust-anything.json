@@ -1,0 +1,55 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/registration_drivers/browser_flow/session.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "browser-flow-session-rs",
+  "exports": [
+    {
+      "name": "_browser_failure_class",
+      "file": "sms_tool/registration_drivers/browser_flow/session.py",
+      "line": 331,
+      "params": [
+        {
+          "name": "code",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_browser_access_token_probe",
+      "file": "sms_tool/registration_drivers/browser_flow/session.py",
+      "line": 23,
+      "reason": "stays in Python (browser I/O and orchestration)"
+    },
+    {
+      "name": "_session_payload",
+      "file": "sms_tool/registration_drivers/browser_flow/session.py",
+      "line": 126,
+      "reason": "stays in Python (browser polling loop)"
+    },
+    {
+      "name": "_browser_diagnostics",
+      "file": "sms_tool/registration_drivers/browser_flow/session.py",
+      "line": 244,
+      "reason": "stays in Python (Playwright page evaluation)"
+    },
+    {
+      "name": "_bind_totp_in_browser",
+      "file": "sms_tool/registration_drivers/browser_flow/session.py",
+      "line": 396,
+      "reason": "stays in Python (in-page fetch orchestration)"
+    }
+  ]
+}

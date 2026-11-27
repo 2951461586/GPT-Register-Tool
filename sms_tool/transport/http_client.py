@@ -7,7 +7,14 @@ from ..config import CFG
 from .backoff import bounded_cooldown, transport_backoff
 from ..kernel.error_classification import is_terminal_registration_error
 from ..proxy.edge_probe import EDGE_CHALLENGE, EDGE_UNKNOWN, edge_challenge_verdict
-from ..kernel.sanitizer import sanitize_text
+from ..kernel.sanitizer import load_native_module, sanitize_text
+
+_NATIVE_HTTP_CLIENT_PARSE = load_native_module(
+    "http-client-parse-rs",
+    "http_client_parse_rs",
+    "RUST_ANYTHING_UNIT_HTTP_CLIENT_PARSE",
+)
+_NATIVE_IS_TRANSIENT_TRANSPORT_ERROR = getattr(_NATIVE_HTTP_CLIENT_PARSE, "is_transient_transport_error", None)
 
 
 class SessionCircuitOpen(RuntimeError):
@@ -225,6 +232,10 @@ def request_retry_delay():
 
 
 def is_transient_transport_error(error):
+    if _NATIVE_IS_TRANSIENT_TRANSPORT_ERROR is not None:
+        if error is None or isinstance(error, str):
+            return _NATIVE_IS_TRANSIENT_TRANSPORT_ERROR(error)
+        return _NATIVE_IS_TRANSIENT_TRANSPORT_ERROR(str(error or ""))
     text = str(error or "").lower()
     return any(marker in text for marker in TRANSIENT_MARKERS)
 

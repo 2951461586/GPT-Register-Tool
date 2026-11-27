@@ -120,11 +120,6 @@ def coupon_url_for_campaign(campaign_id: str = "") -> str:
     return f"{endpoints.CHATGPT_BASE}{COUPON_PATH}?coupon={quote(resolved, safe='')}&is_coupon_from_query_param=true"
 
 
-def _account_token(account: Any) -> str:
-    """Back-compat shim; the canonical reader is ``account_identity.access_token_of``."""
-    return access_token_of(account)
-
-
 def parse_accounts_check(body: Any, *, account_id: str = "") -> dict[str, Any]:
     """Extract plan + Plus-trial/discount eligibility from an accounts/check body."""
     accounts = _accounts_mapping(body)
@@ -465,7 +460,7 @@ def check_account_promotion(
     team_coupon_probe: bool = False,
 ) -> dict[str, Any]:
     """Probe accounts/check + optional Plus/Team trial coupons for one account."""
-    token = _account_token(account)
+    token = access_token_of(account)
     if not token:
         return {
             "ok": False,

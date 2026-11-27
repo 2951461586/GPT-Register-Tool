@@ -19,6 +19,13 @@ from urllib.parse import urlsplit
 
 logger = logging.getLogger(__name__)
 
+_NATIVE_BROWSER_FLOW_SESSION = dom_fields.load_native_module(
+    "browser-flow-session-rs",
+    "browser_flow_session_rs",
+    "RUST_ANYTHING_UNIT_BROWSER_FLOW_SESSION",
+)
+_NATIVE_BROWSER_FAILURE_CLASS = getattr(_NATIVE_BROWSER_FLOW_SESSION, "_browser_failure_class", None)
+
 
 def _browser_access_token_probe(browser: Any, account: Mapping[str, Any], *, timeout: int = 30) -> dict[str, Any]:
     """Probe usage through the connected browser's own network exit.
@@ -329,6 +336,8 @@ def _post_registration_dwell(config: Mapping[str, Any]) -> float:
 
 
 def _browser_failure_class(code: str) -> str:
+    if _NATIVE_BROWSER_FAILURE_CLASS is not None and (code is None or isinstance(code, str)):
+        return _NATIVE_BROWSER_FAILURE_CLASS(code)
     value = str(code or "").lower()
     if "registration_cancelled" in value:
         return "cancelled"

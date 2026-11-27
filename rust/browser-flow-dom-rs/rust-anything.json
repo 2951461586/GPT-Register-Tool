@@ -1,0 +1,103 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/registration_drivers/browser_flow/dom_fields.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "browser-flow-dom-rs",
+  "exports": [
+    {
+      "name": "_is_openai_auth_url",
+      "file": "sms_tool/registration_drivers/browser_flow/dom_fields.py",
+      "line": 57,
+      "params": [
+        {
+          "name": "url",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_unexpected_identity_provider",
+      "file": "sms_tool/registration_drivers/browser_flow/dom_fields.py",
+      "line": 65,
+      "params": [
+        {
+          "name": "url",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_session_context_closed",
+      "file": "sms_tool/registration_drivers/browser_flow/dom_fields.py",
+      "line": 264,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_terminal_session_error",
+      "file": "sms_tool/registration_drivers/browser_flow/dom_fields.py",
+      "line": 283,
+      "params": [
+        {
+          "name": "status",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "error_marker",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_safe_text",
+      "file": "sms_tool/registration_drivers/browser_flow/dom_fields.py",
+      "line": 27,
+      "reason": "delegates to kernel.sanitizer.sanitize_text (already Rust-accelerated)"
+    },
+    {
+      "name": "_click_continue",
+      "file": "sms_tool/registration_drivers/browser_flow/dom_fields.py",
+      "line": 102,
+      "reason": "stays in Python (Playwright DOM interaction)"
+    }
+  ]
+}

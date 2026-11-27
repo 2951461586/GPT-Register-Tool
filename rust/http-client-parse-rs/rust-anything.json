@@ -1,0 +1,73 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/transport/http_client.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "http-client-parse-rs",
+  "exports": [
+    {
+      "name": "is_transient_transport_error",
+      "file": "sms_tool/transport/http_client.py",
+      "line": 227,
+      "params": [
+        {
+          "name": "err",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "clear_session_circuit",
+      "file": "sms_tool/transport/http_client.py",
+      "line": 65,
+      "reason": "stays in Python (mutates session object state)"
+    },
+    {
+      "name": "edge_challenge_discrimination_enabled",
+      "file": "sms_tool/transport/http_client.py",
+      "line": 70,
+      "reason": "stays in Python (reads live CFG mapping)"
+    },
+    {
+      "name": "request_timeout",
+      "file": "sms_tool/transport/http_client.py",
+      "line": 206,
+      "reason": "stays in Python (reads live CFG mapping)"
+    },
+    {
+      "name": "request_attempts",
+      "file": "sms_tool/transport/http_client.py",
+      "line": 213,
+      "reason": "stays in Python (reads live CFG mapping)"
+    },
+    {
+      "name": "request_retry_delay",
+      "file": "sms_tool/transport/http_client.py",
+      "line": 220,
+      "reason": "stays in Python (reads live CFG mapping)"
+    },
+    {
+      "name": "request_with_retry",
+      "file": "sms_tool/transport/http_client.py",
+      "line": 232,
+      "reason": "takes `**kwargs` and performs HTTP I/O"
+    },
+    {
+      "name": "SessionCircuitOpen",
+      "file": "sms_tool/transport/http_client.py",
+      "line": 13,
+      "reason": "class: inherits from RuntimeError"
+    }
+  ]
+}

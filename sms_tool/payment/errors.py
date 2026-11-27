@@ -18,9 +18,9 @@ site — the failure mode this module removes:
 
 :class:`PaymentErrorInfo` documents the shape for type checkers and for the
 exception classes that already declare these attributes in ``__init__``
-(``checkout_contract``, ``payment_capability``, ``payment_egress``,
-``wallet_provider``, ``regional_payment_adapter``, ``gcash_provider``,
-``paypal_extract``, ``nexsms``, ``services/protocol-payment/direct_card``).
+(``checkout_contract``, ``payment.capability``, ``payment.egress``,
+``pay_link.extract_server``, ``paypal.extract``, ``phone.nexsms``,
+``payment.protocol_pay``).
 
 The readers deliberately preserve the historical default semantics rather than
 normalising them: ``*_of`` uses ``or default`` (an empty string falls back),
