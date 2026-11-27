@@ -1,0 +1,55 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/importers/agent_identity.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "agent-identity-jwt-rs",
+  "exports": [
+    {
+      "name": "_jwt_claims",
+      "file": "sms_tool/importers/agent_identity.py",
+      "line": 612,
+      "params": [
+        {
+          "name": "access_token",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_chatgpt_user_id",
+      "file": "sms_tool/importers/agent_identity.py",
+      "line": 621,
+      "params": [
+        {
+          "name": "access_token",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "create_agent_identity",
+      "file": "sms_tool/importers/agent_identity.py",
+      "line": 30,
+      "reason": "Ed25519 keygen and HTTP registration stay in Python"
+    }
+  ]
+}

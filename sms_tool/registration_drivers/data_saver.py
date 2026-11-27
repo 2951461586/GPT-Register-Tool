@@ -24,11 +24,9 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import importlib
 import json
 import logging
 import os
-import sys
 import tempfile
 import threading
 import time
@@ -39,29 +37,11 @@ from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+from ..kernel.native_loader import load_native_module
 
 _LOGGER = logging.getLogger(__name__)
 
-
-def _load_native_data_saver() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_DATA_SAVER") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "data-saver-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("data_saver_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_DATA_SAVER = _load_native_data_saver()
+_NATIVE_DATA_SAVER = load_native_module("data-saver-rs", "data_saver_rs", "RUST_ANYTHING_UNIT_DATA_SAVER")
 _NATIVE_IS_CACHEABLE_STATIC_ASSET = getattr(_NATIVE_DATA_SAVER, "is_cacheable_static_asset", None)
 _NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
 

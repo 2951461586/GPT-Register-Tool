@@ -31,7 +31,7 @@ from ..transport.auth_headers import (
 )
 from ..transport.http_backend import new_session as _new_protocol_session
 from ..transport.http_client import request_with_retry
-from ..transport.http_utils import _absolute_url
+from ..transport.http_utils import absolute_url
 from ..transport.tls_fingerprint import apply_to_session as _apply_tls_fingerprint
 from ..mailbox.router import MailboxAccount, MailboxTokenExpiredError, poll_email_otp, mailbox_has_inbox_credentials
 from ..providers import mailbox_gmail
@@ -48,11 +48,18 @@ from ..registration.account_creation import _create_account_continue_url, _is_us
 from ..sentinel.client import EMAIL_OTP_VALIDATE_FLOW, SentinelIssueError, issue_sentinel_flow
 from ..sentinel.runner import SentinelRunnerError
 from ..utils import atomic_write_text
-from ..utils import _random_birthdate, _random_name
+from ..utils import random_birthdate, random_name
 from typing import Any
+from ..kernel.native_loader import load_native_module
 
 
 _LOGGER = logging.getLogger(__name__)
+
+_NATIVE_CODEX_OAUTH_JWT = load_native_module(
+    "codex-oauth-jwt-rs", "codex_oauth_jwt_rs", "RUST_ANYTHING_UNIT_CODEX_OAUTH_JWT"
+)
+_NATIVE_JWT_SEGMENT = getattr(_NATIVE_CODEX_OAUTH_JWT, "_jwt_segment", None)
+_NATIVE_SAFE_URL = getattr(_NATIVE_CODEX_OAUTH_JWT, "_safe_url", None)
 
 AUTH_URL = endpoints.AUTH_BASE + "/oauth/authorize"
 TOKEN_URL = endpoints.AUTH_BASE + "/oauth/token"
@@ -951,9 +958,9 @@ def _complete_about_you(session, did, current_url, proxy=None):
     here is reported, never raised: the caller still has to decide whether the
     next strategy in the chain is worth trying.
     """
-    first, last = _random_name()
+    first, last = random_name()
     full_name = f"{first} {last}".strip()
-    birthdate = _random_birthdate()
+    birthdate = random_birthdate()
     try:
         sentinel = issue_sentinel_flow(
             flow="oauth_create_account",
@@ -1448,7 +1455,7 @@ def persist_one_click_sms_failure(data, json_path, email, result, *, upsert=upse
 
 
 def _follow_redirects(session, start_url, proxy=None, max_redirects=18):
-    current_url = _absolute_url(endpoints.AUTH_BASE, start_url)
+    current_url = absolute_url(endpoints.AUTH_BASE, start_url)
     response = None
     for _ in range(max_redirects):
         if not current_url:
@@ -1596,7 +1603,7 @@ def _next_url(response):
         body = response.json()
     except Exception:
         body = {}
-    return _absolute_url(
+    return absolute_url(
         endpoints.AUTH_BASE, body.get("continue_url") or response.headers.get("Location") or response.url
     )
 
@@ -1686,6 +1693,8 @@ def _parse_workspace_from_auth_cookie(auth_cookie):
 
 
 def _jwt_segment(segment):
+    if _NATIVE_JWT_SEGMENT is not None and isinstance(segment, str):
+        return _NATIVE_JWT_SEGMENT(segment)
     try:
         padded = segment + "=" * (-len(segment) % 4)
         return json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
@@ -1694,6 +1703,8 @@ def _jwt_segment(segment):
 
 
 def _safe_url(url):
+    if _NATIVE_SAFE_URL is not None and isinstance(url, str):
+        return _NATIVE_SAFE_URL(url)
     try:
         parsed = urllib.parse.urlparse(url)
         return urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))

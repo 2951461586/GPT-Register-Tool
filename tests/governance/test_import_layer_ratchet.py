@@ -508,10 +508,17 @@ def test_summary_facts_are_pinned():
         # 2026-11-25 (Team 5-seat trial direct extractor + dead pay_link import cleanup):
         # 497 -> 491 edges (-6) after pruning dead split-era imports from
         # pay_link/{base,normalize,persistence}.py and adding pay_link/team_trial.py.
-        "total_module_edges": 491,
+        # 2026-11-27 (P1 hygiene + shared kernel.native_loader):
+        # 491 -> 533 edges (+42), mutual_pairs 17 -> 16 (-1), minority_edges 30 -> 29 (-1).
+        # Consolidated 47 duplicated `_load_native_*` helpers into Layer-1 leaf
+        # `sms_tool/kernel/native_loader.py` (+44 strictly inward -> kernel edges) and
+        # routed `paypal/extract.py`'s `CHATGPT_TIMEOUT` directly to `kernel.timeouts`
+        # (+1 inward edge), while clearing all 92 F401 unused imports removed 3 stale
+        # cross-dir edges including one mutual directory pair (`payment <-> paypal`).
+        "total_module_edges": 533,
         "ordered_pairs": 135,
-        "mutual_pairs": 17,
-        "minority_edges": 30,
+        "mutual_pairs": 16,
+        "minority_edges": 29,
         # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
         # took over the mailbox_pool_writer and desktop_ipc imports as delayed
         # ones. Before that, 190 -> 188 when store/connection.py stopped

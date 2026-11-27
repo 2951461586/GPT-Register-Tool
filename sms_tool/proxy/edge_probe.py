@@ -37,37 +37,17 @@ Credentials never leave this module: an :class:`EdgeVerdict` carries the
 
 from __future__ import annotations
 
-import importlib
-import os
-import sys
 import time
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from .entry import normalize_proxy_url, redact_proxy_url
 from ..transport import endpoints
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_proxy_edge_probe() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_PROXY_EDGE_PROBE") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "proxy-edge-probe-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("proxy_edge_probe_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_PROXY_EDGE_PROBE = _load_native_proxy_edge_probe()
+_NATIVE_PROXY_EDGE_PROBE = load_native_module(
+    "proxy-edge-probe-rs", "proxy_edge_probe_rs", "RUST_ANYTHING_UNIT_PROXY_EDGE_PROBE"
+)
 _NATIVE_CLASSIFY_EDGE_RESPONSE = getattr(_NATIVE_PROXY_EDGE_PROBE, "classify_edge_response", None)
 
 CLEAN = "clean"

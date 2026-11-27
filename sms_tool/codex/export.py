@@ -1,9 +1,6 @@
 import base64
-import importlib
 import json
-import os
 import re
-import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,30 +11,12 @@ from curl_cffi import requests as curl_requests
 from ..config import CFG
 from .oauth import refresh_codex_oauth_session
 from ..kernel.paths import output_dir
-from ..session.refresh import _load_seed_session, _session_token, refresh_session
+from ..session.refresh import load_seed_session, session_token as _session_token, refresh_session
 from ..storage import _looks_codex_refresh_token, upsert_account
 from ..transport import endpoints
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_codex_jwt() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_CODEX_JWT") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "codex-jwt-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("codex_jwt_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_CODEX_JWT = _load_native_codex_jwt()
+_NATIVE_CODEX_JWT = load_native_module("codex-jwt-rs", "codex_jwt_rs", "RUST_ANYTHING_UNIT_CODEX_JWT")
 _NATIVE_JWT_CLAIMS = getattr(_NATIVE_CODEX_JWT, "_jwt_claims", None)
 
 
@@ -51,7 +30,7 @@ def export_codex_session(
     require_refresh_token=False,
     force_email_otp_login=False,
 ):
-    data, json_path = _load_seed_session(email=email, session_file=session_file)
+    data, json_path = load_seed_session(email=email, session_file=session_file)
     target_email = (email or data.get("email") or "").strip().lower()
     if not target_email:
         return {"ok": False, "error": "missing_email"}
@@ -68,7 +47,7 @@ def export_codex_session(
             force_email_otp_login=force_email_otp_login,
         )
         if refresh_result.get("ok"):
-            data, json_path = _load_seed_session(email=target_email, session_file=json_path)
+            data, json_path = load_seed_session(email=target_email, session_file=json_path)
         elif _is_terminal_account_deactivated(refresh_result):
             return {
                 "ok": False,

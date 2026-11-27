@@ -4,35 +4,16 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
-import importlib
 import json
-import os
 import sqlite3
-import sys
 
 from .constants import EMAIL_RE
 from .constants import KNOWN_EMAIL_DOMAINS
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_store_normalize() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_STORE_NORMALIZE") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "store-normalize-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("store_normalize_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_STORE_NORMALIZE = _load_native_store_normalize()
+_NATIVE_STORE_NORMALIZE = load_native_module(
+    "store-normalize-rs", "store_normalize_rs", "RUST_ANYTHING_UNIT_STORE_NORMALIZE"
+)
 _NATIVE_NORMALIZE_EMAIL = getattr(_NATIVE_STORE_NORMALIZE, "_normalize_account_email", None)
 _NATIVE_LOOKS_CODEX_RT = getattr(_NATIVE_STORE_NORMALIZE, "_looks_codex_refresh_token", None)
 _NATIVE_JWT_ACCOUNT_TYPE = getattr(_NATIVE_STORE_NORMALIZE, "_jwt_account_type", None)

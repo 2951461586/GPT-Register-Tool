@@ -986,6 +986,313 @@
 {"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "one\r\ntwo threefour"], "ok": {"$tuple": ["one\r\ntwo threefour", "", false]}}
 {"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "café café"], "ok": {"$tuple": ["café café", "", false]}}
 {"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "ΣΑΣ σας ς"], "ok": {"$tuple": ["σας σας ς", "", false]}}
+{"fn": "_yangyang_api_paths", "args": ["ns:key.path"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["İstanbul"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["straße"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["éHELLO"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["./x/**/*.json"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a..b"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["é"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [":"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ünïcödé"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["Hello World"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["line1\nline2"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a😀b😀c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a😀b😀chello"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["trailing."], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["key_name-1"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["hello world"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["{name} has {count} itemsa😀b😀c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ab"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["  padded  "], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["😀"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["emoji 👍🏽 mix"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [".leading"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a:b:c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["abc"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["日本語のテキスト"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["﻿bom"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [".leading﻿bom"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a.b.c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["straßesrc/a/b.ts"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [""], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["  padded  src/a/b.ts"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["HELLO"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["日本語のテキストtab\tseparated"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["😀é"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a..b﻿bom"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ΣΊΣΥΦΟΣ{name} has {count} items"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["hello worldline1\nline2"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["src/a/b.ts"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["﻿boma..b"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["﻿bomabc"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["key_name-1İstanbul"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["{name} has {count} items"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [":tab\tseparated"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["emoji 👍🏽 mixns:key.path"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["./x/**/*.jsonstraße"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["trailing.日本語のテキスト"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["﻿bom😀"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["aa..b"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["src/a/b.tsline1\nline2"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["hello world  padded  "], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["tab\tseparated"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["hello"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["line1\nline2ünïcödé"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["straßetab\tseparated"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["src/a/b.tsa.b.c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ünïcödéa.b.c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["日本語のテキストline1\nline2"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["abab"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["src/a/b.tsünïcödé"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a:b:ca"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["éünïcödé"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a:b:cünïcödé"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["Hello World﻿bom"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ΣΊΣΥΦΟΣ日本語のテキスト"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["hello worldns:key.path"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["Hello World.leading"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ab  padded  "], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["hello worldHELLO"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["﻿bomHello World"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [".leadingHello World"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["Hello Worldline1\nline2"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["aİstanbul"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["line1\nline2a"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ΣΊΣΥΦΟΣtab\tseparated"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["abc{name} has {count} items"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["{name} has {count} itemsΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["key_name-1key_name-1"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["{name} has {count} itemsa"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["src/a/b.tshello"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["Hello Worldstraße"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["straße{name} has {count} items"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [".leadingkey_name-1"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["Hello Worldtrailing."], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["İstanbul😀"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["HELLOemoji 👍🏽 mix"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a..bünïcödé"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["hellotrailing."], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["日本語のテキストΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [":a.b.c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["HELLO./x/**/*.json"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["hellotab\tseparated"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["abca😀b😀c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [":{name} has {count} items"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["hello worlda..b"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [":ab"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["abé"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ünïcödétab\tseparated"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["é./x/**/*.json"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ünïcödékey_name-1"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["key_name-1Hello World"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["{name} has {count} items日本語のテキスト"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ns:key.path日本語のテキスト"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["İstanbulünïcödé"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["trailing.😀"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["emoji 👍🏽 mix:"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["HELLO:"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ünïcödéa😀b😀c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["😀a"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a..bHello World"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ΣΊΣΥΦΟΣkey_name-1"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["src/a/b.ts./x/**/*.json"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["key_name-1日本語のテキスト"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["😀key_name-1"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["line1\nline2:"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["src/a/b.tsabc"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["﻿bomhello world"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["key_name-1line1\nline2"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["tab\tseparatedé"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["line1\nline2  padded  "], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a.b.cİstanbul"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [".leadingemoji 👍🏽 mix"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a.b.cstraße"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["abhello world"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["straßens:key.path"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ΣΊΣΥΦΟΣtrailing."], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["aba😀b😀c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["  padded  abc"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["./x/**/*.jsonhello world"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a.b.c./x/**/*.json"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["Hello Worlda..b"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a..ba😀b😀c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["İstanbul:"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["﻿boma:b:c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["key_name-1:"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ünïcödéline1\nline2"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [".leadinga.b.c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["éa:b:c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["abcsrc/a/b.ts"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["emoji 👍🏽 mixa.b.c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["İstanbul.leading"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a😀b😀ca.b.c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ns:key.pathtrailing."], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [".leadinga..b"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["  padded  HELLO"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["abcns:key.path"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["Hello Worlda:b:c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [".leadingab"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ΣΊΣΥΦΟΣ  padded  "], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["abchello"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a.b.c﻿bom"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["src/a/b.tskey_name-1"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["  padded  a..b"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["éa..b"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ünïcödé./x/**/*.json"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["trailing.{name} has {count} items"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["trailing.ünïcödé"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["éa.b.c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["hello worlda"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a.b.cemoji 👍🏽 mix"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["helloa:b:c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [".leading.leading"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["line1\nline2ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["key_name-1ΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["hello worldkey_name-1"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["﻿boma😀b😀c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["{name} has {count} itemskey_name-1"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["src/a/b.tsemoji 👍🏽 mix"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["  padded  straße"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["abhello"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ns:key.pathline1\nline2"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a..b./x/**/*.json"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["  padded  a:b:c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["Hello World:"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["HELLO  padded  "], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["éΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["line1\nline2abc"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["HELLO﻿bom"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["hello worldİstanbul"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a.b.cns:key.path"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ünïcödéΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["😀a:b:c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a:b:cİstanbul"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a😀b😀c😀"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["emoji 👍🏽 mixİstanbul"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["hello worldΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a..bΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["  padded  .leading"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["hello  padded  "], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ns:key.pathstraße"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["./x/**/*.jsonkey_name-1"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ΣΊΣΥΦΟΣ😀"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["tab\tseparatedΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["tab\tseparated﻿bom"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ns:key.pathHELLO"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["abc﻿bom"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["{name} has {count} itemsa.b.c"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["{name} has {count} itemsé"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [".leadingΣΊΣΥΦΟΣ"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["héllo wörld"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["👍🏽 thumbs"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["日本語"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ılık ırmak"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["👨‍👩‍👧 family"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a b"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a😀b"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a²b x½ y①"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["aⅠb Ⅻ"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a𐐀b 𝐀bc"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["कि ٣٤"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["Iı İi"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["K K k"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ſ s S"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["x‍y 👨‍👩‍👧"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["a b c　d"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["١٢٣ ٤٥"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["𝟘𝟙 ²³"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["snake_case foo-bar o'neil"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ǅungla Ǆ"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["one\r\ntwo threefour"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["café café"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["ΣΑΣ σας ς"], "ok": null}
+{"fn": "_strip_html_to_visible_text", "args": [["a", 1]], "ok": "['a', 1]"}
+{"fn": "_strip_html_to_visible_text", "args": [null], "ok": ""}
+{"fn": "_strip_html_to_visible_text", "args": [[]], "ok": ""}
+{"fn": "_strip_html_to_visible_text", "args": ["x"], "ok": "x"}
+{"fn": "_strip_html_to_visible_text", "args": [{"a": "b"}], "ok": "{'a': 'b'}"}
+{"fn": "_strip_html_to_visible_text", "args": [0], "ok": ""}
+{"fn": "_strip_html_to_visible_text", "args": [true], "ok": "True"}
+{"fn": "_strip_html_to_visible_text", "args": [{}], "ok": ""}
+{"fn": "_strip_html_to_visible_text", "args": [{"a": {"b": "c"}}], "ok": "{'a': {'b': 'c'}}"}
+{"fn": "_strip_html_to_visible_text", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": "{'zebra': 1, 'apple': 2, '10': 3, '2': 4, 'é': 5, 'Apple': 6}"}
+{"fn": "_strip_html_to_visible_text", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": "{'n': 9007199254740993, 'f': 1e+21, 't': 0.1, 'neg': -7}"}
+{"fn": "_strip_html_to_visible_text", "args": [[3, 1, 2]], "ok": "[3, 1, 2]"}
+{"fn": "_latest_mail_received_at", "args": [true], "error": "TypeError: expected string or bytes-like object, got 'bool'"}
+{"fn": "_latest_mail_received_at", "args": [{"a": {"b": "c"}}], "error": "TypeError: expected string or bytes-like object, got 'dict'"}
+{"fn": "_latest_mail_received_at", "args": [0], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": ["x"], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": [[]], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": [{"a": "b"}], "error": "TypeError: expected string or bytes-like object, got 'dict'"}
+{"fn": "_latest_mail_received_at", "args": [["a", 1]], "error": "TypeError: expected string or bytes-like object, got 'list'"}
+{"fn": "_latest_mail_received_at", "args": [{}], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": [null], "ok": ""}
+{"fn": "_latest_mail_received_at", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "error": "TypeError: expected string or bytes-like object, got 'dict'"}
+{"fn": "_latest_mail_received_at", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "error": "TypeError: expected string or bytes-like object, got 'dict'"}
+{"fn": "_latest_mail_received_at", "args": [[3, 1, 2]], "error": "TypeError: expected string or bytes-like object, got 'list'"}
+{"fn": "_decode_js_string", "args": ["{name} has {count} items"], "ok": "{name} has {count} items"}
+{"fn": "_decode_js_string", "args": ["a😀b😀c﻿bom"], "ok": "a😀b😀c﻿bom"}
+{"fn": "_decode_js_string", "args": ["hello world"], "ok": "hello world"}
+{"fn": "_decode_js_string", "args": ["a😀b😀c"], "ok": "a😀b😀c"}
+{"fn": "_decode_js_string", "args": ["tab\tseparated"], "ok": "tab\tseparated"}
+{"fn": "_decode_js_string", "args": ["a"], "ok": "a"}
+{"fn": "_decode_js_string", "args": [":"], "ok": ":"}
+{"fn": "_decode_js_string", "args": ["日本語のテキスト"], "ok": "日本語のテキスト"}
+{"fn": "_decode_js_string", "args": ["key_name-1"], "ok": "key_name-1"}
+{"fn": "_decode_js_string", "args": ["Hello World"], "ok": "Hello World"}
+{"fn": "_decode_js_string", "args": ["{name} has {count} itemsstraße"], "ok": "{name} has {count} itemsstraße"}
+{"fn": "_decode_js_string", "args": ["./x/**/*.json"], "ok": "./x/**/*.json"}
+{"fn": "_decode_js_string", "args": ["ns:key.path"], "ok": "ns:key.path"}
+{"fn": "_decode_js_string", "args": ["ab"], "ok": "ab"}
+{"fn": "_decode_js_string", "args": [""], "ok": ""}
+{"fn": "_with_message_limit", "args": ["İstanbul", {"a": {"b": "c"}}], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'dict'"}
+{"fn": "_with_message_limit", "args": ["a😀b😀c", ["a", 1]], "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"}
+{"fn": "_with_message_limit", "args": ["a..b", {}], "ok": "a..b?n=25"}
+{"fn": "_with_message_limit", "args": [".leading", {}], "ok": ".leading?n=25"}
+{"fn": "_with_message_limit", "args": ["hello world", true], "ok": "hello world?n=1"}
+{"fn": "_with_message_limit", "args": ["ünïcödé", 0], "ok": "ünïcödé?n=25"}
+{"fn": "_with_message_limit", "args": ["a..b", null], "ok": "a..b?n=25"}
+{"fn": "_with_message_limit", "args": ["HELLO", 0], "ok": "HELLO?n=25"}
+{"fn": "_with_message_limit", "args": [".leadingtrailing.", []], "ok": ".leadingtrailing.?n=25"}
+{"fn": "_with_message_limit", "args": ["key_name-1", []], "ok": "key_name-1?n=25"}
+{"fn": "_with_message_limit", "args": ["😀key_name-1", 0], "ok": "😀key_name-1?n=25"}
+{"fn": "_with_message_limit", "args": ["﻿bom", null], "ok": "﻿bom?n=25"}
+{"fn": "_with_message_limit", "args": ["ΣΊΣΥΦΟΣ", {}], "ok": "ΣΊΣΥΦΟΣ?n=25"}
+{"fn": "_with_message_limit", "args": ["a:b:c", null], "ok": "a:b:c?n=25"}
+{"fn": "_with_message_limit", "args": ["Hello World", 0], "ok": "Hello World?n=25"}
+{"fn": "_same_origin", "args": ["İstanbul", "﻿bom"], "ok": true}
+{"fn": "_same_origin", "args": ["Hello World", ":a"], "ok": true}
+{"fn": "_same_origin", "args": ["c", "a.b.c"], "ok": true}
+{"fn": "_same_origin", "args": ["a😀b😀c", "hello"], "ok": true}
+{"fn": "_same_origin", "args": ["😀C", "a😀b😀c"], "ok": true}
+{"fn": "_same_origin", "args": ["./x/**/*.json", "HELLO"], "ok": true}
+{"fn": "_same_origin", "args": ["ab", "emoji 👍🏽 mix"], "ok": true}
+{"fn": "_same_origin", "args": ["emoji 👍🏽 mixé", "MO"], "ok": true}
+{"fn": "_same_origin", "args": [".leading", "./x/**/*.json"], "ok": true}
+{"fn": "_same_origin", "args": ["日本語のテキスト", "ス"], "ok": true}
+{"fn": "_same_origin", "args": ["ünïcödé", "ünïcödé"], "ok": true}
+{"fn": "_same_origin", "args": ["ab", "line1\nline2a:b:c"], "ok": false}
+{"fn": "_same_origin", "args": ["😀", "😀"], "ok": true}
+{"fn": "_same_origin", "args": ["./x/**/*.json", "abc"], "ok": true}
+{"fn": "_same_origin", "args": ["ΣΊΣΥΦΟΣ", "a:b:c"], "ok": false}
+{"fn": "_extract_url_credentials", "args": ["ΣΊΣ", "ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["σίσυφος", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a", ":"], "ok": {"$tuple": [":", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["key_name-1", "ünïcödé"], "ok": {"$tuple": ["ünïcödé", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["tab\tseparated", "tab\tsepa"], "ok": {"$tuple": ["tab\tsepa", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a", "a:b:c"], "ok": {"$tuple": ["a:b:c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["line1\nline2", "src/a/b.ts"], "ok": {"$tuple": ["src/a/b.ts", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["e", "straße"], "ok": {"$tuple": ["straße", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["trailing.日本語のテキスト", "a..b"], "ok": {"$tuple": ["a..b", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["  padded  ", "line1\nline2emoji 👍🏽 mix"], "ok": {"$tuple": ["line1\nline2emoji 👍🏽 mix", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["NA", "key_name-1"], "ok": {"$tuple": ["key_name-1", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["a..b", "a.b.c"], "ok": {"$tuple": ["a.b.c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["CÖD", "ünïcödé"], "ok": {"$tuple": ["ünïcödé", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["b.", "a.b.c"], "ok": {"$tuple": ["a.b.c", "", false]}}
+{"fn": "_extract_url_credentials", "args": ["İstanbul", "İstanbul"], "ok": {"$tuple": ["i̇stanbul", "", false]}}
+{"fn": "_extract_url_credentials", "args": [":", "a"], "ok": {"$tuple": ["a", "", false]}}
 {"fn": "_strip_html_to_visible_text", "args": ["<html><head><style>.a{color:red}</style><script>var x=1;</script></head><body><!-- c --><div><p>Your ChatGPT code is <b>482910</b></p><br/><p>Valid for 10 min &amp; &nbsp; thanks</p></div></body></html>"], "ok": "Your ChatGPT code is 482910\nValid for 10 min & thanks"}
 {"fn": "_strip_html_to_visible_text", "args": ["<article><noscript>hidden</noscript><svg><path d=\"M0\"/></svg><h1>OpenAI</h1><tr><td>Code</td><td>991122</td></tr></article>"], "ok": "OpenAI\nCode\n991122"}
 {"fn": "_strip_html_to_visible_text", "args": ["Plain text without tags &lt;123456&gt;"], "ok": "Plain text without tags <123456>"}
@@ -1000,28 +1307,10 @@
 {"fn": "_latest_mail_received_at", "args": ["2025年02月29日 12:00:00"], "ok": ""}
 {"fn": "_latest_mail_received_at", "args": ["2026年13月01日 12:00:00"], "ok": ""}
 {"fn": "_latest_mail_received_at", "args": ["2026 年 1 月 5 日 9 : 02 : 07"], "ok": "2026-01-05T09:02:07+08:00"}
-{"fn": "_decode_js_string", "args": [""], "ok": ""}
-{"fn": "_decode_js_string", "args": ["plain text"], "ok": "plain text"}
-{"fn": "_decode_js_string", "args": ["<p>Hello \\\"World\\\"</p>\\r\\n\\u4f60\\u597d"], "ok": "<p>Hello \"World\"</p>\r\n你好"}
-{"fn": "_decode_js_string", "args": ["broken \\x escape \\\"quoted\\\" \\r\\n https:\\/\\/openai.com\\/a"], "ok": "broken \\x escape \"quoted\" \n https://openai.com/a"}
-{"fn": "_decode_js_string", "args": ["<div class=\\\"card\\\">Your code is <b>494652<\\/b><\\/div>\\r\\n"], "ok": "<div class=\"card\">Your code is <b>494652</b></div>\r\n"}
-{"fn": "_with_message_limit", "args": ["https://icloud-api.top/inbox/abc", 25], "ok": "https://icloud-api.top/inbox/abc?n=25"}
-{"fn": "_with_message_limit", "args": ["https://icloud-api.top/inbox/abc?token=xyz&n=5", 25], "ok": "https://icloud-api.top/inbox/abc?token=xyz&n=25"}
-{"fn": "_with_message_limit", "args": ["https://icloud-api.top/inbox/abc?a=1&b=hello+world#sec", 100], "ok": "https://icloud-api.top/inbox/abc?a=1&b=hello+world&n=50#sec"}
-{"fn": "_with_message_limit", "args": ["https://icloud-api.top/inbox/abc?k=v", 0], "ok": "https://icloud-api.top/inbox/abc?k=v&n=25"}
-{"fn": "_with_message_limit", "args": ["  padded  ", 0], "ok": "padded  ?n=25"}
-{"fn": "_same_origin", "args": ["https://icloud-api.top/inbox", "https://icloud-api.top/api/pickup/messages"], "ok": true}
-{"fn": "_same_origin", "args": ["https://icloud-api.top:443/inbox", "https://icloud-api.top/api/pickup/messages"], "ok": true}
-{"fn": "_same_origin", "args": ["http://icloud-api.top:80/inbox", "http://icloud-api.top/api/pickup/messages"], "ok": true}
-{"fn": "_same_origin", "args": ["https://icloud-api.top/inbox", "http://icloud-api.top/api/pickup/messages"], "ok": false}
-{"fn": "_same_origin", "args": ["https://icloud-api.top/inbox", "https://evil.example/api/pickup/messages"], "ok": false}
-{"fn": "_same_origin", "args": ["https://icloud-api.top:8443/inbox", "https://icloud-api.top/api/pickup/messages"], "ok": false}
-{"fn": "_same_origin", "args": ["", ""], "ok": true}
-{"fn": "_same_origin", "args": ["http://[::1]:8080/a", "http://[::1]:8080/b"], "ok": true}
-{"fn": "_extract_url_credentials", "args": ["https://mail.example/inbox#email=Alice@iCloud.com&key=secret123", "fallback@icloud.com"], "ok": {"$tuple": ["alice@icloud.com", "secret123", true]}}
-{"fn": "_extract_url_credentials", "args": ["https://mail.example/inbox#/view?token=tok456&email=bob@icloud.com", "fallback@icloud.com"], "ok": {"$tuple": ["bob@icloud.com", "tok456", true]}}
-{"fn": "_extract_url_credentials", "args": ["https://mail.example/inbox?auth_code=ac789&email=carol@icloud.com", "fallback@icloud.com"], "ok": {"$tuple": ["carol@icloud.com", "ac789", false]}}
-{"fn": "_extract_url_credentials", "args": ["https://mail.example/inbox?secret=s1#password=p2", "FALLBACK@ICLOUD.COM"], "ok": {"$tuple": ["fallback@icloud.com", "p2", true]}}
-{"fn": "_extract_url_credentials", "args": ["https://mail.example/inbox#/route-only", "fallback@icloud.com"], "ok": {"$tuple": ["fallback@icloud.com", "", false]}}
-{"fn": "_extract_url_credentials", "args": ["https://mail.example/inbox", "fallback@icloud.com"], "ok": {"$tuple": ["fallback@icloud.com", "", false]}}
-{"fn": "_extract_url_credentials", "args": ["", ""], "ok": {"$tuple": ["", "", false]}}
+{"fn": "_yangyang_api_paths", "args": ["<html><head><title>Inbox</title></head><body><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><script>var detailBase = '/api/mail/detail/'; var detailSuffix = '.json?v=1'; var pageBase = '/api/mail/page/';</script></body></html>"], "ok": {"$tuple": ["/api/mail/detail/", ".json?v=1", "/api/mail/page/"]}}
+{"fn": "_yangyang_api_paths", "args": ["<script>var  detailBase=\"/d/\";\nvar detailSuffix = \"/body\";\nvar\tpageBase='/p/';</script>"], "ok": {"$tuple": ["/d/", "/body", "/p/"]}}
+{"fn": "_yangyang_api_paths", "args": ["<html><head><title>Inbox</title></head><body><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><script>var detailBase = '/only-one/';</script></body></html>"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["<html><head><title>Inbox</title></head><body><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div><div class='row'>mail item</div></body></html>"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": [""], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["var detailBase='/a/'; var detailSuffix=''; var pageBase='/c/';"], "ok": null}
+{"fn": "_yangyang_api_paths", "args": ["var detailBase = '/x/'; var detailSuffix = '.html'; var pageBase = '/y/';"], "ok": {"$tuple": ["/x/", ".html", "/y/"]}}

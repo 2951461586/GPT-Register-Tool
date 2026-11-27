@@ -28,12 +28,9 @@ r"""中性支付内核 —— Checkout 原语、会话工厂与共享失败词�
 from __future__ import annotations
 from ..transport import endpoints
 
-import importlib
 import json
 import os
 import re
-import sys
-from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -42,6 +39,7 @@ import requests
 from ..transport.auth_headers import AUTH_FINGERPRINT_PROFILES
 
 from ..kernel.timeouts import CHATGPT_TIMEOUT
+from ..kernel.native_loader import load_native_module
 
 # curl_cffi functional API (preferred for checkout to avoid Session cookie conflicts)
 try:
@@ -49,26 +47,7 @@ try:
 except ImportError:
     curl_requests = None
 
-
-def _load_native_payment_wire() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_PAYMENT_WIRE") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "payment-wire-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("payment_wire_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_PAYMENT_WIRE = _load_native_payment_wire()
+_NATIVE_PAYMENT_WIRE = load_native_module("payment-wire-rs", "payment_wire_rs", "RUST_ANYTHING_UNIT_PAYMENT_WIRE")
 _NATIVE_EXTRACT_WEB_DEPLOYMENT_ATTESTATION = getattr(_NATIVE_PAYMENT_WIRE, "extract_web_deployment_attestation", None)
 _NATIVE_COMPACT_DIAGNOSTIC = getattr(_NATIVE_PAYMENT_WIRE, "_compact_diagnostic", None)
 _NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)

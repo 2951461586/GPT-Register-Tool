@@ -51,7 +51,7 @@ def run_offline(args, ctx, *, seed, refresh, capsys, monkeypatch):
     with (
         patch("sms_tool.phone.reuse.create_phone_pool", return_value=FakePhonePool()),
         patch("sms_tool.phone.reuse.print_phone_pool_status"),
-        patch("sms_tool.session.refresh._load_seed_session", side_effect=seed),
+        patch("sms_tool.session.refresh.load_seed_session", side_effect=seed),
         patch("sms_tool.codex.oauth.refresh_codex_oauth_session", side_effect=refresh),
         pytest.raises(SystemExit) as exit_info,
     ):

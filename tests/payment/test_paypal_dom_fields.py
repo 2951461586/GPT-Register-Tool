@@ -30,7 +30,7 @@ import random
 
 import pytest
 
-from paypal_dom_fakes import FakeElement, FakePage, MissingElement
+from paypal_dom_fakes import FakeElement, FakePage
 from sms_tool.paypal import dom_fields
 
 

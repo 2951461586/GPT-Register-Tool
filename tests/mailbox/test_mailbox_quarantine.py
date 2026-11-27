@@ -1,6 +1,5 @@
 import json
 import time
-from pathlib import Path
 from unittest.mock import patch
 
 from sms_tool.mailbox.quarantine import (

@@ -28,6 +28,12 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any, Callable
 from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
+from ..kernel.native_loader import load_native_module
+
+_NATIVE_ACCOUNT_STAGES_URL = load_native_module(
+    "account-stages-url-rs", "account_stages_url_rs", "RUST_ANYTHING_UNIT_ACCOUNT_STAGES_URL"
+)
+_NATIVE_STRIP_PROMPT_QUERY = getattr(_NATIVE_ACCOUNT_STAGES_URL, "_strip_prompt_query", None)
 
 from curl_cffi import requests as curl_requests
 
@@ -350,6 +356,8 @@ def _is_registration_disallowed(create_data: Any) -> bool:
 
 def _strip_prompt_query(url: str) -> str:
     """Remove ``prompt`` query params so reauthorize reuses OTP-verified cookies."""
+    if _NATIVE_STRIP_PROMPT_QUERY is not None and isinstance(url, str):
+        return _NATIVE_STRIP_PROMPT_QUERY(url)
     parsed = urlparse(str(url or "").strip())
     if not parsed.scheme or not parsed.hostname:
         return ""

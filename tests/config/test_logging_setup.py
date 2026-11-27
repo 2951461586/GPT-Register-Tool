@@ -17,7 +17,6 @@ Both are now fixed. These tests lock the fixes so neither can regress quietly.
 import inspect
 import logging
 import os
-import sys
 import tempfile
 import unittest
 from logging.handlers import RotatingFileHandler

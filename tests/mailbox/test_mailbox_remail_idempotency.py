@@ -9,7 +9,6 @@ must now be stable per order intent (sha256 of mode + supply + canonical payload
 import re
 from types import SimpleNamespace
 
-import pytest
 
 # The provider lives in ``providers/``; ``sms_tool/mailbox/remail.py`` is a
 # compatibility facade that swaps itself for this module in ``sys.modules``, so

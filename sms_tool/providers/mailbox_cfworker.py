@@ -1,7 +1,6 @@
 import argparse
-import time
 
-from ..mailbox.mail_otp import _email_otp_candidate, _message_id
+from ..mailbox.mail_otp import email_otp_candidate, message_id
 from ..mailbox.types import MailboxAccount
 from .cfworker_client import CFWorkerMailboxClient
 
@@ -105,8 +104,8 @@ def _latest_cfworker_otp_candidate(
     fetch_messages_func = fetch_messages_func or (lambda mb, **kwargs: [])
     excluded_otps = {str(value or "").strip() for value in (excluded_otps or ())}
     for msg in fetch_messages_func(mailbox, proxy=proxy):
-        candidate = _email_otp_candidate(mailbox, msg, keyword=keyword, issued_after_unix=issued_after_unix)
-        if seen_message_id and _message_id(msg) == seen_message_id:
+        candidate = email_otp_candidate(mailbox, msg, keyword=keyword, issued_after_unix=issued_after_unix)
+        if seen_message_id and message_id(msg) == seen_message_id:
             received_ts = int((candidate or {}).get("received_ts") or 0)
             if not issued_after_unix or not received_ts or received_ts < issued_after_unix:
                 continue

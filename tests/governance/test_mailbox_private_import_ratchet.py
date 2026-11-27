@@ -165,13 +165,10 @@ def test_baseline_file_is_present_and_populated():
     for name in WATCHED:
         assert name in baseline["modules"], f"{name} missing from baseline"
         entry = baseline["modules"][name]
-        if name == "mailbox":
-            # 2026-10-21: the consumed symbols became public API, so the module's
-            # baseline is empty and any private import from it fails immediately.
-            assert entry["pairs"] == [], "mailbox must stay at zero private consumers"
-            assert int(entry["total"]) == 0
-        else:
-            assert entry["pairs"], f"{name} baseline records no pairs"
+        # Every watched hub now exposes its consumed helpers as public API, so
+        # all baselines are empty and any private import fails immediately.
+        assert entry["pairs"] == [], f"{name} must stay at zero private consumers"
+        assert int(entry["total"]) == 0
         assert isinstance(entry["per_file"], dict)
 
 

@@ -17,12 +17,11 @@ from typing import Any
 
 from ..accounts.account_liveness import probe_account_liveness
 from ..config import CFG
-from ..kernel.error_classification import classify_error
 from .policy import registration_retry_decision
 from .progress import registration_stage
 from .result import build_registration_failure_result
 from ..kernel.sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
-from ..utils import _timing_summary
+from ..utils import timing_summary
 
 
 def _create_account_error(create_ok, create_data):
@@ -292,7 +291,7 @@ def _failure_result(
         failure_class=decision.failure_class,
         email=email,
         extra={
-            "timing": _timing_summary(),
+            "timing": timing_summary(),
             "retryable": decision.retryable,
             "error_advice": decision.advice,
             "password": "[REDACTED]" if password else "",

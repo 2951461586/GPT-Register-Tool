@@ -34,7 +34,6 @@ import logging
 import os
 import socket
 import ssl
-import struct
 import threading
 import time
 from dataclasses import dataclass, field

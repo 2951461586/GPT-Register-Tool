@@ -21,7 +21,7 @@ import logging
 import random
 import threading
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from .auth_headers import _device_seed, fingerprint_profile_weights

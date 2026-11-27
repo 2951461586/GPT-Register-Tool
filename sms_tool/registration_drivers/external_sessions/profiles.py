@@ -1,6 +1,5 @@
 """Persistent account profile configuration, separate from process ownership."""
 
-from pathlib import Path
 from typing import Any, Mapping
 
 from ...kernel.paths import runtime_dir

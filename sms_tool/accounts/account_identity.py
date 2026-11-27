@@ -8,40 +8,20 @@ thread-local fingerprint state at every worker entry.
 from __future__ import annotations
 
 import base64
-import importlib
 import json
-import os
 import re
-import sys
 from collections.abc import Mapping
-from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
 from ..transport.fingerprint_pool import shared_fingerprint_pool
 from ..proxy.entry import normalize_proxy_url
 from ..proxy.entry import infer_region, rebuild_proxy_credentials
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_account_identity() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_ACCOUNT_IDENTITY") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "account-identity-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("account_identity_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_ACCOUNT_IDENTITY = _load_native_account_identity()
+_NATIVE_ACCOUNT_IDENTITY = load_native_module(
+    "account-identity-rs", "account_identity_rs", "RUST_ANYTHING_UNIT_ACCOUNT_IDENTITY"
+)
 _NATIVE_PROXY_EGRESS_KEY = getattr(_NATIVE_ACCOUNT_IDENTITY, "proxy_egress_key", None)
 _NATIVE_CHATGPT_ACCOUNT_ID_FROM_TOKEN = getattr(_NATIVE_ACCOUNT_IDENTITY, "chatgpt_account_id_from_token", None)
 _NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)

@@ -9,23 +9,23 @@ from urllib.parse import quote, urlencode
 from curl_cffi import requests as curl_requests
 
 from ..transport.auth_wire import _auth_request_headers, _is_existing_login_redirect, _with_query_param
-from ..transport.http_utils import _json_or_raw
+from ..transport.http_utils import json_or_raw
 from ..transport.auth_headers import auth_impersonate, openai_auth_headers, select_auth_fingerprint
 from ..config import current_config_data
 from ..transport.http_client import request_with_retry
 from ..registration.outcome import _failure_result
 from ..sentinel import issue_sentinel_flow
-from ..registration.sentinel_tokens import _import_sentinel_cookies, _sentinel_device_id
+from ..registration.sentinel_tokens import import_sentinel_cookies, sentinel_device_id
 from ..utils import (
-    _generate_password,
-    _print_timings,
-    _random_birthdate,
-    _random_name,
-    _safe_tock,
-    _tick,
-    _timing_summary,
-    _tl,
-    _tock,
+    generate_password,
+    print_timings,
+    random_birthdate,
+    random_name,
+    safe_tock,
+    tick,
+    timing_summary,
+    tl,
+    tock,
 )
 from ..transport import endpoints
 
@@ -65,7 +65,7 @@ def run_phone_register(
     bind_email=None,
 ):
     """Register a ChatGPT account via phone number (SMS OTP), then optionally bind email."""
-    _tl().clear()
+    tl().clear()
     select_auth_fingerprint(rotate=True)
 
     config = current_config_data()
@@ -98,7 +98,7 @@ def run_phone_register(
         )
 
     # Step 0: Acquire phone number from the selected provider
-    _tick("0-Acquire phone number")
+    tick("0-Acquire phone number")
     from .reuse import rental_client, rental_handle_for
     from .smsbower import normalize_phone
 
@@ -106,12 +106,12 @@ def run_phone_register(
     try:
         activation = sms_client.get_number(service="dr", country=country)
     except Exception as e:
-        _safe_tock()
+        safe_tock()
         return _failure_result(f"{provider}_get_number_failed: {e}")
     phone = normalize_phone(activation.phone)
     handle = rental_handle_for(provider, activation)
     print(f"[*] Phone: {phone}  rental={handle}")
-    _tock()
+    tock()
 
     # Step 1: Establish the device identity. Flow tokens are minted immediately
     # before the protocol operations that consume them.
@@ -125,11 +125,11 @@ def run_phone_register(
 
     # Step 2: Generate credentials
     explicit_password = bool(str(password or "").strip())
-    password = password or _generate_password()
-    first, last = _random_name()
+    password = password or generate_password()
+    first, last = random_name()
     full_name = f"{first} {last}"
-    birthdate = _random_birthdate()
-    did = _sentinel_device_id(sentinel_data) or str(uuid.uuid4())
+    birthdate = random_birthdate()
+    did = sentinel_device_id(sentinel_data) or str(uuid.uuid4())
     session_logging_id = str(uuid.uuid4()).replace("-", "")
 
     # 密码是敏感凭据，绝不打印明文到 stdout（日志会被采集/分享）。
@@ -141,12 +141,12 @@ def run_phone_register(
     session = curl_requests.Session()
     if proxy:
         session.proxies = {"http": proxy, "https": proxy}
-    _import_sentinel_cookies(session, sentinel_data, did)
+    import_sentinel_cookies(session, sentinel_data, did)
     base_headers = openai_auth_headers(did, accept="application/json", include_trace=True)
 
     try:
         # Auth flow: prime + signin + authorize
-        _tick("2-Auth flow")
+        tick("2-Auth flow")
         request_with_retry(
             session,
             "get",
@@ -164,7 +164,7 @@ def run_phone_register(
             headers={**base_headers, "Accept": "application/json", "Referer": f"{chat_base}/"},
             impersonate=auth_impersonate(),
         )
-        csrf_token = (_json_or_raw(csrf_resp).get("csrfToken") or "").strip()
+        csrf_token = (json_or_raw(csrf_resp).get("csrfToken") or "").strip()
 
         # Key difference: prompt=login (not screen_hint=signup)
         signin_url = (
@@ -192,7 +192,7 @@ def run_phone_register(
             },
             impersonate=auth_impersonate(),
         )
-        signin_body = _json_or_raw(signin_resp, limit=1000)
+        signin_body = json_or_raw(signin_resp, limit=1000)
         auth_session_url = signin_body.get("url") or signin_resp.headers.get("location") or signin_resp.url
         auth_session_url = _with_query_param(auth_session_url, "device_id", did)
         r = request_with_retry(
@@ -208,7 +208,7 @@ def run_phone_register(
             },
             impersonate=auth_impersonate(),
         )
-        _tock()
+        tock()
         redirect_path = r.url.split("auth.openai.com")[-1]
         print(f"  Redirect: {redirect_path}")
 
@@ -217,7 +217,7 @@ def run_phone_register(
             return _failure_result("phone_already_registered_or_login_redirect", email=phone)
 
         # Step 3: Register with phone + password
-        _tick("3-User register (phone+password)")
+        tick("3-User register (phone+password)")
         username_sentinel = issue_sentinel_flow(
             flow="username_password_create",
             device_id=did,
@@ -246,7 +246,7 @@ def run_phone_register(
             ),
             impersonate=auth_impersonate(),
         )
-        _tock()
+        tock()
 
         reg_data = {}
         try:
@@ -263,10 +263,10 @@ def run_phone_register(
             return _failure_result(f"user_register: {err_msg}", email=phone)
 
         # Step 4: Wait for SMS code from SMSBower
-        _tick("4-Wait SMS code")
+        tick("4-Wait SMS code")
         print(f"[*] Waiting for SMS code on {phone}...")
         code_result = sms_client.wait_for_code(handle, timeout=180, poll_interval=5)
-        _tock()
+        tock()
 
         # ``wait_for_code`` returns the code string itself (Optional[str]), not a
         # mapping; treating it as a dict raised AttributeError and killed the run.
@@ -278,7 +278,7 @@ def run_phone_register(
         print(f"[*] SMS code received: {sms_code}")
 
         # Step 5: Validate phone OTP
-        _tick("5-Validate phone OTP")
+        tick("5-Validate phone OTP")
         validate_resp = request_with_retry(
             session,
             "post",
@@ -294,7 +294,7 @@ def run_phone_register(
             ),
             impersonate=auth_impersonate(),
         )
-        _tock()
+        tock()
 
         validate_data = {}
         try:
@@ -318,7 +318,7 @@ def run_phone_register(
         continue_url = validate_data.get("continue_url") or validate_resp.headers.get("Location") or ""
 
         # Step 6: Create account
-        _tick("6-Create account")
+        tick("6-Create account")
         create_sentinel = issue_sentinel_flow(
             flow="oauth_create_account",
             device_id=did,
@@ -351,7 +351,7 @@ def run_phone_register(
             ),
             impersonate=auth_impersonate(),
         )
-        _tock()
+        tock()
 
         create_data = {}
         try:
@@ -366,7 +366,7 @@ def run_phone_register(
             return _failure_result(f"create_account: {err_msg}", email=phone)
 
     except Exception as e:
-        _safe_tock()
+        safe_tock()
         try:
             sms_client.cancel(handle)
         except Exception:
@@ -374,7 +374,7 @@ def run_phone_register(
         return _failure_result(f"transport_error: {e}", email=phone)
 
     # Step 7: Fetch auth session for access_token
-    _tick("7-Auth session")
+    tick("7-Auth session")
     access_token = ""
     id_token = ""
     try:
@@ -387,7 +387,7 @@ def run_phone_register(
                 headers={**base_headers, "Referer": f"{chat_base}/"},
                 impersonate=auth_impersonate(),
             )
-            session_data = _json_or_raw(session_resp, limit=2000)
+            session_data = json_or_raw(session_resp, limit=2000)
             access_token = session_data.get("accessToken") or session_data.get("access_token") or ""
             id_token = session_data.get("idToken") or session_data.get("id_token") or ""
             if access_token:
@@ -395,7 +395,7 @@ def run_phone_register(
             time.sleep(1)
     except Exception as e:
         print(f"  Auth session error: {e}")
-    _tock()
+    tock()
 
     if not access_token:
         return _failure_result("auth_session_no_token", email=phone, password=password)
@@ -405,7 +405,7 @@ def run_phone_register(
     # Step 8: (Optional) Codex OAuth
     refresh_token = ""
     if codex_oauth:
-        _tick("8-Codex OAuth")
+        tick("8-Codex OAuth")
         try:
             from ..codex.oauth import collect_codex_oauth_tokens
 
@@ -424,9 +424,9 @@ def run_phone_register(
                 print("[*] Refresh token obtained")
         except Exception as e:
             print(f"  Codex OAuth error: {e}")
-        _tock()
+        tock()
 
-    _print_timings()
+    print_timings()
 
     return {
         "success": True,
@@ -440,5 +440,5 @@ def run_phone_register(
         "refresh_token": refresh_token,
         "activation_id": activation.activation_id,
         "source": "phone_register",
-        "timing": _timing_summary(),
+        "timing": timing_summary(),
     }

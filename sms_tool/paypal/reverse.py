@@ -10,7 +10,6 @@ Uses curl_cffi for Chrome TLS fingerprint impersonation.
 from __future__ import annotations
 
 import contextlib
-import json
 import re
 import time
 from dataclasses import dataclass

@@ -93,5 +93,6 @@ _decode_js_string = _native._decode_js_string
 _with_message_limit = _native._with_message_limit
 _same_origin = _native._same_origin
 _extract_url_credentials = _native._extract_url_credentials
+_yangyang_api_paths = _native._yangyang_api_paths
 
-__all__ = ['_strip_html_to_visible_text', '_latest_mail_received_at', '_decode_js_string', '_with_message_limit', '_same_origin', '_extract_url_credentials']
+__all__ = ['_strip_html_to_visible_text', '_latest_mail_received_at', '_decode_js_string', '_with_message_limit', '_same_origin', '_extract_url_credentials', '_yangyang_api_paths']

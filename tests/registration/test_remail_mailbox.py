@@ -826,7 +826,7 @@ class ReMailPickupTests(unittest.TestCase):
             session_path = Path(tmp) / "session.json"
             session_path.write_text(json.dumps(data), encoding="utf-8")
             with (
-                patch("sms_tool.session.refresh._load_seed_session", return_value=(data, str(session_path))),
+                patch("sms_tool.session.refresh.load_seed_session", return_value=(data, str(session_path))),
                 patch("sms_tool.mailbox.router.fetch_mailbox_messages", side_effect=fetch),
                 patch.object(cli, "upsert_account", return_value=True) as upsert,
                 redirect_stdout(io.StringIO()),

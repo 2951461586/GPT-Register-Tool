@@ -9,36 +9,17 @@ then exports import-ready CPA/sub2api/Cockpit/9router/Codex/AxonHub formats.
 from __future__ import annotations
 
 import base64
-import importlib
 import json
-import os
-import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from ..transport import endpoints
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_session_converter() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_SESSION_CONVERTER") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "session-converter-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("session_converter_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_SESSION_CONVERTER = _load_native_session_converter()
+_NATIVE_SESSION_CONVERTER = load_native_module(
+    "session-converter-rs", "session_converter_rs", "RUST_ANYTHING_UNIT_SESSION_CONVERTER"
+)
 _NATIVE_PARSE_JWT_PAYLOAD = getattr(_NATIVE_SESSION_CONVERTER, "parse_jwt_payload", None)
 _NATIVE_COLLECT_SESSIONS = getattr(_NATIVE_SESSION_CONVERTER, "collect_session_like_objects", None)
 

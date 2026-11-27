@@ -31,7 +31,6 @@ grep) is reported and never killed.
 
 from __future__ import annotations
 
-import importlib
 import json
 import logging
 import os
@@ -40,29 +39,13 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Callable, Iterable
+from ..kernel.native_loader import load_native_module
 
 _LOGGER = logging.getLogger(__name__)
 
-
-def _load_native_profile_reclaim() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_PROFILE_RECLAIM") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "profile-reclaim-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("profile_reclaim_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_PROFILE_RECLAIM = _load_native_profile_reclaim()
+_NATIVE_PROFILE_RECLAIM = load_native_module(
+    "profile-reclaim-rs", "profile_reclaim_rs", "RUST_ANYTHING_UNIT_PROFILE_RECLAIM"
+)
 _NATIVE_REFERENCES_PROFILE = getattr(_NATIVE_PROFILE_RECLAIM, "_references_profile", None)
 
 #: Image-name fragments that identify a browser this project could have started.

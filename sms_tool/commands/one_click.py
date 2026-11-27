@@ -73,13 +73,13 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
     """Refresh selected account(s) through Codex OAuth and phone SMS, then store RT."""
     from ..codex.oauth import refresh_codex_oauth_session
     from ..phone.reuse import create_phone_pool, print_phone_pool_status
-    from ..session.refresh import _load_seed_session
+    from ..session.refresh import load_seed_session
 
     emails = read_email_file(args.email_file)
     if args.email:
         emails = [(args.email or "").strip()]
     if not emails and args.session_file:
-        seed, _ = _load_seed_session(session_file=args.session_file)
+        seed, _ = load_seed_session(session_file=args.session_file)
         if seed.get("email"):
             emails = [str(seed.get("email") or "").strip()]
     emails = unique_emails(emails)
@@ -137,7 +137,7 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
                 email=email,
                 detail="读取账号会话",
             )
-            data, json_path = _load_seed_session(
+            data, json_path = load_seed_session(
                 email=email,
                 session_file=args.session_file if len(emails) == 1 else "",
             )
@@ -353,14 +353,14 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
 def one_click_scan(args: Any) -> None:
     """Batch OAuth probe accounts without sending SMS."""
     from ..accounts.account_scan import scan_accounts
-    from ..session.refresh import _load_seed_session
+    from ..session.refresh import load_seed_session
     from ..storage import list_paypal_accounts
 
     emails = read_email_file(args.email_file)
     if args.email:
         emails = [(args.email or "").strip()]
     if not emails and args.session_file:
-        seed, _ = _load_seed_session(session_file=args.session_file)
+        seed, _ = load_seed_session(session_file=args.session_file)
         if seed.get("email"):
             emails = [str(seed.get("email") or "").strip()]
     if not emails:

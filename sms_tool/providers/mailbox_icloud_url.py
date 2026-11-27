@@ -5,48 +5,27 @@ from __future__ import annotations
 import base64
 import hashlib
 import html
-import importlib
 import json
-import os
 import re
-import sys
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
-from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, unquote_to_bytes, urlencode, urljoin, urlsplit, urlunsplit
 
 from curl_cffi import requests as curl_requests
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_icloud_html() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_ICLOUD_HTML") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "icloud-html-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("icloud_html_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_ICLOUD_HTML = _load_native_icloud_html()
+_NATIVE_ICLOUD_HTML = load_native_module("icloud-html-rs", "icloud_html_rs", "RUST_ANYTHING_UNIT_ICLOUD_HTML")
 _NATIVE_STRIP_HTML_TO_VISIBLE_TEXT = getattr(_NATIVE_ICLOUD_HTML, "_strip_html_to_visible_text", None)
 _NATIVE_LATEST_MAIL_RECEIVED_AT = getattr(_NATIVE_ICLOUD_HTML, "_latest_mail_received_at", None)
 _NATIVE_DECODE_JS_STRING = getattr(_NATIVE_ICLOUD_HTML, "_decode_js_string", None)
 _NATIVE_WITH_MESSAGE_LIMIT = getattr(_NATIVE_ICLOUD_HTML, "_with_message_limit", None)
 _NATIVE_SAME_ORIGIN = getattr(_NATIVE_ICLOUD_HTML, "_same_origin", None)
 _NATIVE_EXTRACT_URL_CREDENTIALS = getattr(_NATIVE_ICLOUD_HTML, "_extract_url_credentials", None)
+_NATIVE_YANGYANG_API_PATHS = getattr(_NATIVE_ICLOUD_HTML, "_yangyang_api_paths", None)
 
-from ..mailbox.mail_otp import _extract_otp_from_text, _message_received_ts
+from ..mailbox.mail_otp import extract_otp_from_text, message_received_ts
 from ..mailbox.errors import MailboxEndpointUnavailableError
 from ..mailbox.quarantine import (
     TRANSIENT_AUTH_INVALID_COOLDOWN_SECONDS,
@@ -210,7 +189,7 @@ def fetch_icloud_url_messages(mailbox, limit: int = 25, proxy: str | None = None
             messages = _parse_card_messages(text, email=email, limit=limit)
             if not messages:
                 messages = _parse_generic_html_messages(text, email=email, limit=limit)
-    return sorted(messages, key=_message_received_ts, reverse=True)
+    return sorted(messages, key=message_received_ts, reverse=True)
 
 
 def snapshot_icloud_url_messages(mailbox, limit: int = 25, proxy: str | None = None) -> list[dict[str, Any]]:
@@ -226,11 +205,11 @@ def snapshot_icloud_url_messages(mailbox, limit: int = 25, proxy: str | None = N
     if not api_paths:
         spa_messages = _fetch_spa_pickup_messages(page_url, text, email=email, limit=limit, proxy=proxy)
         if spa_messages is not None:
-            return sorted(spa_messages, key=_message_received_ts, reverse=True)
+            return sorted(spa_messages, key=message_received_ts, reverse=True)
         messages = _parse_card_messages(text, email=email, limit=limit)
         if not messages:
             messages = _parse_generic_html_messages(text, email=email, limit=limit)
-        return sorted(messages, key=_message_received_ts, reverse=True)
+        return sorted(messages, key=message_received_ts, reverse=True)
 
     items = _fetch_yangyang_items(page_url, api_paths, limit=limit, proxy=proxy)
     return [
@@ -462,7 +441,7 @@ def _api_payload_otp(payload: Any) -> str:
     preferred = _walk_api_code(payload)
     if preferred:
         return preferred
-    return _extract_otp_from_text(_api_payload_text(payload))
+    return extract_otp_from_text(_api_payload_text(payload))
 
 
 def _api_payload_text(value: Any) -> str:
@@ -522,6 +501,8 @@ def _now_iso() -> str:
 
 
 def _yangyang_api_paths(text: str) -> tuple[str, str, str] | None:
+    if _NATIVE_YANGYANG_API_PATHS is not None and isinstance(text, str):
+        return _NATIVE_YANGYANG_API_PATHS(text)
     detail_base = re.search(r"var\s+detailBase\s*=\s*['\"]([^'\"]+)['\"]", text)
     detail_suffix = re.search(r"var\s+detailSuffix\s*=\s*['\"]([^'\"]+)['\"]", text)
     page_base = re.search(r"var\s+pageBase\s*=\s*['\"]([^'\"]+)['\"]", text)
@@ -587,7 +568,7 @@ def _fetch_yangyang_items(
     items = payload.get("items") if isinstance(payload, dict) else []
     items = sorted(
         (item for item in list(items or []) if isinstance(item, dict)),
-        key=lambda item: _message_received_ts(
+        key=lambda item: message_received_ts(
             {
                 "receivedDateTime": _iso_datetime(item.get("received_at") or item.get("receivedAt")),
             }
@@ -684,7 +665,7 @@ def _parse_card_messages(text: str, *, email: str, limit: int) -> list[dict[str,
     messages = []
     cards = sorted(
         parser.cards,
-        key=lambda card: _message_received_ts({"receivedDateTime": _iso_datetime(card.get("received_at"))}),
+        key=lambda card: message_received_ts({"receivedDateTime": _iso_datetime(card.get("received_at"))}),
         reverse=True,
     )
     for card in cards[: max(1, min(int(limit or 25), 50))]:
@@ -931,7 +912,7 @@ def _fetch_spa_pickup_messages(
                     body=body,
                 )
             )
-        messages.sort(key=_message_received_ts, reverse=True)
+        messages.sort(key=message_received_ts, reverse=True)
         return messages[:clamped]
     return None
 
@@ -960,7 +941,7 @@ def _extract_generic_timestamp(visible_text: str) -> str:
             iso = _latest_mail_received_at(raw) if pattern is _CN_TIME_RE else _iso_datetime(raw)
             if not iso:
                 continue
-            ts = _message_received_ts({"receivedDateTime": iso})
+            ts = message_received_ts({"receivedDateTime": iso})
             if ts >= best_ts:
                 best_ts = ts
                 best_iso = iso
@@ -973,7 +954,7 @@ def _parse_generic_html_messages(text: str, *, email: str, limit: int) -> list[d
     visible = _strip_html_to_visible_text(text)
     if not visible or not _OTP_CONTEXT_RE.search(visible):
         return []
-    code = _extract_otp_from_text(visible)
+    code = extract_otp_from_text(visible)
     if not code:
         return []
     received_at = _extract_generic_timestamp(visible)
@@ -1014,7 +995,7 @@ def _message(*, email: str, message_id: str, subject: str, sender: str, received
 
 def _normalize_otp_subject(subject: str, body: str) -> str:
     combined = f"{subject}\n{body}"
-    if _extract_otp_from_text(combined) and _OTP_CONTEXT_RE.search(combined):
+    if extract_otp_from_text(combined) and _OTP_CONTEXT_RE.search(combined):
         return f"{subject} login code".strip()
     return subject
 

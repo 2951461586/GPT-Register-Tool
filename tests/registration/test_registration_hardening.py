@@ -97,7 +97,7 @@ def test_camoufox_keep_open_preserves_owned_profile(fake_camoufox):
 def test_totp_uses_configured_origin_for_both_requests():
     page = MagicMock()
     page.evaluate.side_effect = [
-        {"status": 200, "body": {"secret": "JBSWY3DPEHPK3PXP", "session_id": "test"}},
+        {"status": 200, "body": {"secret": "JBSWY3DPEHPK3PXPJBSWY3DP", "session_id": "test"}},
         {"status": 200, "body": {"success": True}},
     ]
     result = _bind_totp_in_browser(page, "test-token", "test-device", chat_base="https://chat.example/")
@@ -118,7 +118,7 @@ def test_totp_requests_carry_an_in_page_deadline():
     """
     page = MagicMock()
     page.evaluate.side_effect = [
-        {"status": 200, "body": {"secret": "JBSWY3DPEHPK3PXP", "session_id": "test"}},
+        {"status": 200, "body": {"secret": "JBSWY3DPEHPK3PXPJBSWY3DP", "session_id": "test"}},
         {"status": 200, "body": {"success": True}},
     ]
     assert _bind_totp_in_browser(
@@ -140,7 +140,7 @@ def test_totp_requests_carry_an_in_page_deadline():
 def test_totp_deadline_falls_back_on_invalid_budget(bad):
     page = MagicMock()
     page.evaluate.side_effect = [
-        {"status": 200, "body": {"secret": "JBSWY3DPEHPK3PXP", "session_id": "test"}},
+        {"status": 200, "body": {"secret": "JBSWY3DPEHPK3PXPJBSWY3DP", "session_id": "test"}},
         {"status": 200, "body": {"success": True}},
     ]
     assert _bind_totp_in_browser(

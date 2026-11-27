@@ -132,7 +132,7 @@ class SentinelTokenTests(unittest.TestCase):
         with (
             patch.object(sentinel_tokens, "CFG", {"email_registration": {"sentinel_allow_http_fallback": True}}),
             patch("sms_tool.registration.sentinel_tokens._sentinel_mode", return_value="http"),
-            patch("sms_tool.registration.sentinel_tokens._extract_sentinel_http", return_value=expected) as extract,
+            patch("sms_tool.registration.sentinel_tokens.extract_sentinel_http", return_value=expected) as extract,
         ):
             result = sentinel_tokens._extract_sentinel(force_fresh=True, persist=False)
 
@@ -143,7 +143,7 @@ class SentinelTokenTests(unittest.TestCase):
         with (
             patch("sms_tool.registration.sentinel_tokens._sentinel_mode", return_value="auto"),
             patch("sms_tool.registration.sentinel_tokens._extract_sentinel_quickjs", return_value=None) as quickjs,
-            patch("sms_tool.registration.sentinel_tokens._extract_sentinel_http") as http,
+            patch("sms_tool.registration.sentinel_tokens.extract_sentinel_http") as http,
             patch("sms_tool.registration.sentinel_tokens._extract_sentinel_cloakbrowser") as browser,
         ):
             result = sentinel_tokens._extract_sentinel(
@@ -181,7 +181,7 @@ class SentinelTokenTests(unittest.TestCase):
             patch.object(sentinel_tokens, "CFG", {"email_registration": {"sentinel_allow_http_fallback": True}}),
             patch.object(sentinel_tokens, "_sentinel_extraction_gate", gate),
             patch("sms_tool.registration.sentinel_tokens._sentinel_mode", return_value="http"),
-            patch("sms_tool.registration.sentinel_tokens._extract_sentinel_http", side_effect=extract),
+            patch("sms_tool.registration.sentinel_tokens.extract_sentinel_http", side_effect=extract),
         ):
             with ThreadPoolExecutor(max_workers=4) as executor:
                 futures = [
@@ -225,7 +225,7 @@ class SentinelTokenTests(unittest.TestCase):
         with (
             patch.object(sentinel_tokens, "_sentinel_mode", return_value="auto"),
             patch.object(sentinel_tokens, "_extract_sentinel_quickjs", return_value=None),
-            patch.object(sentinel_tokens, "_extract_sentinel_http"),
+            patch.object(sentinel_tokens, "extract_sentinel_http"),
             patch.object(sentinel_tokens, "_extract_sentinel_cloakbrowser") as browser,
         ):
             result = sentinel_tokens._extract_sentinel_uncached(persist=False)

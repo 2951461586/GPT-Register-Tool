@@ -11,31 +11,23 @@ three-stage proxy-routing logic.  These utilities cover:
 
 from __future__ import annotations
 
-import importlib
 import json
 import os
 import re
-import sys
 import uuid
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, quote, urljoin, urlsplit
 
-import requests
 
-from .checkout_contract import CheckoutRequestContract, CheckoutSessionContract
 from ..cross_process_gate import cross_process_write_lock
 from ..kernel.paths import runtime_file
 from ..proxy.entry import normalize_proxy_url, retarget_region
 
 from ..paypal.proxy import (
-    PayPalProxyState,
-    infer_proxy_country,
-    is_retryable_network_error,
-    probe_proxy,
-    redact_proxy_url,
     rotate_proxy_session as rotate_stage_proxy_session,
 )
+from ..kernel.native_loader import load_native_module
 
 # curl_cffi functional API (preferred for checkout to avoid Session cookie conflicts)
 try:
@@ -45,26 +37,9 @@ except ImportError:
 
 # ─── 原生 Rust 加速加载 ──────────────────────────────────────────────────────
 
-
-def _load_native_pp_link_helpers() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_PP_LINK_HELPERS") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "pp-link-helpers-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("pp_link_helpers_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_PP_LINK_HELPERS = _load_native_pp_link_helpers()
+_NATIVE_PP_LINK_HELPERS = load_native_module(
+    "pp-link-helpers-rs", "pp_link_helpers_rs", "RUST_ANYTHING_UNIT_PP_LINK_HELPERS"
+)
 _NATIVE_NORMALIZE_PROXY_TEMPLATE = getattr(_NATIVE_PP_LINK_HELPERS, "normalize_proxy_template", None)
 _NATIVE_PROXY_FOR_COUNTRY_TEMPLATE = getattr(_NATIVE_PP_LINK_HELPERS, "proxy_for_country_template", None)
 _NATIVE_IS_PAYPAL_BA_APPROVE_URL = getattr(_NATIVE_PP_LINK_HELPERS, "is_paypal_ba_approve_url", None)
@@ -77,7 +52,7 @@ DEFAULT_STRIPE_PK = (os.environ.get("PP_STRIPE_PUBLISHABLE_KEY", "") or "").stri
 )
 STRIPE_VERSION = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
 from ..transport import endpoints
-from ..kernel.timeouts import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
+from ..kernel.timeouts import DEFAULT_TIMEOUT
 
 _CHATGPT_ORIGIN_HOST = endpoints.CHATGPT_BASE
 

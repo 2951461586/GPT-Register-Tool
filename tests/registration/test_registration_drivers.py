@@ -8,7 +8,6 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-from urllib.parse import parse_qs, urlsplit
 
 from sms_tool.registration.batch_runner import run_batch_impl
 from sms_tool.config import ConfigError, validate_registration_driver_config

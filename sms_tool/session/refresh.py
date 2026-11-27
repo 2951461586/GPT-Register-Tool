@@ -9,7 +9,7 @@ from ..config import CFG
 from ..kernel.paths import output_dir
 from ..storage import get_account_record, list_paypal_accounts, upsert_account
 from ..transport.http_client import _retry_after_seconds
-from ..transport.http_utils import _minimal_chatgpt_cookie_header
+from ..transport.http_utils import minimal_chatgpt_cookie_header
 from ..transport import endpoints
 
 
@@ -27,10 +27,10 @@ def refresh_session(
     that need a full login when the cookie is dead should use the
     ``account_recovery`` chain (RT / cookie / protocol email-OTP / Codex OAuth).
     """
-    data, json_path = _load_seed_session(email=email, session_file=session_file)
+    data, json_path = load_seed_session(email=email, session_file=session_file)
     target_email = (email or data.get("email") or "").strip().lower()
     timeout = max(30, int(timeout or 300))
-    return _refresh_session_protocol(
+    return refresh_session_protocol(
         data,
         json_path,
         target_email,
@@ -70,8 +70,8 @@ def _jwt_is_expired(token, *, skew_seconds: float = 60.0) -> bool:
         return False
 
 
-def _refresh_session_protocol(data, json_path, target_email, timeout, proxy=None, persist=True):
-    cookie_header = _minimal_chatgpt_cookie_header(data.get("cookie_header") or "")
+def refresh_session_protocol(data, json_path, target_email, timeout, proxy=None, persist=True):
+    cookie_header = minimal_chatgpt_cookie_header(data.get("cookie_header") or "")
     cookie_header = _ensure_session_cookie(cookie_header, data)
     if not _has_session_cookie(cookie_header):
         return {"ok": False, "email": target_email, "mode": "protocol", "error": "missing_session_cookie"}
@@ -80,8 +80,8 @@ def _refresh_session_protocol(data, json_path, target_email, timeout, proxy=None
     # a failed refresh can say *which* hop failed instead of only "no token".
     detail = {}
     auth_session = _fetch_protocol_auth_session(cookie_header, timeout=timeout, proxy=proxy, detail=detail)
-    access_token = _session_token(auth_session, "accessToken", "access_token")
-    oauth_refresh_token = _session_token(auth_session, "refreshToken", "refresh_token")
+    access_token = session_token(auth_session, "accessToken", "access_token")
+    oauth_refresh_token = session_token(auth_session, "refreshToken", "refresh_token")
     if not access_token:
         # ``detail`` separates the two cases that used to collapse into one
         # string.  A 200 without an accessToken means the session really is
@@ -145,7 +145,7 @@ def _finish_session_refresh(refreshed, json_path, mode, persist):
             "persisted": False,
             "data": refreshed,
         }
-    json_path = _save_refreshed(refreshed, json_path)
+    json_path = save_refreshed(refreshed, json_path)
     return {
         "ok": True,
         "mode": mode,
@@ -171,7 +171,7 @@ def _merge_refreshed_session(data, target_email, auth_session, access_token, oau
     return refreshed
 
 
-def _save_refreshed(refreshed, json_path):
+def save_refreshed(refreshed, json_path):
     if not json_path:
         json_path = _new_session_path(refreshed)
     Path(json_path).parent.mkdir(parents=True, exist_ok=True)
@@ -180,7 +180,7 @@ def _save_refreshed(refreshed, json_path):
     return json_path
 
 
-def _load_seed_session(email="", session_file=""):
+def load_seed_session(email="", session_file=""):
     if session_file:
         path = Path(session_file)
         data = _read_json(path)
@@ -376,7 +376,7 @@ def _dict_section(source: object, key: str) -> dict:
     return {}
 
 
-def _auth_session_email(data):
+def auth_session_email(data):
     if not isinstance(data, dict):
         return ""
     session = _dict_section(data, "session")
@@ -393,14 +393,14 @@ def _auth_session_email(data):
     return ""
 
 
-def _poll_auth_session(ctx, timeout):
+def poll_auth_session(ctx, timeout):
     deadline = time.time() + timeout
     last_status = ""
     while time.time() < deadline:
         try:
             body = _request_auth_session(ctx)
             last_status = "200" if body else "unavailable"
-            if _session_token(body, "accessToken", "access_token"):
+            if session_token(body, "accessToken", "access_token"):
                 print("[*] Auth session refreshed.")
                 return body
         except Exception as e:
@@ -410,7 +410,7 @@ def _poll_auth_session(ctx, timeout):
     raise RuntimeError("timed out waiting for ChatGPT auth session")
 
 
-def _session_token(data, *keys):
+def session_token(data, *keys):
     if not isinstance(data, dict):
         return ""
     for key in keys:
@@ -424,6 +424,14 @@ def _session_token(data, *keys):
             if isinstance(value, str) and value:
                 return value
     return ""
+
+
+_auth_session_email = auth_session_email
+_load_seed_session = load_seed_session
+_poll_auth_session = poll_auth_session
+_refresh_session_protocol = refresh_session_protocol
+_save_refreshed = save_refreshed
+_session_token = session_token
 
 
 def _new_session_path(data):

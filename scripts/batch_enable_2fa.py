@@ -413,15 +413,14 @@ def run_one(
     from sms_tool.accounts.account_recovery import _stored_registration_password
     from sms_tool.auth_flow import _login_existing_account_with_email_otp
     from sms_tool.transport.auth_headers import (
-        auth_impersonate,
         openai_auth_headers,
         select_auth_fingerprint,
     )
     from sms_tool.codex.oauth import _mailbox_from_data
     from sms_tool.config import CFG
     from sms_tool.proxy.routing import operation_proxy_candidates
-    from sms_tool.session.refresh import _auth_session_email
-    from sms_tool.registration.sentinel_tokens import _set_oai_did_cookie
+    from sms_tool.session.refresh import auth_session_email
+    from sms_tool.registration.sentinel_tokens import set_oai_did_cookie
 
     email = str(account.get("email") or "").strip().lower()
     device_id = str(account.get("device_id") or "").strip() or str(uuid.uuid4())
@@ -460,7 +459,7 @@ def run_one(
             session = curl_requests.Session()
             if proxy:
                 session.proxies = {"http": proxy, "https": proxy}
-            _set_oai_did_cookie(session, device_id)
+            set_oai_did_cookie(session, device_id)
             base_headers = openai_auth_headers(
                 device_id,
                 accept="application/json",
@@ -524,7 +523,7 @@ def run_one(
                 fresh = str(_auth_session_access_token(body) or "").strip()
                 if not fresh:
                     raise RuntimeError("auth_session_missing_access_token")
-                authed = _auth_session_email(body)
+                authed = auth_session_email(body)
                 if authed and authed != email:
                     raise RuntimeError("auth_session_email_mismatch")
                 return fresh

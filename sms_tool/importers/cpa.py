@@ -1,8 +1,5 @@
-import importlib
 import json
-import os
 import re
-import sys
 import time
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -20,30 +17,12 @@ from ..accounts.account_liveness import (
 from ..codex.export import build_codex_json
 from ..config import CFG
 from ..kernel.paths import output_dir
-from ..session.refresh import _load_seed_session
-from ..storage import get_account_record, list_paypal_accounts, mark_quota_status, upsert_account
+from ..session.refresh import load_seed_session
+from ..storage import get_account_record, mark_quota_status, upsert_account
 from typing import Any
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_cpa_classify() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_CPA_CLASSIFY") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "cpa-classify-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("cpa_classify_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_CPA_CLASSIFY = _load_native_cpa_classify()
+_NATIVE_CPA_CLASSIFY = load_native_module("cpa-classify-rs", "cpa_classify_rs", "RUST_ANYTHING_UNIT_CPA_CLASSIFY")
 _NATIVE_CLASSIFY_CPA_AUTH_FILE = getattr(_NATIVE_CPA_CLASSIFY, "classify_cpa_auth_file", None)
 
 
@@ -614,7 +593,7 @@ def _resolve_cpa_config(api_url="", api_token=""):
 
 
 def _load_cpa_source(email="", session_file="", export_dir=""):
-    data, json_path = _load_seed_session(email=email, session_file=session_file)
+    data, json_path = load_seed_session(email=email, session_file=session_file)
     if isinstance(data, dict) and _has_access_token(data):
         return {
             "ok": True,

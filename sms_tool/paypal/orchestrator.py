@@ -15,7 +15,7 @@ from ..account_seed import extract_access_token as _extract_access_token
 from ..account_seed import load_account_seed as _load_seed
 from ..config import CFG
 from .fingerprints import PAYPAL_USER_AGENT as _USER_AGENT
-from ..utils import _generate_password, _random_name
+from ..utils import generate_password, random_name
 from .config_picker import (
     _generate_alias_email,
     _pick_card_and_address,
@@ -100,8 +100,8 @@ def auto_pay(
     # report the absence explicitly instead of polling an empty URL.
     phone = ""
     sms_api_url = ""
-    first_name, last_name = _random_name()
-    password = _generate_password()
+    first_name, last_name = random_name()
+    password = generate_password()
     alias_email = _generate_alias_email(target_email)
 
     print(f"[*] Card: [REDACTED]  Name: {first_name} {last_name}  Email: {alias_email}  Phone: {phone or '(none)'}")
@@ -374,6 +374,8 @@ def _try_browser_pay(
         try:
             from camoufox.sync_api import Camoufox
             from browserforge.fingerprints import Screen
+
+            del Camoufox, Screen
         except ImportError:
             print("[*] Camoufox not installed, falling back to CloakBrowser")
             use_camoufox = False

@@ -20,17 +20,15 @@ It is dependency-free beyond the standard library and reuses the existing
 
 from __future__ import annotations
 
-import importlib
 import os
 import random
 import re
 import secrets
 import string
-import sys
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
+from ..kernel.native_loader import load_native_module
 
 # Scheme aliases -> canonical scheme.
 _SCHEME_ALIASES = {
@@ -409,31 +407,9 @@ _IPWO_CUSTOM_ZONE_RE = re.compile(
 # lane imports this module directly instead of borrowing the phone lane's name.
 # Rule 13 therefore covers six helpers, not five.
 
-
-def _load_native_proxy_entry() -> Any:
-    """Load the Rust `normalize_proxy_url_rs` acceleration module when available."""
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_NORMALIZE_PROXY_URL") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    native_root = str(Path(__file__).resolve().parent.parent.parent / "rust" / "normalize-proxy-url-rs" / "python")
-    if not os.path.isdir(native_root):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise ImportError(f"normalize_proxy_url_rs not found at {native_root}")
-        return None
-    sys.path.insert(0, native_root)
-    try:
-        return importlib.import_module("normalize_proxy_url_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-    finally:
-        if native_root in sys.path:
-            sys.path.remove(native_root)
-
-
-_NATIVE_PROXY_ENTRY = _load_native_proxy_entry()
+_NATIVE_PROXY_ENTRY = load_native_module(
+    "normalize-proxy-url-rs", "normalize_proxy_url_rs", "RUST_ANYTHING_UNIT_NORMALIZE_PROXY_URL"
+)
 _NATIVE_MASK_CREDENTIALS = getattr(_NATIVE_PROXY_ENTRY, "_mask_credentials", None)
 _NATIVE_REDACT_PROXY_TEXT = getattr(_NATIVE_PROXY_ENTRY, "redact_proxy_text", None)
 _NATIVE_RETARGET_REGION = getattr(_NATIVE_PROXY_ENTRY, "retarget_region", None)

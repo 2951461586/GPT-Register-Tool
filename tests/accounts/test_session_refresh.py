@@ -13,7 +13,7 @@ def test_protocol_candidate_can_be_returned_without_persistence():
     }
     with (
         patch.object(session_refresh, "_fetch_protocol_auth_session", return_value=auth_session),
-        patch.object(session_refresh, "_save_refreshed") as save,
+        patch.object(session_refresh, "save_refreshed") as save,
     ):
         result = session_refresh._refresh_session_protocol(
             data,

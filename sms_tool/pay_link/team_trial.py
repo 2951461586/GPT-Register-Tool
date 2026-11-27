@@ -9,35 +9,13 @@ the account's Access Token and matching egress country.
 from __future__ import annotations
 
 import base64
-import importlib
 import json
-import os
 import re
-import sys
-from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.parse import quote
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_team_trial() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_TEAM_TRIAL") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "team-trial-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("team_trial_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_TEAM_TRIAL = _load_native_team_trial()
+_NATIVE_TEAM_TRIAL = load_native_module("team-trial-rs", "team_trial_rs", "RUST_ANYTHING_UNIT_TEAM_TRIAL")
 _NATIVE_JWT_CHATGPT_ACCOUNT_ID = getattr(_NATIVE_TEAM_TRIAL, "_jwt_chatgpt_account_id", None)
 
 from ..payment.checkout_contract import (

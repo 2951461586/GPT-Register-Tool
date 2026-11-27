@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
-from urllib.parse import parse_qs, quote, urlsplit
+from urllib.parse import quote
 
 from sms_tool.kernel import env_loader
 from sms_tool.config import ConfigError, validate_config
@@ -30,7 +30,6 @@ from sms_tool.registration_drivers.stealth import apply_playwright_stealth
 # exist for anything the orchestrator itself imports.
 from sms_tool.registration_drivers.browser_flow import flow_steps
 from sms_tool.registration_drivers.browser_flow.dom_fields import (
-    _browser_heartbeat,
     _click_continue,
     _click_passwordless_otp,
     _first_visible,

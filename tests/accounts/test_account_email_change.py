@@ -1,7 +1,5 @@
 import json
-import time
 from argparse import Namespace
-from pathlib import Path
 
 from sms_tool.accounts.account_email_change import (
     EmailChangeRequest,

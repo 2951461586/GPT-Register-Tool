@@ -7,11 +7,10 @@ from ..transport.auth_headers import auth_impersonate, openai_auth_headers
 from ..config import CFG
 from ..transport.http_client import request_with_retry
 from ..transport.http_utils import (
-    _absolute_url,
-    _cookie_header,
-    _cookie_presence,
-    _json_or_raw,
-    _minimal_chatgpt_cookie_header,
+    absolute_url,
+    cookie_header as _cookie_header,
+    cookie_presence,
+    json_or_raw,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -104,7 +103,7 @@ def _validate_email_otp(
         sentinel = sentinel_data or load_cached_sentinel()
         validate_headers = with_sentinel(validate_headers, sentinel)
     # Try primary endpoint first with {"code": payload (matches codex_oauth)
-    url = _absolute_url(auth_base, primary_endpoint)
+    url = absolute_url(auth_base, primary_endpoint)
     r = request_with_retry(
         session,
         "post",
@@ -114,7 +113,7 @@ def _validate_email_otp(
         headers=validate_headers,
         impersonate=auth_impersonate(),
     )
-    body = _json_or_raw(r)
+    body = json_or_raw(r)
     if r.status_code == 200:
         print(f"  Email OTP validate: {primary_endpoint} {r.status_code}")
         return True, body
@@ -125,7 +124,7 @@ def _validate_email_otp(
     # If primary returns 404/405, try fallback endpoints
     if r.status_code in (404, 405):
         for endpoint in fallback_endpoints:
-            url = _absolute_url(auth_base, endpoint)
+            url = absolute_url(auth_base, endpoint)
             for payload in ({"code": code}, {"otp": code}):
                 r = request_with_retry(
                     session,
@@ -136,7 +135,7 @@ def _validate_email_otp(
                     headers=validate_headers,
                     impersonate=auth_impersonate(),
                 )
-                body = _json_or_raw(r)
+                body = json_or_raw(r)
                 if r.status_code == 200:
                     print(f"  Email OTP validate: {endpoint} {r.status_code}")
                     return True, body
@@ -258,7 +257,7 @@ def _fetch_auth_session(session, chat_base, base_headers, attempts=8, delay=0.5)
             attempts=1,
             timeout=request_timeout,
         )
-        body = _json_or_raw(r, limit=1000)
+        body = json_or_raw(r, limit=1000)
         last = {
             "status_code": r.status_code,
             "body": body,
@@ -284,7 +283,7 @@ def _fetch_auth_session(session, chat_base, base_headers, attempts=8, delay=0.5)
         # came out as ``[REDACTED]`` (measured, not assumed).
         token_key_present = _contains_access_token_key(body)
         shape = _session_body_shape(body)
-        jar = _cookie_presence(session)
+        jar = cookie_presence(session)
         # P2 (2026-09-19): a session whose jar never received the
         # ``__Secure-next-auth.session-token`` cookie is structurally
         # anonymous -- ``GET /api/auth/session`` will keep answering the bare

@@ -15,15 +15,10 @@ account_creation, account_2fa, codex_oauth, session_refresh, and auth_state:
 from __future__ import annotations
 
 import base64
-import importlib
 import json
 import logging
-import os
 import re
-import sys
 from collections.abc import Mapping
-from pathlib import Path
-from typing import Any
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
 from ..config import CFG
@@ -31,29 +26,11 @@ from .auth_headers import auth_impersonate
 from .http_client import request_with_retry
 from ..observability.operator_output import emit
 from . import endpoints
+from ..kernel.native_loader import load_native_module
 
 _LOGGER = logging.getLogger(__name__)
 
-
-def _load_native_http_utils() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_HTTP_UTILS") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "http-utils-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("http_utils_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_HTTP_UTILS = _load_native_http_utils()
+_NATIVE_HTTP_UTILS = load_native_module("http-utils-rs", "http_utils_rs", "RUST_ANYTHING_UNIT_HTTP_UTILS")
 _NATIVE_IS_ALLOWED_CALLBACK_URL = getattr(_NATIVE_HTTP_UTILS, "_is_allowed_callback_url", None)
 _NATIVE_MINIMAL_CHATGPT_COOKIE_HEADER = getattr(_NATIVE_HTTP_UTILS, "_minimal_chatgpt_cookie_header", None)
 _NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
@@ -66,7 +43,7 @@ _WORKSPACES_STREAM_RE = re.compile(r'workspaces".{0,1600}?"id","([0-9a-fA-F-]{36
 # ── response parsing ──────────────────────────────────────────────────────────
 
 
-def _json_or_raw(response, limit: int = 500):
+def json_or_raw(response, limit: int = 500):
     """Parse response as JSON; on failure return dict with truncated raw text."""
     try:
         return response.json()
@@ -74,16 +51,22 @@ def _json_or_raw(response, limit: int = 500):
         return {"_raw": getattr(response, "text", "")[:limit]}
 
 
+_json_or_raw = json_or_raw
+
+
 # ── URL helpers ───────────────────────────────────────────────────────────────
 
 
-def _absolute_url(base_url: str, url: str) -> str:
+def absolute_url(base_url: str, url: str) -> str:
     """Resolve *url* against *base_url* if it is not already absolute."""
     if not url:
         return ""
     if str(url).startswith(("http://", "https://")):
         return str(url)
     return base_url.rstrip("/") + "/" + str(url).lstrip("/")
+
+
+_absolute_url = absolute_url
 
 
 # ── continue-URL navigation ───────────────────────────────────────────────────
@@ -318,14 +301,14 @@ def _resolve_auth_callback_stops(
     return current_resp
 
 
-def _follow_continue_url(session, url, base_headers, referer="", label="continue"):
+def follow_continue_url(session, url, base_headers, referer="", label="continue"):
     """GET a continue URL (resolved against auth_base) with impersonation."""
     if not url:
         return None
     chat_cfg = CFG.get("chatgpt") if isinstance(CFG, Mapping) else {}
     auth_base = (chat_cfg or {}).get("auth_base_url", endpoints.AUTH_BASE)
     chat_base = (chat_cfg or {}).get("chat_base_url", endpoints.CHATGPT_BASE)
-    full_url = _absolute_url(auth_base, url)
+    full_url = absolute_url(auth_base, url)
     headers = {**base_headers, "Accept": "text/html,application/xhtml+xml"}
     if referer:
         headers["Referer"] = referer
@@ -352,10 +335,13 @@ def _follow_continue_url(session, url, base_headers, referer="", label="continue
     )
 
 
+_follow_continue_url = follow_continue_url
+
+
 # ── cookie helpers ────────────────────────────────────────────────────────────
 
 
-def _minimal_chatgpt_cookie_header(cookie_header) -> str:
+def minimal_chatgpt_cookie_header(cookie_header) -> str:
     """Return a minimal cookie header with only essential ChatGPT cookies."""
     if _NATIVE_MINIMAL_CHATGPT_COOKIE_HEADER is not None and isinstance(cookie_header, _NATIVE_SCALAR_TYPES):
         return str(_NATIVE_MINIMAL_CHATGPT_COOKIE_HEADER(cookie_header))
@@ -382,7 +368,10 @@ def _minimal_chatgpt_cookie_header(cookie_header) -> str:
     return "; ".join(output)
 
 
-def _cookie_header(session) -> str:
+_minimal_chatgpt_cookie_header = minimal_chatgpt_cookie_header
+
+
+def cookie_header(session) -> str:
     """Serialize session cookies to a header string, keeping only ChatGPT essentials."""
     cookies = getattr(session, "cookies", None)
     if not cookies:
@@ -391,10 +380,13 @@ def _cookie_header(session) -> str:
         items = cookies.get_dict().items()
     else:
         items = [(cookie.name, cookie.value) for cookie in cookies]
-    return _minimal_chatgpt_cookie_header("; ".join(f"{name}={value}" for name, value in items))
+    return minimal_chatgpt_cookie_header("; ".join(f"{name}={value}" for name, value in items))
 
 
-def _cookie_presence(session):
+_cookie_header = cookie_header
+
+
+def cookie_presence(session):
     """Which auth-relevant cookies the session currently holds (flags, no values).
 
     Moved here from ``auth_flow`` on 2026-09-12: ``account_creation`` needs it too,
@@ -430,6 +422,9 @@ def _cookie_presence(session):
         "nextauth_session": any("next-auth.session-token" in name.lower() for name in names),
         "cookie_count": len(names),
     }
+
+
+_cookie_presence = cookie_presence
 
 
 # ── email OTP validation ──────────────────────────────────────────────────────

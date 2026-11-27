@@ -42,40 +42,20 @@ proxy because its probe crashed.
 
 from __future__ import annotations
 
-import importlib
-import os
-import sys
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
-from pathlib import Path
 from statistics import median
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from .entry import _mask_credentials
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_proxy_screening() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_PROXY_SCREENING") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "proxy-screening-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("proxy_screening_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_PROXY_SCREENING = _load_native_proxy_screening()
+_NATIVE_PROXY_SCREENING = load_native_module(
+    "proxy-screening-rs", "proxy_screening_rs", "RUST_ANYTHING_UNIT_PROXY_SCREENING"
+)
 _NATIVE_CLASSIFY_NETWORK_TYPE = getattr(_NATIVE_PROXY_SCREENING, "classify_network_type", None)
 
 if TYPE_CHECKING:  # annotation-only: see the delayed-import note below

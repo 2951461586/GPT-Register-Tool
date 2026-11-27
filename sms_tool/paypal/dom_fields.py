@@ -8,35 +8,12 @@ PayPal-specific business meaning, and no dependency on any sibling module.
 from __future__ import annotations
 
 import contextlib
-import importlib
-import os
 import random
 import re
-import sys
 import time
-from pathlib import Path
-from typing import Any
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_paypal_dom() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_PAYPAL_DOM") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "paypal-dom-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("paypal_dom_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_PAYPAL_DOM = _load_native_paypal_dom()
+_NATIVE_PAYPAL_DOM = load_native_module("paypal-dom-rs", "paypal_dom_rs", "RUST_ANYTHING_UNIT_PAYPAL_DOM")
 _NATIVE_VALUE_MATCHES = getattr(_NATIVE_PAYPAL_DOM, "_value_matches", None)
 
 

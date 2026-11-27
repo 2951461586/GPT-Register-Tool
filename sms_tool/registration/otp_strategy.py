@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from ..config import CFG, current_config_data
 from ..transport.auth_headers import AUTH_IMPERSONATE, auth_impersonate, openai_auth_headers
 from ..transport.auth_wire import _invalid_state_auth_response
-from ..transport.http_utils import _absolute_url, _json_or_raw
+from ..transport.http_utils import absolute_url, json_or_raw
 from ..transport.http_client import request_with_retry
 from ..mailbox.router import poll_email_otp
 from .progress import registration_stage
@@ -156,7 +156,7 @@ def send_registration_email_otp(session, auth_base, base_headers, current_url=""
         response = request_with_retry(
             session,
             "post",
-            _absolute_url(auth_base, endpoint),
+            absolute_url(auth_base, endpoint),
             label=f"Email OTP {endpoint}",
             **kwargs,
         )
@@ -164,7 +164,7 @@ def send_registration_email_otp(session, auth_base, base_headers, current_url=""
         last = response
         if response.status_code in (200, 202, 204):
             return response
-        body = _json_or_raw(response, limit=500)
+        body = json_or_raw(response, limit=500)
         print(f"    Response: {json.dumps(body, ensure_ascii=False)[:500]}")
         if mode == "passwordless" and _invalid_state_auth_response(body):
             return response
@@ -176,7 +176,7 @@ def send_registration_email_otp(session, auth_base, base_headers, current_url=""
             return SyntheticResponse(
                 204,
                 {"assumed_pre_sent": True, "resend_status": response.status_code, "resend_body": body},
-                url=_absolute_url(auth_base, endpoint),
+                url=absolute_url(auth_base, endpoint),
             )
         if response.status_code not in (404, 405):
             return response

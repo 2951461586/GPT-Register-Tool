@@ -32,7 +32,6 @@ API key outside source control (``SMAILR_API_KEY`` is preferred)::
 
 from __future__ import annotations
 
-import json
 import time
 import urllib.parse
 import urllib.error
@@ -374,14 +373,14 @@ def poll_otp(
 ) -> str | None:
     """Settle-stability OTP polling."""
     from ..mailbox.poll import _poll_otp_with_settle
-    from ..mailbox.mail_otp import _email_otp_candidate
+    from ..mailbox.mail_otp import email_otp_candidate
 
     keyword = (subject_keyword or "").lower()
     excluded = {str(value or "").strip() for value in (excluded_otps or ())}
 
     def _fetch_candidate():
         for msg in fetch_messages(client, mailbox_id, mailbox_email, limit=10):
-            candidate = _email_otp_candidate(
+            candidate = email_otp_candidate(
                 type("FakeMB", (), {"email": mailbox_email, "provider": "smailr"})(),
                 msg,
                 keyword=keyword,
@@ -391,7 +390,7 @@ def poll_otp(
                 # Smailr currently stores some CJK OpenAI subjects as mojibake.
                 # Keep timestamp/sender/recipient checks, but allow the body OTP
                 # parser to decide when the subject cannot carry the keyword.
-                candidate = _email_otp_candidate(
+                candidate = email_otp_candidate(
                     type("FakeMB", (), {"email": mailbox_email, "provider": "smailr"})(),
                     msg,
                     keyword="",

@@ -1316,7 +1316,7 @@ def test_refresh_token_recovery_verifies_before_persisting():
             "probe_account_liveness",
             return_value={"ok": True, "status": "active", "status_code": 200},
         ) as probe,
-        patch("sms_tool.session.refresh._save_refreshed", return_value="session.json") as save,
+        patch("sms_tool.session.refresh.save_refreshed", return_value="session.json") as save,
     ):
         result = account_recovery.relogin_refresh_token_account(account)
 
@@ -1347,7 +1347,7 @@ def test_refresh_token_recovery_rejects_unverified_candidate():
             "probe_account_liveness",
             return_value={"ok": False, "status": "token_invalid", "status_code": 401},
         ),
-        patch("sms_tool.session.refresh._save_refreshed") as save,
+        patch("sms_tool.session.refresh.save_refreshed") as save,
     ):
         result = account_recovery.relogin_refresh_token_account(account)
 
@@ -1363,9 +1363,9 @@ def test_web_session_rejects_a_cookie_for_another_account():
         "auth_session": {"user": {"email": "other@example.com"}},
     }
     with (
-        patch("sms_tool.session.refresh._refresh_session_protocol", return_value={"ok": True, "data": candidate}),
+        patch("sms_tool.session.refresh.refresh_session_protocol", return_value={"ok": True, "data": candidate}),
         patch.object(account_recovery, "probe_account_liveness") as probe,
-        patch("sms_tool.session.refresh._save_refreshed") as save,
+        patch("sms_tool.session.refresh.save_refreshed") as save,
     ):
         result = account_recovery.relogin_web_session_account({"email": "ok@example.com"})
 
@@ -1573,7 +1573,7 @@ def test_browser_recovery_uses_driver_from_browser_identity():
             "probe_account_liveness",
             return_value={"ok": True, "status": "active", "status_code": 200},
         ),
-        patch("sms_tool.session.refresh._save_refreshed", return_value="session.json"),
+        patch("sms_tool.session.refresh.save_refreshed", return_value="session.json"),
     ):
         result = account_recovery.relogin_browser_session_account(account)
 
@@ -1947,7 +1947,7 @@ def test_relogin_hands_the_stored_password_to_the_login_probe():
     with (
         patch("sms_tool.codex.oauth._mailbox_from_data", return_value=Mock()),
         patch("sms_tool.transport.auth_headers.select_auth_fingerprint"),
-        patch("sms_tool.registration.sentinel_tokens._set_oai_did_cookie"),
+        patch("sms_tool.registration.sentinel_tokens.set_oai_did_cookie"),
         patch("sms_tool.transport.http_client.request_with_retry", return_value=Mock(status_code=200)),
         patch("sms_tool.auth_flow._json_or_raw", return_value={"csrfToken": "csrf"}),
         patch(
@@ -1975,7 +1975,7 @@ def _capturing_relogin(account: dict, stored_password: str):
     with (
         patch("sms_tool.codex.oauth._mailbox_from_data", return_value=Mock()),
         patch("sms_tool.transport.auth_headers.select_auth_fingerprint"),
-        patch("sms_tool.registration.sentinel_tokens._set_oai_did_cookie"),
+        patch("sms_tool.registration.sentinel_tokens.set_oai_did_cookie"),
         patch("sms_tool.transport.http_client.request_with_retry", return_value=Mock(status_code=200)),
         patch("sms_tool.auth_flow._json_or_raw", return_value={"csrfToken": "csrf"}),
         patch(
@@ -2288,7 +2288,7 @@ def test_verify_candidate_retries_liveness_probe_on_transport_zero_status():
             {"proxy": {"pool": ["http://exit-1:8080", "http://exit-2:8080"]}},
         ),
         patch.object(account_recovery, "probe_account_liveness", side_effect=fake_probe),
-        patch("sms_tool.session.refresh._save_refreshed", return_value="session.json"),
+        patch("sms_tool.session.refresh.save_refreshed", return_value="session.json"),
     ):
         result = account_recovery._verify_and_persist_candidate(
             {"email": "ok@outlook.com"},

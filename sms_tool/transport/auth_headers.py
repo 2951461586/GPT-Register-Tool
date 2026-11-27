@@ -3,44 +3,21 @@
 from __future__ import annotations
 
 import hashlib
-import importlib
-import os
 import random
 import re
 import secrets
-import sys
 import threading
 import time
 import uuid
 from collections import Counter
 from collections.abc import Mapping
 from importlib.metadata import PackageNotFoundError, version as package_version
-from pathlib import Path
-from typing import Any
 from urllib.parse import urlparse
 
 from ..geo.profiles import MARKET_PROFILES, WINDOWS_TIMEZONE_BY_IANA
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_auth_headers() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_AUTH_HEADERS") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "auth-headers-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("auth_headers_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_AUTH_HEADERS = _load_native_auth_headers()
+_NATIVE_AUTH_HEADERS = load_native_module("auth-headers-rs", "auth_headers_rs", "RUST_ANYTHING_UNIT_AUTH_HEADERS")
 _NATIVE_BROWSER_VERSION = getattr(_NATIVE_AUTH_HEADERS, "_browser_version", None)
 _NATIVE_FULL_VERSION_LIST = getattr(_NATIVE_AUTH_HEADERS, "_full_version_list", None)
 _NATIVE_ACCEPT_ENCODING_FOR = getattr(_NATIVE_AUTH_HEADERS, "accept_encoding_for", None)

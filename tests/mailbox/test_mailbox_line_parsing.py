@@ -18,7 +18,6 @@ fails here, without anyone having to remember the list.
 
 from __future__ import annotations
 
-import dataclasses
 import tempfile
 import unittest
 from pathlib import Path

@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 
 def test_mailbox_pool_liveness_requires_two_definitive_observations_before_apply(tmp_path, monkeypatch):

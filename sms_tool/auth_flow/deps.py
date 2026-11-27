@@ -15,7 +15,12 @@ from ..transport.auth_headers import auth_impersonate, nextauth_headers, openai_
 from ..transport.auth_state import fetch_client_auth_session_dump as _fetch_client_auth_session_dump
 from ..config import current_config_data
 from ..transport.http_client import _retry_after_seconds, request_with_retry
-from ..transport.http_utils import _absolute_url, _cookie_presence, _follow_continue_url, _json_or_raw
+from ..transport.http_utils import (
+    absolute_url as _absolute_url,
+    cookie_presence as _cookie_presence,
+    follow_continue_url as _follow_continue_url,
+    json_or_raw as _json_or_raw,
+)
 from ..mailbox.router import poll_email_otp
 from ..phone.phone_proxy import redact_proxy_url
 from ..registration.concurrency import mark_registration_rate_limited

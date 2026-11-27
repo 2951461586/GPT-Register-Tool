@@ -40,13 +40,9 @@ or ``phone_reuse.nexsms.api_key``.
 
 from __future__ import annotations
 
-import importlib
 import logging
-import os
-import sys
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Optional
 
 import requests as _requests
@@ -65,29 +61,11 @@ from .smsbower import (
     normalize_phone,
     normalize_service,
 )
+from ..kernel.native_loader import load_native_module
 
 _LOGGER = logging.getLogger(__name__)
 
-
-def _load_native_nexsms_phone() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_NEXSMS_PHONE") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "nexsms-phone-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("nexsms_phone_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_NEXSMS_PHONE = _load_native_nexsms_phone()
+_NATIVE_NEXSMS_PHONE = load_native_module("nexsms-phone-rs", "nexsms_phone_rs", "RUST_ANYTHING_UNIT_NEXSMS_PHONE")
 _NATIVE_API_PHONE_NUMBER = getattr(_NATIVE_NEXSMS_PHONE, "api_phone_number", None)
 
 #: Base host only -- this family appends its own ``/api/...`` path per call, so

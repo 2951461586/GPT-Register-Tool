@@ -32,7 +32,7 @@ class FakeSession:
     def post(self, url, **kwargs):
         self.post_calls.append((url, kwargs))
         if url.endswith("/mfa/enroll"):
-            return FakeResponse({"secret": "JBSWY3DPEHPK3PXP", "session_id": "sid"})
+            return FakeResponse({"secret": "JBSWY3DPEHPK3PXPJBSWY3DP", "session_id": "sid"})
         if url.endswith("/activate_enrollment"):
             return FakeResponse({"success": True})
         raise AssertionError(url)
@@ -49,7 +49,7 @@ def test_newly_registered_session_uses_inline_totp_enrollment():
         poll_otp_fn=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("OTP fallback must not run")),
     )
     assert result["ok"] is True
-    assert result["totp_secret"] == "JBSWY3DPEHPK3PXP"
+    assert result["totp_secret"] == "JBSWY3DPEHPK3PXPJBSWY3DP"
     assert [url for url, _ in session.post_calls] == [
         "https://chatgpt.com/backend-api/accounts/mfa/enroll",
         "https://chatgpt.com/backend-api/accounts/mfa/user/activate_enrollment",

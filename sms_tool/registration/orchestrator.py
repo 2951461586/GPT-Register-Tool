@@ -104,7 +104,6 @@ _MODULE_EXPORTS: dict[str, tuple[str, str]] = {
     "_invalid_state_auth_response": ("sms_tool.auth_flow", "_invalid_state_auth_response"),
     "_is_email_verification_step": ("sms_tool.auth_flow", "_is_email_verification_step"),
     "_is_mfa_challenge_payload": ("sms_tool.auth_flow", "_is_mfa_challenge_payload"),
-    "_minimal_chatgpt_cookie_header": ("sms_tool.registration.account_creation", "_minimal_chatgpt_cookie_header"),
     "_openai_signin_url": ("sms_tool.auth_flow", "_openai_signin_url"),
     "_prime_email_verification_page": ("sms_tool.auth_flow", "_prime_email_verification_page"),
     "_response_next_url": ("sms_tool.auth_flow", "_response_next_url"),
@@ -144,7 +143,6 @@ if TYPE_CHECKING:  # pragma: no cover - static checkers only
     from sms_tool.registration.account_creation import (  # noqa: F401
         _cookie_header,
         _create_account_sentinel_token,
-        _minimal_chatgpt_cookie_header,
     )
     from sms_tool.auth_flow import (  # noqa: F401
         _absolute_url,
@@ -196,11 +194,11 @@ if TYPE_CHECKING:  # pragma: no cover - static checkers only
         prepare_registration_context,
     )
     from sms_tool.registration.sentinel_tokens import (  # noqa: F401
-        _cookie_jar_header,
-        _extract_sentinel_http,
-        _sentinel_frame_version,
+        cookie_jar_header as _cookie_jar_header,
+        extract_sentinel_http as _extract_sentinel_http,
+        sentinel_frame_version as _sentinel_frame_version,
     )
-    from sms_tool.utils import _tock  # noqa: F401
+    from sms_tool.utils import tock as _tock  # noqa: F401
 
 
 def __getattr__(name: str) -> Any:
@@ -260,7 +258,12 @@ from sms_tool.config import (
     validate_registration_driver_config,
 )
 from sms_tool.transport.http_client import request_with_retry
-from sms_tool.transport.http_utils import _follow_continue_url
+from sms_tool.transport.http_utils import (
+    follow_continue_url as _follow_continue_url,
+    minimal_chatgpt_cookie_header,
+)
+
+_minimal_chatgpt_cookie_header = minimal_chatgpt_cookie_header
 from sms_tool.kernel.sanitizer import sanitize_text as _sanitize_text
 from sms_tool.mailbox.router import (
     ensure_mailbox_account,
@@ -300,22 +303,22 @@ from sms_tool.registration.state import (
 )
 from sms_tool.registration_drivers.base import normalize_registration_driver
 from sms_tool.registration.sentinel_tokens import (
-    _extract_sentinel,
-    _import_sentinel_cookies,
-    _sentinel_device_id,
-    _set_oai_did_cookie,
+    extract_sentinel as _extract_sentinel,
+    import_sentinel_cookies as _import_sentinel_cookies,
+    sentinel_device_id as _sentinel_device_id,
+    set_oai_did_cookie as _set_oai_did_cookie,
     assert_sentinel_device_id,
 )
 from sms_tool.session.builder import build_session_file
 from sms_tool.utils import (
-    _generate_password,
-    _print_timings,
-    _random_birthdate,
-    _random_name,
-    _safe_tock,
-    _tick,
-    _timing_summary,
-    _tl,
+    generate_password as _generate_password,
+    print_timings as _print_timings,
+    random_birthdate as _random_birthdate,
+    random_name as _random_name,
+    safe_tock as _safe_tock,
+    tick as _tick,
+    timing_summary as _timing_summary,
+    tl as _tl,
     think_stage,
 )
 

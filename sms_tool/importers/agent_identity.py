@@ -16,6 +16,13 @@ from ..config import CFG
 from ..kernel.paths import output_dir
 from ..proxy.entry import normalize_proxy_url
 from ..transport import endpoints
+from ..kernel.native_loader import load_native_module
+
+_NATIVE_AGENT_IDENTITY_JWT = load_native_module(
+    "agent-identity-jwt-rs", "agent_identity_jwt_rs", "RUST_ANYTHING_UNIT_AGENT_IDENTITY_JWT"
+)
+_NATIVE_JWT_CLAIMS = getattr(_NATIVE_AGENT_IDENTITY_JWT, "_jwt_claims", None)
+_NATIVE_CHATGPT_USER_ID = getattr(_NATIVE_AGENT_IDENTITY_JWT, "_chatgpt_user_id", None)
 
 
 REGISTER_URL = endpoints.AUTH_BASE + "/api/accounts/v1/agent/register"
@@ -170,9 +177,9 @@ def rebuild_agent_identity(email="", source_data=None, export_dir="", proxy="", 
     json_path = str(data.get("json_path") or "").strip()
     target_email = str(email or data.get("email") or "").strip().lower()
     if not data and target_email:
-        from ..session.refresh import _load_seed_session
+        from ..session.refresh import load_seed_session
 
-        data, json_path = _load_seed_session(email=target_email)
+        data, json_path = load_seed_session(email=target_email)
     if not target_email:
         target_email = str(data.get("email") or "").strip().lower()
     if not target_email:
@@ -279,7 +286,7 @@ def _refresh_agent_identity_chatgpt_session(data, email, json_path="", proxy="",
     if not _has_chatgpt_session(source):
         return None, json_path, ""
     try:
-        from ..session.refresh import _load_seed_session, refresh_session
+        from ..session.refresh import load_seed_session, refresh_session
 
         refreshed = refresh_session(
             email=email,
@@ -289,7 +296,7 @@ def _refresh_agent_identity_chatgpt_session(data, email, json_path="", proxy="",
         )
         if not refreshed.get("ok"):
             return None, json_path, str(refreshed.get("error") or "session_refresh_failed")
-        refreshed_source, refreshed_path = _load_seed_session(
+        refreshed_source, refreshed_path = load_seed_session(
             email=email,
             session_file=str(refreshed.get("json_path") or json_path or ""),
         )
@@ -299,9 +306,9 @@ def _refresh_agent_identity_chatgpt_session(data, email, json_path="", proxy="",
 
 
 def _persist_agent_identity_source(data, json_path=""):
-    from ..session.refresh import _save_refreshed
+    from ..session.refresh import save_refreshed
 
-    return _save_refreshed(dict(data or {}), json_path)
+    return save_refreshed(dict(data or {}), json_path)
 
 
 def _has_chatgpt_session(data):
@@ -610,6 +617,8 @@ def _normalize_access_token(value):
 
 
 def _jwt_claims(access_token):
+    if _NATIVE_JWT_CLAIMS is not None and isinstance(access_token, str):
+        return _NATIVE_JWT_CLAIMS(access_token)
     try:
         payload = access_token.split(".")[1]
         payload += "=" * (-len(payload) % 4)
@@ -619,6 +628,8 @@ def _jwt_claims(access_token):
 
 
 def _chatgpt_user_id(access_token):
+    if _NATIVE_CHATGPT_USER_ID is not None and isinstance(access_token, str):
+        return _NATIVE_CHATGPT_USER_ID(access_token)
     claims = _jwt_claims(access_token)
     _raw_auth: object = claims.get("https://api.openai.com/auth")
     auth: dict = _raw_auth if isinstance(_raw_auth, dict) else {}

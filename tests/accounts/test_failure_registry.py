@@ -1,6 +1,6 @@
 """失败词汇单一注册表：派生一致性与分类语义保持。"""
 
-from sms_tool.kernel import error_classification, failure_registry
+from sms_tool.kernel import failure_registry
 from sms_tool.kernel.error_classification import (
     ACCOUNT_ERROR_MARKERS,
     AUTH_STATE_ERROR_MARKERS,

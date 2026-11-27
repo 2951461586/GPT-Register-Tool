@@ -31,35 +31,12 @@ binding is equivalent.
 
 from __future__ import annotations
 
-import importlib
-import os
-import sys
-from pathlib import Path
-from typing import Any
 from urllib.parse import quote, urlparse
 
 from .auth_headers import openai_auth_headers
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_auth_wire() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_AUTH_WIRE") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "auth-wire-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("auth_wire_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_AUTH_WIRE = _load_native_auth_wire()
+_NATIVE_AUTH_WIRE = load_native_module("auth-wire-rs", "auth_wire_rs", "RUST_ANYTHING_UNIT_AUTH_WIRE")
 _NATIVE_IS_EXISTING_LOGIN_REDIRECT = getattr(_NATIVE_AUTH_WIRE, "_is_existing_login_redirect", None)
 
 #: Subject fragment that identifies a login (not signup) OTP mail.

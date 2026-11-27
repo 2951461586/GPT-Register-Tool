@@ -17,13 +17,13 @@ the *gate* (per-pair, only-down); this file is the *view*.
 
 | Measure | Value |
 | --- | ---: |
-| Modules | 294 |
-| Module-level import edges | 914 |
+| Modules | 295 |
+| Module-level import edges | 958 |
 | Delayed (function-local) edges | 309 |
-| Type-only (`if TYPE_CHECKING`) edges | 60 |
+| Type-only (`if TYPE_CHECKING`) edges | 58 |
 | Strongly connected components (size > 1) | 0 |
 | Modules inside a cycle | 0 |
-| Mutually dependent directory pairs | 17 |
+| Mutually dependent directory pairs | 16 |
 
 ## Cycles
 
@@ -36,7 +36,6 @@ None.
 | `sms_tool` ↔ `sms_tool/desktop` |
 | `sms_tool` ↔ `sms_tool/payment` |
 | `sms_tool` ↔ `sms_tool/registration` |
-| `sms_tool` ↔ `sms_tool/registration_drivers` |
 | `sms_tool` ↔ `sms_tool/store` |
 | `sms_tool/accounts` ↔ `sms_tool/registration` |
 | `sms_tool/auth_flow` ↔ `sms_tool/registration` |
@@ -56,6 +55,7 @@ None.
 | Module | Importers |
 | --- | ---: |
 | `sms_tool.config` | 60 |
+| `sms_tool.kernel.native_loader` | 47 |
 | `sms_tool.transport` | 33 |
 | `sms_tool.transport.endpoints` | 33 |
 | `sms_tool.kernel.sanitizer` | 31 |
@@ -64,9 +64,8 @@ None.
 | `sms_tool.transport.auth_headers` | 26 |
 | `sms_tool.observability.operator_output` | 18 |
 | `sms_tool.transport.http_client` | 15 |
-| `sms_tool.storage` | 14 |
-| `sms_tool.registration_drivers.base` | 13 |
+| `sms_tool.storage` | 13 |
 | `sms_tool.registration.state` | 12 |
+| `sms_tool.registration_drivers.base` | 12 |
 | `sms_tool.cross_process_gate` | 10 |
-| `sms_tool.kernel.error_classification` | 10 |
 | `sms_tool.accounts.account_liveness` | 9 |

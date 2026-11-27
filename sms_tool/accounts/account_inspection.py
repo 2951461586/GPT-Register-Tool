@@ -16,14 +16,10 @@ Filters the local account pool by decoding each stored access token's JWT
 from __future__ import annotations
 
 import base64
-import importlib
 import json
 import math
-import os
-import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
-from pathlib import Path
 from typing import Any
 
 from .account_health import resolve_account_health_budgets
@@ -34,29 +30,13 @@ from .account_recovery import (
     is_permanently_deactivated,
 )
 from .promotion_batch import refresh_promotion_statuses
+from ..kernel.native_loader import load_native_module
 
 DEFAULT_INSPECT_SKEW_SECONDS = 300
 
-
-def _load_native_account_inspection() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_ACCOUNT_INSPECTION") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "account-inspection-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("account_inspection_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_ACCOUNT_INSPECTION = _load_native_account_inspection()
+_NATIVE_ACCOUNT_INSPECTION = load_native_module(
+    "account-inspection-rs", "account_inspection_rs", "RUST_ANYTHING_UNIT_ACCOUNT_INSPECTION"
+)
 _NATIVE_DECODE_JWT_EXP = getattr(_NATIVE_ACCOUNT_INSPECTION, "decode_jwt_exp", None)
 _NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
 

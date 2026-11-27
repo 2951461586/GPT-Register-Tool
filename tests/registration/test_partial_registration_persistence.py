@@ -25,7 +25,6 @@ import pytest
 
 import sms_tool.storage as storage_mod
 from sms_tool.commands.registration import (
-    _PERSISTENCE_KEY,
     RegistrationCommandContext,
     _persist_registration_result_core,
 )

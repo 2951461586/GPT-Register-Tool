@@ -1,7 +1,5 @@
 """Tests for the shared proxy health/geo cache and PayPal country catalog."""
 
-import pytest
-
 from sms_tool.paypal import proxy as paypal_proxy
 from sms_tool.paypal.proxy import (
     PayPalProxyState,

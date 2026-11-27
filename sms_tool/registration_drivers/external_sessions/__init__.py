@@ -5,22 +5,16 @@ from typing import Any, Mapping
 
 from ...kernel.driver_env import driver_config as _driver_config
 from ..base import BROWSER_REGISTRATION_DRIVERS, BrowserRegistrationError, normalize_registration_driver
-from ..browser_session import PlaywrightBrowserSession, _playwright_proxy
+from ..browser_session import PlaywrightBrowserSession
+from ..platform_patches import MOZ_DISABLE_CONTENT_SANDBOX as MOZ_DISABLE_CONTENT_SANDBOX
 from .managed import (
     CamoufoxBrowserSession,
     CloakBrowserSession,
-    ConnectedPlaywrightSession,
     RoxyBrowserSession,
-    MOZ_DISABLE_CONTENT_SANDBOX,
-    _first,
-    _normalize_debugger_address,
-    _require,
-    _roxy_retryable,
-    apply_playwright_stealth,
-    curl_requests,
-    time,
+    curl_requests as curl_requests,
+    time as time,
 )
-from .profiles import _browser_profile_dir, _inject_browser_profile, _inject_screen_size
+from .profiles import _inject_browser_profile, _inject_screen_size
 from .probe import verify_browser_proxy_country
 
 _BROWSER_SESSION_FACTORIES: dict[str, Callable[..., PlaywrightBrowserSession]] = {

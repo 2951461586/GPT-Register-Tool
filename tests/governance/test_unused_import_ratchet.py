@@ -56,8 +56,8 @@ def test_script_reports_ok_on_the_current_tree():
 
 def test_baseline_is_populated_and_self_consistent():
     payload = _payload()
-    assert payload["total"] > 0
-    assert payload["per_file"], "a baseline with no per-file detail cannot localise growth"
+    assert payload["total"] == 0, "unused-import debt was cleared to zero; do not re-grow the baseline"
+    assert payload["per_file"] == {}
     assert sum(payload["per_file"].values()) == payload["total"], "total drifted from per_file"
 
 
@@ -68,13 +68,10 @@ def test_baseline_is_written_with_lf_endings():
 
 
 def test_growth_is_detected(tmp_path, monkeypatch):
-    """Mutation: lower one file's allowance and the ratchet must fail."""
-    payload = _payload()
-    victim = max(payload["per_file"], key=lambda p: payload["per_file"][p])
-    assert payload["per_file"][victim] >= 1
-    payload["per_file"][victim] -= 1
-
-    monkeypatch.setattr(ratchet, "BASELINE", _scratch(tmp_path, payload))
+    """Mutation: one new unused import against a zero baseline must fail."""
+    baseline = {"total": 0, "per_file": {}}
+    monkeypatch.setattr(ratchet, "BASELINE", _scratch(tmp_path, baseline))
+    monkeypatch.setattr(ratchet, "collect", lambda: {"sms_tool/example.py": 1})
     assert ratchet.main([]) == 1, "a file that grew must fail the ratchet"
 
 
@@ -87,25 +84,19 @@ def test_missing_baseline_is_a_hard_error(tmp_path, monkeypatch):
 def test_a_shrinking_file_does_not_mask_growth(tmp_path, monkeypatch):
     """Per-file baselines are the point: a grand total would hide this.
 
-    The fixture lowers one file's allowance (growth) while raising another's
-    (slack), so the aggregate stays favourable and only a per-file check fires.
+    One file grows (1 -> 2) while another shrinks (5 -> 0), so the aggregate
+    falls (6 -> 2) and only a per-file check fires.
     """
-    payload = _payload()
-    grown = max(payload["per_file"], key=lambda p: payload["per_file"][p])
-    shrunk = min(payload["per_file"], key=lambda p: payload["per_file"][p])
-    if grown == shrunk:
-        return
-    payload["per_file"][grown] -= 1
-    payload["per_file"][shrunk] += 5
-
-    monkeypatch.setattr(ratchet, "BASELINE", _scratch(tmp_path, payload))
+    baseline = {"total": 6, "per_file": {"sms_tool/grown.py": 1, "sms_tool/shrunk.py": 5}}
+    monkeypatch.setattr(ratchet, "BASELINE", _scratch(tmp_path, baseline))
+    monkeypatch.setattr(ratchet, "collect", lambda: {"sms_tool/grown.py": 2, "sms_tool/shrunk.py": 0})
     assert ratchet.main([]) == 1, "growth must fail even when the aggregate looks fine"
 
 
-def test_detail_mode_lists_per_file_counts(capsys, monkeypatch):
-    monkeypatch.setattr(ratchet, "BASELINE", ratchet.BASELINE)
+def test_detail_mode_lists_per_file_counts(tmp_path, capsys, monkeypatch):
+    baseline = {"total": 2, "per_file": {"sms_tool/sample.py": 2}}
+    monkeypatch.setattr(ratchet, "BASELINE", _scratch(tmp_path, baseline))
+    monkeypatch.setattr(ratchet, "collect", lambda: {"sms_tool/sample.py": 2})
     assert ratchet.main(["--detail"]) == 0
     out = capsys.readouterr().out
-    per_file = _payload()["per_file"]
-    worst = max(per_file, key=lambda p: per_file[p])
-    assert worst in out, "detail output should name the worst file"
+    assert "sms_tool/sample.py" in out, "detail output should name files with findings"

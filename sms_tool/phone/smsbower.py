@@ -15,9 +15,15 @@ from typing import Optional
 import requests as _requests
 
 from .sms_providers import PROVIDERS as _PROVIDERS
+from ..kernel.native_loader import load_native_module
 
 
 _LOGGER = logging.getLogger(__name__)
+
+_NATIVE_SMSBOWER_PHONE = load_native_module(
+    "smsbower-phone-rs", "smsbower_phone_rs", "RUST_ANYTHING_UNIT_SMSBOWER_PHONE"
+)
+_NATIVE_NORMALIZE_PHONE = getattr(_NATIVE_SMSBOWER_PHONE, "normalize_phone", None)
 
 # The host lives in the provider registry so every vendor speaking this protocol
 # shares one declaration. This client is protocol-level; which host it points at
@@ -56,6 +62,8 @@ def normalize_country(country: str) -> str:
 
 
 def normalize_phone(phone: str) -> str:
+    if _NATIVE_NORMALIZE_PHONE is not None and isinstance(phone, str):
+        return _NATIVE_NORMALIZE_PHONE(phone)
     value = str(phone or "").strip()
     if not value:
         return ""

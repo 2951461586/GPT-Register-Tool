@@ -30,7 +30,9 @@ def _complete_existing_login_totp(
     try:
         import pyotp
 
-        code = pyotp.TOTP(secret).now()
+        # PyOTP 2.12+ ships py.typed without listing TOTP in __all__; lookup via
+        # getattr keeps pyright clean and preserves patch("pyotp.TOTP") test seams.
+        code = getattr(pyotp, "TOTP")(secret).now()
     except Exception:  # broad-except: compat
         return {"ok": False, "error": "existing_login_totp_code_failed"}
 

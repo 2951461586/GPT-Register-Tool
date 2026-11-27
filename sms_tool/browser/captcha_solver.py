@@ -10,43 +10,24 @@ Adapted from the project's original payment-flow CAPTCHA helper.
 from __future__ import annotations
 
 import http.server
-import importlib
 import json
 import logging
 import os
 import re
 import socketserver
-import sys
 import tempfile
 import threading
 import time
 import uuid
-from pathlib import Path
 from typing import Any, Callable, Optional
 from urllib.parse import quote, urlparse
+from ..kernel.native_loader import load_native_module
 
 logger = logging.getLogger(__name__)
 
-
-def _load_native_captcha_config() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_CAPTCHA_CONFIG") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "captcha-config-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("captcha_config_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_CAPTCHA_CONFIG = _load_native_captcha_config()
+_NATIVE_CAPTCHA_CONFIG = load_native_module(
+    "captcha-config-rs", "captcha_config_rs", "RUST_ANYTHING_UNIT_CAPTCHA_CONFIG"
+)
 _NATIVE_EXTRACT_CAPTCHA_CONFIG = getattr(_NATIVE_CAPTCHA_CONFIG, "extract_captcha_config", None)
 _NATIVE_PLAYWRIGHT_PROXY = getattr(_NATIVE_CAPTCHA_CONFIG, "_playwright_proxy", None)
 _NATIVE_BUILD_HCAPTCHA_BRIDGE_HTML = getattr(_NATIVE_CAPTCHA_CONFIG, "_build_hcaptcha_bridge_html", None)

@@ -15,7 +15,7 @@ from urllib.parse import quote
 import requests as http_requests
 
 from ..config import current_config_data
-from ..mailbox.mail_otp import candidate_is_newer, _email_otp_candidate, _extract_otp_from_text, _message_received_ts
+from ..mailbox.mail_otp import candidate_is_newer, email_otp_candidate, extract_otp_from_text, message_received_ts
 from ..mailbox.types import MailboxAccount
 from ..kernel.paths import project_path, runtime_file
 from ..kernel.sanitizer import mask_otp
@@ -967,7 +967,7 @@ def _fetch_remail_messages(mailbox, limit=25, proxy=None, include_body=False):
         if not isinstance(item, dict):
             continue
         text = "\n".join(str(item.get(key) or "") for key in ("subject", "bodyPreview", "verificationCode"))
-        if (include_body or not _extract_otp_from_text(text)) and item.get("id") is not None:
+        if (include_body or not extract_otp_from_text(text)) and item.get("id") is not None:
             try:
                 # Separate name: assigning back to ``item`` widened its inferred
                 # type to the helper's union, so the next ``item[...]`` read was
@@ -989,7 +989,7 @@ def _latest_remail_otp_candidate(mailbox, messages, keyword="", issued_after_uni
     for message in messages or []:
         if seen_message_id and str(message.get("id") or "").strip() == seen_message_id:
             continue
-        candidate = _email_otp_candidate(
+        candidate = email_otp_candidate(
             mailbox,
             message,
             keyword=keyword,
@@ -1084,7 +1084,7 @@ def _remail_fetch_state(response):
 
 def _remail_item_received_ts(item):
     """Parse receivedAt timestamp from a raw ReMail message item."""
-    return _message_received_ts({"receivedDateTime": str((item or {}).get("receivedAt") or "")})
+    return message_received_ts({"receivedDateTime": str((item or {}).get("receivedAt") or "")})
 
 
 def _trusted_structured_remail_code(mailbox, item):

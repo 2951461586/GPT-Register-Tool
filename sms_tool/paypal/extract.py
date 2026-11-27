@@ -27,12 +27,12 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from ..kernel.timeouts import CHATGPT_TIMEOUT
 from ..proxy.entry import normalize_proxy_url
 from ..payment.pp_link_helpers import (
     DEFAULT_STRIPE_PK,
     STRIPE_VERSION,
     DEFAULT_TIMEOUT,
-    CHATGPT_TIMEOUT,
     RETRY_ATTEMPTS,
     _SIDE_EFFECT_STAGES,
     stripe_confirm_error_diagnostics,

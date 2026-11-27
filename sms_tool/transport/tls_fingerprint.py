@@ -61,41 +61,21 @@ Configuration
 from __future__ import annotations
 
 import hashlib
-import importlib
 import logging
-import os
 import random
-import sys
 import threading
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from .auth_headers import _device_seed, current_auth_fingerprint
+from ..kernel.native_loader import load_native_module
 
 logger = logging.getLogger(__name__)
 
-
-def _load_native_tls_fingerprint() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_TLS_FINGERPRINT") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "tls-fingerprint-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("tls_fingerprint_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_TLS_FINGERPRINT = _load_native_tls_fingerprint()
+_NATIVE_TLS_FINGERPRINT = load_native_module(
+    "tls-fingerprint-rs", "tls_fingerprint_rs", "RUST_ANYTHING_UNIT_TLS_FINGERPRINT"
+)
 _NATIVE_PERMUTE_EXTENSION_ORDER = getattr(_NATIVE_TLS_FINGERPRINT, "permute_extension_order", None)
 
 #: Extension id lists captured from the live ``curl_cffi`` presets

@@ -21,7 +21,6 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from sms_tool.config import CFG
 from sms_tool.mailbox.router import fetch_mailbox_messages
 from sms_tool.mailbox.parsers import parse_mailbox_pool_line
 from sms_tool.kernel.paths import resolve_config_file

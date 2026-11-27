@@ -775,6 +775,48 @@ pub fn _extract_url_credentials(
     Ok((email, String::new(), false))
 }
 
+struct YangyangRegexes {
+    detail_base: Regex,
+    detail_suffix: Regex,
+    page_base: Regex,
+}
+
+fn yangyang_re() -> &'static YangyangRegexes {
+    static RE: OnceLock<YangyangRegexes> = OnceLock::new();
+    RE.get_or_init(|| YangyangRegexes {
+        detail_base: Regex::new(
+            r#"var[\s\x1c-\x1f]+detailBase[\s\x1c-\x1f]*=[\s\x1c-\x1f]*['"]([^'"]+)['"]"#,
+        )
+        .expect("valid regex"),
+        detail_suffix: Regex::new(
+            r#"var[\s\x1c-\x1f]+detailSuffix[\s\x1c-\x1f]*=[\s\x1c-\x1f]*['"]([^'"]+)['"]"#,
+        )
+        .expect("valid regex"),
+        page_base: Regex::new(
+            r#"var[\s\x1c-\x1f]+pageBase[\s\x1c-\x1f]*=[\s\x1c-\x1f]*['"]([^'"]+)['"]"#,
+        )
+        .expect("valid regex"),
+    })
+}
+
+pub fn _yangyang_api_paths(text: String) -> Result<Option<(String, String, String)>, String> {
+    let regs = yangyang_re();
+    let Some(db) = regs.detail_base.captures(&text) else {
+        return Ok(None);
+    };
+    let Some(ds) = regs.detail_suffix.captures(&text) else {
+        return Ok(None);
+    };
+    let Some(pb) = regs.page_base.captures(&text) else {
+        return Ok(None);
+    };
+    Ok(Some((
+        db[1].to_string(),
+        ds[1].to_string(),
+        pb[1].to_string(),
+    )))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -795,6 +837,18 @@ mod tests {
             )
             .unwrap(),
             ("alice@icloud.com".to_string(), "k123".to_string(), true)
+        );
+        assert_eq!(
+            _yangyang_api_paths(
+                "<script>var detailBase = '/api/d/'; var detailSuffix = '.json'; var pageBase = '/api/p/';</script>"
+                    .to_string()
+            )
+            .unwrap(),
+            Some((
+                "/api/d/".to_string(),
+                ".json".to_string(),
+                "/api/p/".to_string()
+            ))
         );
     }
 }

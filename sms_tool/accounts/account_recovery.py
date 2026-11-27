@@ -8,21 +8,18 @@ ChatGPT cookie session, protocol email-OTP login, then Codex OAuth PKCE).
 
 from __future__ import annotations
 
-import importlib
 import json
 import logging
-import os
 import re
-import sys
-import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 from typing import Any
 
-from .account_identity import account_identity, resolve_account_proxy
-from .account_liveness import browser_fetch_for_account, probe_account_liveness
+from .account_identity import account_identity as account_identity, resolve_account_proxy
+from .account_liveness import (
+    browser_fetch_for_account as browser_fetch_for_account,
+    probe_account_liveness,
+)
 from .account_terminal import text_has_account_deactivated
 from ..config import CFG
 from ..transport.http_client import is_transient_transport_error
@@ -31,13 +28,13 @@ from ..kernel.paths import runtime_file
 from ..registration.state import _stored_registration_password
 from ..storage import (
     _probe_is_token_invalid,
-    clear_stale_promotion_at_marker,
+    clear_stale_promotion_at_marker as clear_stale_promotion_at_marker,
     get_account_record,
     list_paypal_accounts,
     mark_quota_status,
     upsert_account,
 )
-from ..mailbox.quarantine import mailbox_relogin_allowed
+from ..mailbox.quarantine import mailbox_relogin_allowed as mailbox_relogin_allowed
 from ..payment.promotion_states import (
     AUTH_INVALID_LABEL,
     PROMOTION_STATE_AUTH_INVALID,
@@ -45,29 +42,13 @@ from ..payment.promotion_states import (
 from ..providers.mailbox_graph import MailboxAuthInvalidError
 from ..utils import atomic_write_text
 from ..transport import endpoints
+from ..kernel.native_loader import load_native_module
 
 logger = logging.getLogger(__name__)
 
-
-def _load_native_account_recovery() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_ACCOUNT_RECOVERY") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "account-recovery-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("account_recovery_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_ACCOUNT_RECOVERY = _load_native_account_recovery()
+_NATIVE_ACCOUNT_RECOVERY = load_native_module(
+    "account-recovery-rs", "account_recovery_rs", "RUST_ANYTHING_UNIT_ACCOUNT_RECOVERY"
+)
 _NATIVE_REDACT_RECOVERY_ERROR = getattr(_NATIVE_ACCOUNT_RECOVERY, "_redact_recovery_error", None)
 _NATIVE_RELOGIN_FAILURE_QUOTA_STATUS = getattr(_NATIVE_ACCOUNT_RECOVERY, "_relogin_failure_quota_status", None)
 _NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
@@ -83,12 +64,12 @@ def relogin_web_session_account(
     if not email:
         return {"ok": False, "mode": "web_session", "error": "missing_email"}
     try:
-        from ..session.refresh import _refresh_session_protocol
+        from ..session.refresh import refresh_session_protocol
 
         data = dict(account)
         data["email"] = email
         result = dict(
-            _refresh_session_protocol(
+            refresh_session_protocol(
                 data,
                 str(account.get("json_path") or ""),
                 email,
@@ -202,8 +183,8 @@ def relogin_chatgpt_email_account(
         from ..codex.oauth import _mailbox_from_data
         from ..transport.http_client import request_with_retry
         from ..registration.orchestrator import _login_existing_account_with_email_otp
-        from ..registration.sentinel_tokens import _set_oai_did_cookie
-        from ..session.refresh import _auth_session_email
+        from ..registration.sentinel_tokens import set_oai_did_cookie
+        from ..session.refresh import auth_session_email
 
         mailbox = _mailbox_from_data(account)
         if mailbox is None:
@@ -219,7 +200,7 @@ def relogin_chatgpt_email_account(
         session = curl_requests.Session()
         if proxy:
             session.proxies = {"http": proxy, "https": proxy}
-        _set_oai_did_cookie(session, device_id)
+        set_oai_did_cookie(session, device_id)
         base_headers = openai_auth_headers(device_id, accept="application/json", include_trace=True)
 
         request_with_retry(
@@ -284,7 +265,7 @@ def relogin_chatgpt_email_account(
         access_token = str(_auth_session_access_token(auth_session) or "").strip()
         if not access_token:
             return {"ok": False, "mode": "chatgpt_email_otp", "error": "auth_session_missing_access_token"}
-        authenticated_email = _auth_session_email(auth_session)
+        authenticated_email = auth_session_email(auth_session)
         if not authenticated_email:
             return {"ok": False, "mode": "chatgpt_email_otp", "error": "auth_session_missing_email"}
         if authenticated_email != email:
@@ -789,11 +770,11 @@ def _verify_and_persist_candidate(
     verified.update(candidate)
     verified["email"] = email
     if mode == "web_session":
-        from ..session.refresh import _auth_session_email
+        from ..session.refresh import auth_session_email
 
         _raw_auth_session: object = verified.get("auth_session")
         auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
-        authenticated_email = _auth_session_email(auth_session)
+        authenticated_email = auth_session_email(auth_session)
         if not authenticated_email:
             return {"ok": False, "mode": mode, "error": "auth_session_missing_email", "persisted": False}
         if authenticated_email != email:
@@ -815,9 +796,9 @@ def _verify_and_persist_candidate(
     json_path = str(verified.get("json_path") or account.get("json_path") or "").strip()
     saved_path = json_path
     if persist:
-        from ..session.refresh import _save_refreshed
+        from ..session.refresh import save_refreshed
 
-        saved_path = _save_refreshed(verified, json_path)
+        saved_path = save_refreshed(verified, json_path)
     return {
         "ok": True,
         "mode": mode,

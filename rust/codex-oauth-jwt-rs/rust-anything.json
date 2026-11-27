@@ -1,0 +1,55 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/codex/oauth.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "codex-oauth-jwt-rs",
+  "exports": [
+    {
+      "name": "_jwt_segment",
+      "file": "sms_tool/codex/oauth.py",
+      "line": 1688,
+      "params": [
+        {
+          "name": "segment",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_safe_url",
+      "file": "sms_tool/codex/oauth.py",
+      "line": 1696,
+      "params": [
+        {
+          "name": "url",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "refresh_codex_oauth_session",
+      "file": "sms_tool/codex/oauth.py",
+      "line": 88,
+      "reason": "network OAuth PKCE workflow stays in Python"
+    }
+  ]
+}

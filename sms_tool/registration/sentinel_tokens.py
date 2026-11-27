@@ -1,14 +1,10 @@
-import importlib
 import json
 import logging
 import os
 import re
-import sys
 import threading
 import time
 import uuid
-from pathlib import Path
-from typing import Any
 
 from curl_cffi import requests as curl_requests
 
@@ -24,29 +20,13 @@ from ..proxy.entry import (
 )
 from ..observability.operator_output import emit as _emit
 from ..sentinel import client as _sentinel_client
+from ..kernel.native_loader import load_native_module
 
 _LOGGER = logging.getLogger(__name__)
 
-
-def _load_native_sentinel_tokens() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_SENTINEL_TOKENS") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "sentinel-tokens-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("sentinel_tokens_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_SENTINEL_TOKENS = _load_native_sentinel_tokens()
+_NATIVE_SENTINEL_TOKENS = load_native_module(
+    "sentinel-tokens-rs", "sentinel_tokens_rs", "RUST_ANYTHING_UNIT_SENTINEL_TOKENS"
+)
 _NATIVE_SOLVE_POW = getattr(_NATIVE_SENTINEL_TOKENS, "_solve_pow", None)
 
 SENTINEL_CACHE_FILE = runtime_file(CFG, "sentinel_cache.json")
@@ -138,7 +118,7 @@ def _save_sentinel_cache(data):
     print(f"[*] Sentinel token cached")
 
 
-def _cookie_jar_header(cookies):
+def cookie_jar_header(cookies):
     if not cookies:
         return ""
     try:
@@ -160,7 +140,7 @@ def _cookie_jar_header(cookies):
         return ""
 
 
-def _sentinel_device_id(sentinel_data):
+def sentinel_device_id(sentinel_data):
     data = sentinel_data or {}
     did = str(data.get("oai_did") or "").strip()
     if did:
@@ -215,7 +195,7 @@ def assert_sentinel_device_id(sentinel_data, device_id: str) -> str:
     return expected or actual
 
 
-def _set_oai_did_cookie(session, did):
+def set_oai_did_cookie(session, did):
     if did:
         for domain in (".openai.com", "chatgpt.com"):
             try:
@@ -224,11 +204,11 @@ def _set_oai_did_cookie(session, did):
                 continue
 
 
-def _import_sentinel_cookies(session, sentinel_data, did):
+def import_sentinel_cookies(session, sentinel_data, did):
     cookie_str = str((sentinel_data or {}).get("cookie_str") or "").strip()
     if cookie_str:
         import_cookie_header(session, cookie_str, "auth.openai.com")
-    _set_oai_did_cookie(session, did)
+    set_oai_did_cookie(session, did)
 
 
 def _solve_pow(seed, difficulty_hex):
@@ -254,7 +234,7 @@ def _solve_pow(seed, difficulty_hex):
     return ""
 
 
-def _sentinel_frame_version():
+def sentinel_frame_version():
     from ..sentinel.bundle import sentinel_version
 
     return sentinel_version()
@@ -281,7 +261,7 @@ def _build_sentinel_pow_token(flow_data, did, flow):
     )
 
 
-def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
+def extract_sentinel_http(proxy=None, persist=True, device_id=None):
     """Extract sentinel tokens via direct HTTP POST (no browser needed).
 
     Mirrors fetchSentinelViaProtocol from standalone-phone-protocol.
@@ -319,7 +299,7 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
                     "Content-Type": "text/plain;charset=UTF-8",
                     "Accept": "*/*",
                     "Origin": "https://sentinel.openai.com",
-                    "Referer": f"https://sentinel.openai.com/backend-api/sentinel/frame.html?sv={_sentinel_frame_version()}",
+                    "Referer": f"https://sentinel.openai.com/backend-api/sentinel/frame.html?sv={sentinel_frame_version()}",
                     "User-Agent": auth_user_agent(),
                 },
                 timeout=30,
@@ -391,7 +371,7 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
             impersonate=auth_impersonate(),
         )
         # Extract cookies from the session
-        cookie_str = _cookie_jar_header(session.cookies)
+        cookie_str = cookie_jar_header(session.cookies)
         # Ensure oai-did cookie is set
         session.cookies.set("oai-did", did, domain=".openai.com")
         cookie_str = "; ".join(item for item in (f"oai-did={did}", cookie_str) if item)
@@ -456,7 +436,7 @@ def _http_fallback_enabled() -> bool:
     return isinstance(value, bool) and value
 
 
-def _sentinel_max_concurrency():
+def sentinel_max_concurrency():
     _raw_cfg: object = CFG.get("email_registration")
     cfg: dict = _raw_cfg if isinstance(_raw_cfg, dict) else {}
     try:
@@ -563,7 +543,7 @@ def _extract_sentinel_quickjs(proxy=None, persist=True, device_id=None):
 
 # Fresh account registrations may extract Sentinel data concurrently, but the
 # gate remains deliberately small to avoid overwhelming sentinel.openai.com.
-_sentinel_extraction_gate = threading.BoundedSemaphore(_sentinel_max_concurrency())
+_sentinel_extraction_gate = threading.BoundedSemaphore(sentinel_max_concurrency())
 _sentinel_cache_fill_lock = threading.Lock()
 
 
@@ -588,9 +568,9 @@ def _extract_sentinel_uncached(proxy=None, persist=True, browser_headless: bool 
         elif provider == "http":
             print("[*] Extracting sentinel tokens via HTTP protocol...")
             if device_id:
-                result = _extract_sentinel_http(proxy, persist=persist, device_id=device_id)
+                result = extract_sentinel_http(proxy, persist=persist, device_id=device_id)
             else:
-                result = _extract_sentinel_http(proxy, persist=persist)
+                result = extract_sentinel_http(proxy, persist=persist)
         else:
             print("[*] Falling back to browser Sentinel extraction...")
             browser_proxy = (
@@ -612,9 +592,7 @@ def _extract_sentinel_uncached(proxy=None, persist=True, browser_headless: bool 
     return None
 
 
-def _extract_sentinel(
-    proxy=None, force_fresh=False, persist=True, browser_headless: bool | None = None, device_id=None
-):
+def extract_sentinel(proxy=None, force_fresh=False, persist=True, browser_headless: bool | None = None, device_id=None):
     proxy = normalize_proxy_url(proxy or "") or None
     cached = _get_cached_sentinel(force_fresh=force_fresh)
     if cached:
@@ -817,6 +795,16 @@ def _collect_sentinel_tokens(page, ctx, persist=True):
     return result
 
 
+# Backwards-compatible internal aliases for tests that inspect legacy names.
+_cookie_jar_header = cookie_jar_header
+_sentinel_device_id = sentinel_device_id
+_set_oai_did_cookie = set_oai_did_cookie
+_import_sentinel_cookies = import_sentinel_cookies
+_sentinel_frame_version = sentinel_frame_version
+_extract_sentinel_http = extract_sentinel_http
+_sentinel_max_concurrency = sentinel_max_concurrency
+_extract_sentinel = extract_sentinel
+
 # Wire one-way legacy fallback hook into sentinel.client without creating a
 # reverse import edge from Layer 4 (`sentinel`) to Layer 5 (`registration`).
-_sentinel_client.register_legacy_extractor(lambda **kwargs: _extract_sentinel(**kwargs))
+_sentinel_client.register_legacy_extractor(lambda **kwargs: extract_sentinel(**kwargs))

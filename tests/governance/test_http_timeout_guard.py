@@ -30,7 +30,6 @@ import ast
 import os
 from pathlib import Path
 
-import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SKIP_DIRS = {"dist", "runtime", ".venv", ".git", "__pycache__", "tests", ".dotnet", "node_modules", "logs", "sessions"}

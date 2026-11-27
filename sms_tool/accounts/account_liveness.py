@@ -7,36 +7,16 @@ this seam instead of defining their own endpoint, headers, or classification.
 
 from __future__ import annotations
 
-import importlib
 import json
-import os
 import re
-import sys
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Any, Generator
 from curl_cffi import requests as curl_requests
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_liveness_parse() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_LIVENESS_PARSE") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "liveness-parse-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("liveness_parse_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_LIVENESS_PARSE = _load_native_liveness_parse()
+_NATIVE_LIVENESS_PARSE = load_native_module(
+    "liveness-parse-rs", "liveness_parse_rs", "RUST_ANYTHING_UNIT_LIVENESS_PARSE"
+)
 _NATIVE_IS_TOKEN_INVALID = getattr(_NATIVE_LIVENESS_PARSE, "_is_token_invalid", None)
 
 from .account_identity import (

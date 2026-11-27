@@ -76,7 +76,7 @@ class TestTwoFactorUsesTheTransportRetry(unittest.TestCase):
             )
 
         self.assertTrue(result.get("ok"), result.get("error"))
-        self.assertEqual(result.get("totp_secret"), "JBSWY3DPEHPK3PXP")
+        self.assertEqual(result.get("totp_secret"), "JBSWY3DPEHPK3PXPJBSWY3DP")
         # First attempt hit the transient reset, the retry succeeded.
         self.assertEqual(session.enroll_attempts, 2)
 
@@ -116,7 +116,7 @@ class _FlakyEnrollSession:
             self.enroll_attempts += 1
             if self.enroll_attempts == 1:
                 raise RuntimeError(TRANSIENT_RESET)
-            return _FakeResponse({"secret": "JBSWY3DPEHPK3PXP", "session_id": "sid"})
+            return _FakeResponse({"secret": "JBSWY3DPEHPK3PXPJBSWY3DP", "session_id": "sid"})
         if url.endswith("/activate_enrollment"):
             return _FakeResponse({"success": True})
         raise AssertionError(url)

@@ -696,7 +696,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
                     }
                 },
             ),
-            patch("sms_tool.registration.sentinel_tokens._extract_sentinel", side_effect=extract),
+            patch("sms_tool.registration.sentinel_tokens.extract_sentinel", side_effect=extract),
         ):
             results = batch_runner.run_batch_impl(
                 count=3,

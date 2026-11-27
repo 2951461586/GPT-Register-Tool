@@ -11,7 +11,7 @@ import contextlib
 import time
 from typing import Any
 
-from ..session.refresh import _poll_auth_session, _session_token
+from ..session.refresh import poll_auth_session, session_token
 from ..phone.sms_utils import (
     NO_NUMBER_SOURCE,
     _number_source_or_none,
@@ -357,12 +357,12 @@ def _run_browser_steps(
     _screenshot(page, debug_dir, "13_redirect_done", debug_enabled)
 
     step = "refresh_session"
-    auth_body = _poll_auth_session(ctx, timeout=120)
+    auth_body = poll_auth_session(ctx, timeout=120)
     if not auth_body:
         raise _PayPalStepError("refresh_session", "auth_session_poll_timeout")
 
-    new_access = _session_token(auth_body, "accessToken", "access_token")
-    new_refresh = _session_token(auth_body, "refreshToken", "refresh_token")
+    new_access = session_token(auth_body, "accessToken", "access_token")
+    new_refresh = session_token(auth_body, "refreshToken", "refresh_token")
 
     if not new_access:
         raise _PayPalStepError("refresh_session", "no_access_token_in_response")

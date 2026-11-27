@@ -5,7 +5,7 @@ from curl_cffi.requests.exceptions import SSLError
 
 from sms_tool.providers import mailbox_smailr
 from sms_tool.mailbox.parsers import _parse_mailbox_token_file
-from sms_tool.providers.smailr_client import SmailrClient, SmailrError, fetch_messages, poll_otp, _normalize_message
+from sms_tool.providers.smailr_client import SmailrClient, SmailrError, fetch_messages, poll_otp
 
 
 class FakeResponse:

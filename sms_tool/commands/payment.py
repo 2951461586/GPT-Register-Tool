@@ -11,7 +11,6 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-import re
 import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -426,10 +425,10 @@ def resolve_access_token(args: Any, *, stderr: Any = None) -> tuple[str, Any]:
     if not email and not session_file:
         return "", None
 
-    from ..session.refresh import _load_seed_session
+    from ..session.refresh import load_seed_session
 
     with contextlib.redirect_stdout(stderr or sys.stderr):
-        data, _ = _load_seed_session(email=email, session_file=session_file)
+        data, _ = load_seed_session(email=email, session_file=session_file)
     if not isinstance(data, dict):
         return "", None
 

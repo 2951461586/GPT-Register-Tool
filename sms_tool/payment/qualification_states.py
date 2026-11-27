@@ -12,32 +12,12 @@ contract tests import it alongside the batch module.
 
 from __future__ import annotations
 
-import importlib
-import os
-import sys
-from pathlib import Path
 from typing import Any
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_qualification_states() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_QUALIFICATION_STATES") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "qualification-states-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("qualification_states_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_QUALIFICATION_STATES = _load_native_qualification_states()
+_NATIVE_QUALIFICATION_STATES = load_native_module(
+    "qualification-states-rs", "qualification_states_rs", "RUST_ANYTHING_UNIT_QUALIFICATION_STATES"
+)
 _NATIVE_QUALIFICATION_STATE = getattr(_NATIVE_QUALIFICATION_STATES, "qualification_state", None)
 _NATIVE_QUALIFICATION_LABEL = getattr(_NATIVE_QUALIFICATION_STATES, "qualification_label", None)
 _NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)

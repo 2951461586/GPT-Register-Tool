@@ -10,13 +10,8 @@ make the patch silently ineffective.
 
 from __future__ import annotations
 
-import importlib
 import json
 import logging
-import os
-import sys
-from pathlib import Path
-from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
 
 # Deliberate re-exports (ADR-0009 facade pattern): ``steps`` stays the public
@@ -31,6 +26,7 @@ from ..transport.auth_wire import (  # noqa: F401
 )
 from . import deps
 from ..kernel.flags import section_flag
+from ..kernel.native_loader import load_native_module
 
 logger = logging.getLogger(__name__)
 
@@ -54,26 +50,9 @@ _TURB_CC_CAPS = "login_methods chatgpt_login_finalizer_v1"
 _TURB_AUTH_RETURN_TARGET = "chatgpt_home"
 _NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
 
-
-def _load_native_auth_flow_steps() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_AUTH_FLOW_STEPS") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "auth-flow-steps-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("auth_flow_steps_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_AUTH_FLOW_STEPS = _load_native_auth_flow_steps()
+_NATIVE_AUTH_FLOW_STEPS = load_native_module(
+    "auth-flow-steps-rs", "auth_flow_steps_rs", "RUST_ANYTHING_UNIT_AUTH_FLOW_STEPS"
+)
 _NATIVE_IS_CHATGPT_AUTH_LOGIN_LANDING = getattr(_NATIVE_AUTH_FLOW_STEPS, "_is_chatgpt_auth_login_landing", None)
 _NATIVE_IS_SIGNUP_PASSWORD_PAGE = getattr(_NATIVE_AUTH_FLOW_STEPS, "_is_signup_password_page", None)
 _NATIVE_IS_SIGNUP_PASSWORD_STEP = getattr(_NATIVE_AUTH_FLOW_STEPS, "_is_signup_password_step", None)

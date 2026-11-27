@@ -1,10 +1,5 @@
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait as futures_wait
 from collections.abc import Mapping
-import importlib
-import os
-from pathlib import Path
-import sys
-import time
 import uuid
 import threading
 from urllib.parse import urlsplit
@@ -35,27 +30,9 @@ from ..storage import (
     record_environment_observations,
     release_environment_lease,
 )
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_batch_proxy() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_BATCH_PROXY") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "batch-proxy-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("batch_proxy_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_BATCH_PROXY = _load_native_batch_proxy()
+_NATIVE_BATCH_PROXY = load_native_module("batch-proxy-rs", "batch_proxy_rs", "RUST_ANYTHING_UNIT_BATCH_PROXY")
 _NATIVE_INTERLEAVE_PROXY_ENDPOINTS = getattr(_NATIVE_BATCH_PROXY, "_interleave_proxy_endpoints", None)
 
 
@@ -724,15 +701,15 @@ def _start_batch_sentinel_prewarm(
     prewarmed: dict[int, Any] = {}
     first_attempt_proxies: dict[Any, Any] = {}
     if prewarm_window:
-        from .sentinel_tokens import _extract_sentinel, _sentinel_max_concurrency
+        from .sentinel_tokens import extract_sentinel, sentinel_max_concurrency
 
-        prewarm_executor = ThreadPoolExecutor(max_workers=min(prewarm_window, _sentinel_max_concurrency()))
+        prewarm_executor = ThreadPoolExecutor(max_workers=min(prewarm_window, sentinel_max_concurrency()))
         for index in range(prewarm_window):
             base_proxy = proxy_pool[index % len(proxy_pool)] if proxy_pool else proxy
             worker_proxy = refresh_proxy_sid(base_proxy) if base_proxy else base_proxy
             first_attempt_proxies[index] = (base_proxy, worker_proxy)
             prewarmed[index] = prewarm_executor.submit(
-                _extract_sentinel,
+                extract_sentinel,
                 proxy=worker_proxy,
                 force_fresh=True,
                 persist=False,

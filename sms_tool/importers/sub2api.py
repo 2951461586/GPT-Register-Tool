@@ -1,38 +1,17 @@
 from __future__ import annotations
 
-import importlib
 import json
-import os
 import random
 import re
-import sys
 import time
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_sub2api_parse() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_SUB2API_PARSE") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "sub2api-parse-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("sub2api_parse_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_SUB2API_PARSE = _load_native_sub2api_parse()
+_NATIVE_SUB2API_PARSE = load_native_module("sub2api-parse-rs", "sub2api_parse_rs", "RUST_ANYTHING_UNIT_SUB2API_PARSE")
 _NATIVE_NORMALIZE_SUB2API_ORIGIN = getattr(_NATIVE_SUB2API_PARSE, "_normalize_sub2api_origin", None)
 _NATIVE_PARSE_INT_LIST = getattr(_NATIVE_SUB2API_PARSE, "_parse_int_list", None)
 

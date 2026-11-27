@@ -8,11 +8,8 @@ compose them are named ``mailbox_*`` (``mailbox_cfworker``,
 layering.
 """
 
-import importlib
 import json
-import os
 import re
-import sys
 import time
 import urllib.error
 import urllib.request
@@ -21,32 +18,13 @@ from email.header import decode_header, make_header
 from email.parser import Parser
 from html import unescape
 from html.parser import HTMLParser
-from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
 from curl_cffi import requests as curl_requests
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_cfworker_html() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_CFWORKER_HTML") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "cfworker-html-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("cfworker_html_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_CFWORKER_HTML = _load_native_cfworker_html()
+_NATIVE_CFWORKER_HTML = load_native_module("cfworker-html-rs", "cfworker_html_rs", "RUST_ANYTHING_UNIT_CFWORKER_HTML")
 _NATIVE_DISPLAY_TEXT = getattr(_NATIVE_CFWORKER_HTML, "_display_text", None)
 _NATIVE_STRIP_LEADING_CSS = getattr(_NATIVE_CFWORKER_HTML, "_strip_leading_css", None)
 _NATIVE_EXTRACT_EMAILS = getattr(_NATIVE_CFWORKER_HTML, "_extract_emails", None)

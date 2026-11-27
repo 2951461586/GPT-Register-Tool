@@ -1,0 +1,220 @@
+{"fn": "normalize_phone", "args": ["src/a/b.tskey_name-1"], "ok": "+1"}
+{"fn": "normalize_phone", "args": ["src/a/b.ts"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a:b:c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["Hello Worldline1\nline2"], "ok": "+12"}
+{"fn": "normalize_phone", "args": ["{name} has {count} itemskey_name-1"], "ok": "+1"}
+{"fn": "normalize_phone", "args": ["a..ba😀b😀c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["  padded  "], "ok": ""}
+{"fn": "normalize_phone", "args": ["a😀b😀c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["Hello World"], "ok": ""}
+{"fn": "normalize_phone", "args": ["hello world"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a.b.c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["line1\nline2"], "ok": "+12"}
+{"fn": "normalize_phone", "args": [""], "ok": ""}
+{"fn": "normalize_phone", "args": [".leading"], "ok": ""}
+{"fn": "normalize_phone", "args": ["abc"], "ok": ""}
+{"fn": "normalize_phone", "args": ["tab\tseparated"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ab"], "ok": ""}
+{"fn": "normalize_phone", "args": ["  padded  😀"], "ok": ""}
+{"fn": "normalize_phone", "args": ["emoji 👍🏽 mix"], "ok": ""}
+{"fn": "normalize_phone", "args": ["straße"], "ok": ""}
+{"fn": "normalize_phone", "args": ["HELLO"], "ok": ""}
+{"fn": "normalize_phone", "args": ["key_name-1"], "ok": "+1"}
+{"fn": "normalize_phone", "args": ["helloünïcödé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["hello"], "ok": ""}
+{"fn": "normalize_phone", "args": ["{name} has {count} items"], "ok": ""}
+{"fn": "normalize_phone", "args": ["tab\tseparatedHello World"], "ok": ""}
+{"fn": "normalize_phone", "args": ["İstanbul"], "ok": ""}
+{"fn": "normalize_phone", "args": ["éünïcödé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["key_name-1日本語のテキスト"], "ok": "+1"}
+{"fn": "normalize_phone", "args": ["ΣΊΣΥΦΟΣ  padded  "], "ok": ""}
+{"fn": "normalize_phone", "args": ["ünïcödé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a"], "ok": ""}
+{"fn": "normalize_phone", "args": ["aabc"], "ok": ""}
+{"fn": "normalize_phone", "args": ["trailing."], "ok": ""}
+{"fn": "normalize_phone", "args": ["./x/**/*.json"], "ok": ""}
+{"fn": "normalize_phone", "args": ["﻿boma:b:c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["é"], "ok": ""}
+{"fn": "normalize_phone", "args": ["日本語のテキスト"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a.b.ca..b"], "ok": ""}
+{"fn": "normalize_phone", "args": ["aba:b:c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a😀b😀ckey_name-1"], "ok": "+1"}
+{"fn": "normalize_phone", "args": ["Hello Worldé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["akey_name-1"], "ok": "+1"}
+{"fn": "normalize_phone", "args": ["﻿bomΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ab:"], "ok": ""}
+{"fn": "normalize_phone", "args": ["﻿bom"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a..b"], "ok": ""}
+{"fn": "normalize_phone", "args": ["😀"], "ok": ""}
+{"fn": "normalize_phone", "args": ["trailing.:"], "ok": ""}
+{"fn": "normalize_phone", "args": ["😀😀"], "ok": ""}
+{"fn": "normalize_phone", "args": ["﻿bomhello"], "ok": ""}
+{"fn": "normalize_phone", "args": ["tab\tseparated  padded  "], "ok": ""}
+{"fn": "normalize_phone", "args": ["straßeab"], "ok": ""}
+{"fn": "normalize_phone", "args": ["key_name-1ünïcödé"], "ok": "+1"}
+{"fn": "normalize_phone", "args": ["hello worldΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "normalize_phone", "args": ["abc.leading"], "ok": ""}
+{"fn": "normalize_phone", "args": ["éHello World"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a:b:cé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["  padded    padded  "], "ok": ""}
+{"fn": "normalize_phone", "args": ["a:b:c  padded  "], "ok": ""}
+{"fn": "normalize_phone", "args": ["{name} has {count} itemsabc"], "ok": ""}
+{"fn": "normalize_phone", "args": ["abctrailing."], "ok": ""}
+{"fn": "normalize_phone", "args": ["ΣΊΣΥΦΟΣé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["  padded  trailing."], "ok": ""}
+{"fn": "normalize_phone", "args": ["ab日本語のテキスト"], "ok": ""}
+{"fn": "normalize_phone", "args": ["line1\nline2﻿bom"], "ok": "+12"}
+{"fn": "normalize_phone", "args": [":"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ΣΊΣΥΦΟΣa..b"], "ok": ""}
+{"fn": "normalize_phone", "args": ["HELLOa"], "ok": ""}
+{"fn": "normalize_phone", "args": ["trailing.ns:key.path"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ns:key.path"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a😀b😀c:"], "ok": ""}
+{"fn": "normalize_phone", "args": ["key_name-1key_name-1"], "ok": "+11"}
+{"fn": "normalize_phone", "args": ["{name} has {count} itemsHello World"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ΣΊΣΥΦΟΣab"], "ok": ""}
+{"fn": "normalize_phone", "args": ["aba..b"], "ok": ""}
+{"fn": "normalize_phone", "args": ["hello worlda"], "ok": ""}
+{"fn": "normalize_phone", "args": ["emoji 👍🏽 mixünïcödé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["tab\tseparatedhello"], "ok": ""}
+{"fn": "normalize_phone", "args": ["line1\nline2  padded  "], "ok": "+12"}
+{"fn": "normalize_phone", "args": ["straße{name} has {count} items"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a..bkey_name-1"], "ok": "+1"}
+{"fn": "normalize_phone", "args": ["a.b.c日本語のテキスト"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a..bHello World"], "ok": ""}
+{"fn": "normalize_phone", "args": ["src/a/b.tsünïcödé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["line1\nline2emoji 👍🏽 mix"], "ok": "+12"}
+{"fn": "normalize_phone", "args": ["aünïcödé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["Hello Worlda"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ns:key.pathünïcödé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["{name} has {count} itemsns:key.path"], "ok": ""}
+{"fn": "normalize_phone", "args": ["é﻿bom"], "ok": ""}
+{"fn": "normalize_phone", "args": ["日本語のテキストhello"], "ok": ""}
+{"fn": "normalize_phone", "args": ["emoji 👍🏽 mixa"], "ok": ""}
+{"fn": "normalize_phone", "args": ["tab\tseparatedtrailing."], "ok": ""}
+{"fn": "normalize_phone", "args": ["  padded  ünïcödé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["Hello World:"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ΣΊΣΥΦΟΣsrc/a/b.ts"], "ok": ""}
+{"fn": "normalize_phone", "args": ["tab\tseparated日本語のテキスト"], "ok": ""}
+{"fn": "normalize_phone", "args": ["İstanbula..b"], "ok": ""}
+{"fn": "normalize_phone", "args": ["hello world日本語のテキスト"], "ok": ""}
+{"fn": "normalize_phone", "args": ["éns:key.path"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ünïcödéHELLO"], "ok": ""}
+{"fn": "normalize_phone", "args": ["abcΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ns:key.pathab"], "ok": ""}
+{"fn": "normalize_phone", "args": [":ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "normalize_phone", "args": ["  padded  ./x/**/*.json"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ésrc/a/b.ts"], "ok": ""}
+{"fn": "normalize_phone", "args": ["line1\nline2tab\tseparated"], "ok": "+12"}
+{"fn": "normalize_phone", "args": ["{name} has {count} itemsab"], "ok": ""}
+{"fn": "normalize_phone", "args": ["日本語のテキストemoji 👍🏽 mix"], "ok": ""}
+{"fn": "normalize_phone", "args": ["  padded  hello"], "ok": ""}
+{"fn": "normalize_phone", "args": ["﻿bomHello World"], "ok": ""}
+{"fn": "normalize_phone", "args": ["src/a/b.tsstraße"], "ok": ""}
+{"fn": "normalize_phone", "args": ["straße日本語のテキスト"], "ok": ""}
+{"fn": "normalize_phone", "args": [".leadinga"], "ok": ""}
+{"fn": "normalize_phone", "args": ["aa.b.c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["aa:b:c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["Hello Worldünïcödé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["aa😀b😀c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["emoji 👍🏽 mixline1\nline2"], "ok": "+12"}
+{"fn": "normalize_phone", "args": ["éabc"], "ok": ""}
+{"fn": "normalize_phone", "args": ["日本語のテキストab"], "ok": ""}
+{"fn": "normalize_phone", "args": ["HELLOabc"], "ok": ""}
+{"fn": "normalize_phone", "args": ["hello worldé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["日本語のテキストtab\tseparated"], "ok": ""}
+{"fn": "normalize_phone", "args": ["key_name-1src/a/b.ts"], "ok": "+1"}
+{"fn": "normalize_phone", "args": [":ab"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a./x/**/*.json"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a..ba.b.c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["HELLOtrailing."], "ok": ""}
+{"fn": "normalize_phone", "args": [".leadingHello World"], "ok": ""}
+{"fn": "normalize_phone", "args": ["{name} has {count} itemsa😀b😀c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["İstanbul:"], "ok": ""}
+{"fn": "normalize_phone", "args": ["line1\nline2a:b:c"], "ok": "+12"}
+{"fn": "normalize_phone", "args": ["Hello World{name} has {count} items"], "ok": ""}
+{"fn": "normalize_phone", "args": ["trailing.İstanbul"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a.b.cstraße"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a😀b😀ca"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ΣΊΣΥΦΟΣline1\nline2"], "ok": "+12"}
+{"fn": "normalize_phone", "args": ["src/a/b.ts  padded  "], "ok": ""}
+{"fn": "normalize_phone", "args": ["src/a/b.tsa..b"], "ok": ""}
+{"fn": "normalize_phone", "args": ["HELLO.leading"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ünïcödéhello"], "ok": ""}
+{"fn": "normalize_phone", "args": ["tab\tseparateda:b:c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ünïcödé﻿bom"], "ok": ""}
+{"fn": "normalize_phone", "args": ["trailing.a😀b😀c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["hello world:"], "ok": ""}
+{"fn": "normalize_phone", "args": [".leading./x/**/*.json"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a:b:ca"], "ok": ""}
+{"fn": "normalize_phone", "args": ["src/a/b.ts:"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a😀b😀c./x/**/*.json"], "ok": ""}
+{"fn": "normalize_phone", "args": ["hello日本語のテキスト"], "ok": ""}
+{"fn": "normalize_phone", "args": ["😀a:b:c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["line1\nline2./x/**/*.json"], "ok": "+12"}
+{"fn": "normalize_phone", "args": ["a😀b😀ca.b.c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["tab\tseparated😀"], "ok": ""}
+{"fn": "normalize_phone", "args": ["helloé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ababc"], "ok": ""}
+{"fn": "normalize_phone", "args": ["line1\nline2ab"], "ok": "+12"}
+{"fn": "normalize_phone", "args": ["HELLOünïcödé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a:b:ckey_name-1"], "ok": "+1"}
+{"fn": "normalize_phone", "args": ["line1\nline2日本語のテキスト"], "ok": "+12"}
+{"fn": "normalize_phone", "args": ["a😀b😀cé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a😀b😀cünïcödé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["line1\nline2hello world"], "ok": "+12"}
+{"fn": "normalize_phone", "args": ["a..bab"], "ok": ""}
+{"fn": "normalize_phone", "args": ["./x/**/*.json😀"], "ok": ""}
+{"fn": "normalize_phone", "args": ["  padded  ﻿bom"], "ok": ""}
+{"fn": "normalize_phone", "args": ["hello worldns:key.path"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a:b:ctab\tseparated"], "ok": ""}
+{"fn": "normalize_phone", "args": ["emoji 👍🏽 mix./x/**/*.json"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a😀b😀cns:key.path"], "ok": ""}
+{"fn": "normalize_phone", "args": ["😀trailing."], "ok": ""}
+{"fn": "normalize_phone", "args": ["İstanbulemoji 👍🏽 mix"], "ok": ""}
+{"fn": "normalize_phone", "args": ["./x/**/*.json{name} has {count} items"], "ok": ""}
+{"fn": "normalize_phone", "args": [".leadingns:key.path"], "ok": ""}
+{"fn": "normalize_phone", "args": ["日本語のテキスト﻿bom"], "ok": ""}
+{"fn": "normalize_phone", "args": ["  padded  Hello World"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a.b.ca😀b😀c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["﻿bomab"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ns:key.path  padded  "], "ok": ""}
+{"fn": "normalize_phone", "args": ["ünïcödé:"], "ok": ""}
+{"fn": "normalize_phone", "args": ["trailing.trailing."], "ok": ""}
+{"fn": "normalize_phone", "args": ["éa😀b😀c"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a..bns:key.path"], "ok": ""}
+{"fn": "normalize_phone", "args": ["abc  padded  "], "ok": ""}
+{"fn": "normalize_phone", "args": ["line1\nline2a"], "ok": "+12"}
+{"fn": "normalize_phone", "args": ["éstraße"], "ok": ""}
+{"fn": "normalize_phone", "args": ["tab\tseparated:"], "ok": ""}
+{"fn": "normalize_phone", "args": ["straßeünïcödé"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ab😀"], "ok": ""}
+{"fn": "normalize_phone", "args": ["./x/**/*.jsonHello World"], "ok": ""}
+{"fn": "normalize_phone", "args": ["src/a/b.tssrc/a/b.ts"], "ok": ""}
+{"fn": "normalize_phone", "args": ["line1\nline2😀"], "ok": "+12"}
+{"fn": "normalize_phone", "args": ["abcns:key.path"], "ok": ""}
+{"fn": "normalize_phone", "args": ["./x/**/*.jsonstraße"], "ok": ""}
+{"fn": "normalize_phone", "args": ["{name} has {count} items  padded  "], "ok": ""}
+{"fn": "normalize_phone", "args": ["trailing.a..b"], "ok": ""}
+{"fn": "normalize_phone", "args": ["日本語のテキスト  padded  "], "ok": ""}
+{"fn": "normalize_phone", "args": ["héllo wörld"], "ok": ""}
+{"fn": "normalize_phone", "args": ["👍🏽 thumbs"], "ok": ""}
+{"fn": "normalize_phone", "args": ["日本語"], "ok": ""}
+{"fn": "normalize_phone", "args": ["ılık ırmak"], "ok": ""}
+{"fn": "normalize_phone", "args": ["👨‍👩‍👧 family"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a b"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a😀b"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a²b x½ y①"], "ok": "+²①"}
+{"fn": "normalize_phone", "args": ["aⅠb Ⅻ"], "ok": ""}
+{"fn": "normalize_phone", "args": ["a𐐀b 𝐀bc"], "ok": ""}
+{"fn": "normalize_phone", "args": ["कि ٣٤"], "ok": "+٣٤"}
+{"fn": "normalize_phone", "args": ["+233 55-123-4567"], "ok": "+233551234567"}
+{"fn": "normalize_phone", "args": ["0086-138-0013-8000"], "ok": "+8613800138000"}
+{"fn": "normalize_phone", "args": ["  233 (55) 999-8888  "], "ok": "+233559998888"}
+{"fn": "normalize_phone", "args": ["+001 415-555-0199"], "ok": "+0014155550199"}
+{"fn": "normalize_phone", "args": ["+"], "ok": "+"}
+{"fn": "normalize_phone", "args": ["00"], "ok": "+"}
+{"fn": "normalize_phone", "args": ["abc-def"], "ok": ""}
+{"fn": "normalize_phone", "args": [""], "ok": ""}
+{"fn": "normalize_phone", "args": ["  +63 917 888 9999 ext 12 "], "ok": "+63917888999912"}

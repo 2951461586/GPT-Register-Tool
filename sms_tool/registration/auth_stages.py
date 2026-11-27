@@ -26,7 +26,7 @@ from .protocol_helpers import _safe_float, _safe_int
 from .state import RegistrationState
 
 if TYPE_CHECKING:
-    from .state import RegistrationWorkflow
+    pass
 
 _LOGGER = logging.getLogger(__name__)
 

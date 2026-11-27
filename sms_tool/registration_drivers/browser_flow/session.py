@@ -495,7 +495,9 @@ def _bind_totp_in_browser(
         try:
             import pyotp
 
-            totp_code = pyotp.TOTP(secret).now()
+            # PyOTP 2.12+ ships py.typed without listing TOTP in __all__; lookup via
+            # getattr keeps pyright clean and preserves patch("pyotp.TOTP") test seams.
+            totp_code = getattr(pyotp, "TOTP")(secret).now()
         except ImportError:
             return {"ok": False, "error": "pyotp_not_installed", "totp_secret": secret}
 

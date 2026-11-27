@@ -1,0 +1,37 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/phone/smsbower.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "smsbower-phone-rs",
+  "exports": [
+    {
+      "name": "normalize_phone",
+      "file": "sms_tool/phone/smsbower.py",
+      "line": 58,
+      "params": [
+        {
+          "name": "phone",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "SmsBowerClient",
+      "file": "sms_tool/phone/smsbower.py",
+      "line": 88,
+      "reason": "HTTP vendor client stays in Python"
+    }
+  ]
+}

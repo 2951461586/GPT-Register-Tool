@@ -11,7 +11,6 @@ from .config import CFG, ConfigError, default_config_dir, initialize_config_shar
 from .observability.diagnostics import install_safe_stdio, safe_print
 from .desktop.ipc import emit_result
 from .kernel.paths import output_dir, runtime_file
-from .registration_drivers.base import driver_choices
 from .kernel.sanitizer import sanitize_text
 
 

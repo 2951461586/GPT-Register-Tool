@@ -32,24 +32,24 @@ def atomic_write_text(path, text: str) -> None:
 # ==========================================
 # Timing
 # ==========================================
-def _tl():
+def tl():
     if not hasattr(_tls, "timings"):
         _tls.timings = []
     return _tls.timings
 
 
-def _tick(name):
-    _tl().append((name, time.time()))
+def tick(name):
+    tl().append((name, time.time()))
     print(f"[{name}]", flush=True)
 
 
-def _tock():
-    t = _tl()
+def tock():
+    t = tl()
     t[-1] = (t[-1][0], time.time() - t[-1][1])
 
 
-def _print_timings():
-    t = _tl()
+def print_timings():
+    t = tl()
     total = sum(e for _, e in t)
     print("\n" + "=" * 50)
     print(f"{'Step':<40} {'Time (s)':>10}")
@@ -61,35 +61,35 @@ def _print_timings():
     print("=" * 50)
 
 
-def _timing_summary():
-    t = _tl()
+def timing_summary():
+    t = tl()
     return {
         "steps": [{"name": name, "seconds": round(elapsed, 2)} for name, elapsed in t],
         "total_seconds": round(sum(elapsed for _, elapsed in t), 2),
     }
 
 
-def _safe_tock():
-    timings = _tl()
+def safe_tock():
+    timings = tl()
     if timings and timings[-1][1] > 1_000_000:
-        _tock()
+        tock()
 
 
 # ==========================================
 # Random Generators
 # ==========================================
-def _random_name():
+def random_name():
     first = ["James", "John", "Robert", "Michael", "David", "William", "Mary", "Linda", "Barbara", "Jennifer"]
     last = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Wilson", "Anderson"]
     return random.choice(first), random.choice(last)
 
 
-def _random_birthdate():
+def random_birthdate():
     y, m, d = random.randint(1985, 2004), random.randint(1, 12), random.randint(1, 28)
     return f"{y}-{m:02d}-{d:02d}"
 
 
-def _generate_password():
+def generate_password():
     reg = CFG.get("registration", {})
     length = reg.get("password_random_length", 12)
     suffix = reg.get("password_suffix", "!A1")
@@ -97,6 +97,17 @@ def _generate_password():
     base_len = max(1, length - len(suffix))
     # Use cryptographic RNG to eliminate PRNG-based predictability markers
     return "".join(secrets.choice(charset) for _ in range(base_len)) + suffix
+
+
+_tl = tl
+_tick = tick
+_tock = tock
+_print_timings = print_timings
+_timing_summary = timing_summary
+_safe_tock = safe_tock
+_random_name = random_name
+_random_birthdate = random_birthdate
+_generate_password = generate_password
 
 
 # Default per-stage humanized dwell ranges in milliseconds (min, max). Modeled on

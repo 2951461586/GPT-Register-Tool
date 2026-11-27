@@ -9,7 +9,7 @@ import json
 
 from .auth_headers import auth_impersonate
 from .http_client import request_with_retry
-from .http_utils import _json_or_raw
+from .http_utils import json_or_raw
 
 
 #: Transaction-enum values the server writes into ``client_auth_session`` whose
@@ -408,7 +408,7 @@ def fetch_client_auth_session_dump(session, auth_base, base_headers, stage=""):
     except Exception as exc:
         print(f"  client_auth_session_dump[{stage or 'default'}] warning: {exc}")
         return {}
-    body = _json_or_raw(response, limit=1200)
+    body = json_or_raw(response, limit=1200)
     if getattr(response, "status_code", 0) != 200:
         print(f"  client_auth_session_dump[{stage or 'default'}]: {response.status_code}{auth_dump_failure_text(body)}")
         return {"status": getattr(response, "status_code", 0), "body": body}

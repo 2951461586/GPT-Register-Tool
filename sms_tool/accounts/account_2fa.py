@@ -216,7 +216,9 @@ def _activate_totp(session, access_token: str, did: str, secret: str, session_id
 
     url = endpoints.CHATGPT_BASE + "/backend-api/accounts/mfa/user/activate_enrollment"
     headers = _mfa_chatgpt_headers(access_token, did, base_headers, include_content_type=True)
-    totp_code = pyotp.TOTP(secret).now()
+    # PyOTP 2.12+ ships py.typed without listing TOTP in __all__; lookup via
+    # getattr keeps pyright clean and preserves patch("pyotp.TOTP") test seams.
+    totp_code = getattr(pyotp, "TOTP")(secret).now()
     r = request_with_retry(
         session,
         "post",

@@ -5,14 +5,10 @@ from __future__ import annotations
 import base64
 import html
 import imaplib
-import importlib
-import os
 import re
 import socket
 import smtplib
 import ssl
-import sys
-from pathlib import Path
 from urllib.parse import unquote, urlparse
 from email.message import EmailMessage
 from email.utils import formataddr
@@ -22,27 +18,9 @@ from curl_cffi import requests as curl_requests
 from .outlook_imap_client import discover_imap_folders, imap_message_to_graph_shape
 from . import ports
 from typing import Any
+from ..kernel.native_loader import load_native_module
 
-
-def _load_native_gmail_html() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_GMAIL_HTML") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "gmail-html-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("gmail_html_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_GMAIL_HTML = _load_native_gmail_html()
+_NATIVE_GMAIL_HTML = load_native_module("gmail-html-rs", "gmail_html_rs", "RUST_ANYTHING_UNIT_GMAIL_HTML")
 _NATIVE_HTML_TO_TEXT = getattr(_NATIVE_GMAIL_HTML, "_html_to_text", None)
 _NATIVE_PARSE_PROXY_URL = getattr(_NATIVE_GMAIL_HTML, "_parse_proxy_url", None)
 _NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)

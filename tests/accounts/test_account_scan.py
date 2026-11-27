@@ -224,7 +224,7 @@ class AccountScanTests(unittest.TestCase):
     def test_scan_one_relogin_recovers_token_invalid_before_scan_failure(self):
         with (
             patch(
-                "sms_tool.accounts.account_scan._load_seed_session",
+                "sms_tool.accounts.account_scan.load_seed_session",
                 side_effect=[
                     ({"email": "a@example.com", "access_token": "old_at"}, "session.json"),
                     (
@@ -265,7 +265,7 @@ class AccountScanTests(unittest.TestCase):
     def test_scan_one_keeps_alive_when_existing_at_is_valid_but_auth_probe_transport_fails(self):
         with (
             patch(
-                "sms_tool.accounts.account_scan._load_seed_session",
+                "sms_tool.accounts.account_scan.load_seed_session",
                 return_value=({"email": "a@example.com", "access_token": "at_123"}, ""),
             ),
             patch(
@@ -291,7 +291,7 @@ class AccountScanTests(unittest.TestCase):
     def test_scan_one_probe_only_does_not_start_oauth_or_otp(self):
         with (
             patch(
-                "sms_tool.accounts.account_scan._load_seed_session",
+                "sms_tool.accounts.account_scan.load_seed_session",
                 return_value=({"email": "a@example.com", "access_token": "at_123"}, ""),
             ),
             patch(
@@ -312,7 +312,7 @@ class AccountScanTests(unittest.TestCase):
     def test_scan_one_marks_relogin_failed_instead_of_generic_scan_failed(self):
         with (
             patch(
-                "sms_tool.accounts.account_scan._load_seed_session",
+                "sms_tool.accounts.account_scan.load_seed_session",
                 return_value=({"email": "a@example.com", "access_token": "old_at"}, "session.json"),
             ),
             patch(
@@ -337,7 +337,7 @@ class AccountScanTests(unittest.TestCase):
     def test_scan_one_passes_codex_only_relogin_mode(self):
         with (
             patch(
-                "sms_tool.accounts.account_scan._load_seed_session",
+                "sms_tool.accounts.account_scan.load_seed_session",
                 side_effect=[
                     ({"email": "a@example.com", "access_token": "old_at"}, "session.json"),
                     ({"email": "a@example.com", "access_token": "new_at"}, "session.json"),
@@ -373,7 +373,7 @@ class AccountScanTests(unittest.TestCase):
     def test_scan_one_skips_all_network_relogin_for_terminal_account(self):
         data = {"email": "a@example.com", "status": "account_deactivated", "access_token": "old_at"}
         with (
-            patch("sms_tool.accounts.account_scan._load_seed_session", return_value=(data, "session.json")),
+            patch("sms_tool.accounts.account_scan.load_seed_session", return_value=(data, "session.json")),
             patch("sms_tool.accounts.account_scan.probe_account_liveness") as probe,
             patch("sms_tool.accounts.account_scan.relogin_codex_account") as relogin,
             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect,
@@ -419,7 +419,7 @@ class ScanFailureStatusTests(unittest.TestCase):
     def test_auth_state_error_is_not_reported_as_relogin_failed(self):
         with (
             patch(
-                "sms_tool.accounts.account_scan._load_seed_session",
+                "sms_tool.accounts.account_scan.load_seed_session",
                 return_value=({"email": "a@example.com", "access_token": "old_at"}, "session.json"),
             ),
             patch(

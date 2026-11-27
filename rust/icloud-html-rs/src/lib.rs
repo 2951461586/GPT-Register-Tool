@@ -149,6 +149,20 @@ fn _extract_url_credentials(
         .and_then(|v| crate::pyconv::ToPy::to_py(&v, py))
 }
 
+fn _yangyang_api_paths_inner(text: String) -> Result<Option<(String, String, String)>, String> {
+    let out = port::_yangyang_api_paths(text)?;
+    Ok(out)
+}
+
+/// `_yangyang_api_paths`.
+#[pyfunction]
+#[pyo3(name = "_yangyang_api_paths", signature = (text))]
+fn _yangyang_api_paths(py: Python<'_>, text: String) -> PyResult<Py<PyAny>> {
+    _yangyang_api_paths_inner(text)
+        .map_err(error)
+        .and_then(|v| crate::pyconv::ToPy::to_py(&v, py))
+}
+
 #[pymodule]
 #[pyo3(name = "_native")]
 fn native_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -158,5 +172,6 @@ fn native_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(_with_message_limit, m)?)?;
     m.add_function(wrap_pyfunction!(_same_origin, m)?)?;
     m.add_function(wrap_pyfunction!(_extract_url_credentials, m)?)?;
+    m.add_function(wrap_pyfunction!(_yangyang_api_paths, m)?)?;
     Ok(())
 }

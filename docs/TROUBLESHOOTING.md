@@ -107,7 +107,7 @@
    它会把**占用该 profile 的进程**列出来（PID + 映像名）。
 2. 🔴 **不要用 `parent.lock` 判断**。Camoufox 每次**正常退出**也会留下它，
    「文件存在」不等于「有进程持有」。
-3. `describe_contention`（`sms_tool/browser/profile_reclaim.py:236`）只把**精确引用**该 profile
+3. `describe_contention`（`sms_tool/browser/profile_reclaim.py:219`）只把**精确引用**该 profile
    路径的进程算作占用者；命令行里只是**提到**这个路径的进程不算。
 4. 需要清理时用 `reclaim_stale_profile(..., terminate=True)`，它会跳过非浏览器映像与自身进程。
 
@@ -234,7 +234,7 @@
 7. 🔴 **配置写对了、`--doctor` 也是绿的，但一个号都买不到** ⇒ 先查**价格窗口**。
 
    `phone_reuse` 会把 `max_price` **全局兜底成 `0.06`**（`phone/reuse.py:555` 的 `or "0.06"`），
-   而 `_price_window_refusal()`（`sms_tool/phone/nexsms.py:528`）会拒掉任何高于它的报价。
+   而 `_price_window_refusal()`（`sms_tool/phone/nexsms.py:506`）会拒掉任何高于它的报价。
    **「空值不是边界」** —— 空 `min_price` 确实无下界，但 `max_price` 有默认上界。
 
    ⇒ **换一家供应商时必须重估价格窗口，不能沿用 0.06。** 各家的价差极大，实测 nexsms

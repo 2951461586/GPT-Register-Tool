@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 from . import decisions, dom_fields, flow_steps, form_steps, page_state, recovery, session
 from .context import prepare_browser_context
 
-from ... import storage
 from ...registration import chatgpt_bootstrap
 from ...browser import fingerprint_pool as browser_fingerprint_pool
 from ...registration import outcome as registration_outcome
@@ -29,7 +28,7 @@ from ...accounts import account_identity
 from ...mailbox.service import MailboxService
 from ...proxy.entry import redact_proxy_text
 from ...registration.state import RegistrationState, RegistrationStateMachine
-from ...utils import _generate_password, _random_birthdate, _random_name
+from ...utils import generate_password, random_birthdate, random_name
 from .. import external_sessions
 from ..base import BrowserRegistrationError, driver_capabilities, normalize_registration_driver
 from collections.abc import Mapping
@@ -88,9 +87,9 @@ def run_browser_registration(
     if isinstance(pre, dict):
         return pre
     driver_name, mailbox, email, mailbox_service = pre
-    password = str(password or "").strip() or _generate_password()
-    full_name = " ".join(_random_name())
-    birthdate = _random_birthdate()
+    password = str(password or "").strip() or generate_password()
+    full_name = " ".join(random_name())
+    birthdate = random_birthdate()
     context = prepare_browser_context(config, driver_name, browser_headless)
     headless, timeout, otp_timeout = context.headless, context.timeout, context.otp_timeout
     machine = RegistrationStateMachine(registration_progress.registration_stage)

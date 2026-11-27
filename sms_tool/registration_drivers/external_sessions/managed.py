@@ -10,7 +10,7 @@ import shutil
 import time
 import warnings
 from typing import Any, Callable, Mapping
-from urllib.parse import unquote, urlencode, urljoin, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit
 
 from curl_cffi import requests as curl_requests
 
@@ -21,7 +21,7 @@ from ..base import BrowserRegistrationError
 from ..browser_flow.decisions import DEFAULT_VIEWPORT_HEIGHT, DEFAULT_VIEWPORT_WIDTH
 from ..browser_session import PlaywrightBrowserSession
 from ..stealth import apply_playwright_stealth
-from ..platform_patches import MOZ_DISABLE_CONTENT_SANDBOX, camoufox_launch_env
+from ..platform_patches import camoufox_launch_env
 
 logger = logging.getLogger(__name__)
 

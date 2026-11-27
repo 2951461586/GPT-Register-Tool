@@ -520,8 +520,8 @@ class CompleteAboutYouTests(unittest.TestCase):
                 "sms_tool.codex.oauth._follow_redirects",
                 return_value=(None, "https://chatgpt.com/api/auth/callback/openai?code=abc"),
             ) as follow,
-            patch("sms_tool.codex.oauth._random_name", return_value=("James", "Smith")),
-            patch("sms_tool.codex.oauth._random_birthdate", return_value="1990-01-02"),
+            patch("sms_tool.codex.oauth.random_name", return_value=("James", "Smith")),
+            patch("sms_tool.codex.oauth.random_birthdate", return_value="1990-01-02"),
         ):
             result = codex_oauth._complete_about_you(Mock(), "did-1", "https://auth.openai.com/about-you")
 

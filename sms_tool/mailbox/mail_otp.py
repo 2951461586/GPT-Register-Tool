@@ -1,10 +1,6 @@
-import importlib
-import os
 import re
-import sys
 from datetime import datetime
-from pathlib import Path
-from typing import Any
+from ..kernel.native_loader import load_native_module
 
 OTP_RE = re.compile(r"(^|[^0-9])([0-9]{6})([^0-9]|$)")
 _HTML_NOISE_STRIP_RE = re.compile(
@@ -47,33 +43,10 @@ FAKE_OTP_CONTEXT_MARKERS = (
     "message-id",
 )
 
-
-def _load_native_mail_otp() -> Any:
-    """Load the Rust `mail_otp_rs` acceleration module when available."""
-    mode = os.environ.get("RUST_ANYTHING_MODE")
-    if mode == "old" or os.environ.get("RUST_ANYTHING_UNIT_MAIL_OTP") == "original":
-        return None
-    native_root = str(Path(__file__).resolve().parent.parent.parent / "rust" / "mail-otp-rs" / "python")
-    if not os.path.isdir(native_root):
-        if mode == "new":
-            raise ImportError(f"mail_otp_rs not found at {native_root}")
-        return None
-    sys.path.insert(0, native_root)
-    try:
-        return importlib.import_module("mail_otp_rs")
-    except ImportError:
-        if mode == "new":
-            raise
-        return None
-    finally:
-        if native_root in sys.path:
-            sys.path.remove(native_root)
+_NATIVE_MAIL_OTP = load_native_module("mail-otp-rs", "mail_otp_rs", "RUST_ANYTHING_UNIT_MAIL_OTP")
 
 
-_NATIVE_MAIL_OTP = _load_native_mail_otp()
-
-
-def _extract_otp_from_text(text):
+def extract_otp_from_text(text):
     if _NATIVE_MAIL_OTP is not None and (text is None or isinstance(text, str)):
         return _NATIVE_MAIL_OTP._extract_otp_from_text(text)
     text = text or ""
@@ -133,12 +106,18 @@ def _extract_otp_from_text(text):
     return candidates[0][2]
 
 
-def _message_id(msg):
+_extract_otp_from_text = extract_otp_from_text
+
+
+def message_id(msg):
     msg = msg or {}
     return str(msg.get("id") or msg.get("message_id") or "").strip()
 
 
-def _message_received_ts(msg):
+_message_id = message_id
+
+
+def message_received_ts(msg):
     value = str((msg or {}).get("receivedDateTime") or "")
     if not value:
         return 0
@@ -148,9 +127,12 @@ def _message_received_ts(msg):
         return 0
 
 
-def _email_otp_candidate(mailbox, msg, keyword="", issued_after_unix=0):
+_message_received_ts = message_received_ts
+
+
+def email_otp_candidate(mailbox, msg, keyword="", issued_after_unix=0):
     if issued_after_unix > 0:
-        recv_ts = _message_received_ts(msg)
+        recv_ts = message_received_ts(msg)
         if recv_ts and recv_ts < issued_after_unix:
             return None
     subject = str((msg or {}).get("subject") or "")
@@ -172,14 +154,17 @@ def _email_otp_candidate(mailbox, msg, keyword="", issued_after_unix=0):
     body += str((((msg or {}).get("body") or {}).get("content")) or "")
     if _message_looks_fake_otp_noise(body):
         return None
-    otp = _extract_otp_from_text(body)
+    otp = extract_otp_from_text(body)
     if not otp:
         return None
     return {
         "otp": otp,
-        "id": _message_id(msg),
-        "received_ts": _message_received_ts(msg),
+        "id": message_id(msg),
+        "received_ts": message_received_ts(msg),
     }
+
+
+_email_otp_candidate = email_otp_candidate
 
 
 def candidate_is_newer(candidate, current):

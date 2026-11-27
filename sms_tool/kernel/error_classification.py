@@ -8,35 +8,14 @@
 
 from __future__ import annotations
 
-import importlib
 import json
-import os
-import sys
-from pathlib import Path
-from typing import Any
 
 from .failure_registry import FAILURE_CLASSES, TERMINAL_ERROR_MARKERS as _TERMINAL_MARKERS
+from .native_loader import load_native_module
 
-
-def _load_native_error_classification() -> Any | None:
-    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
-    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_ERROR_CLASSIFICATION") or "").strip().lower()
-    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
-        return None
-    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "error-classification-rs" / "python"
-    if pkg_dir.is_dir():
-        pkg_str = str(pkg_dir)
-        if pkg_str not in sys.path:
-            sys.path.insert(0, pkg_str)
-    try:
-        return importlib.import_module("error_classification_rs")
-    except (ImportError, OSError):
-        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
-            raise
-        return None
-
-
-_NATIVE_ERROR_CLASSIFICATION = _load_native_error_classification()
+_NATIVE_ERROR_CLASSIFICATION = load_native_module(
+    "error-classification-rs", "error_classification_rs", "RUST_ANYTHING_UNIT_ERROR_CLASSIFICATION"
+)
 _NATIVE_CLASSIFY_ERROR = getattr(_NATIVE_ERROR_CLASSIFICATION, "classify_error", None)
 _NATIVE_IS_TERMINAL = getattr(_NATIVE_ERROR_CLASSIFICATION, "is_terminal_registration_error", None)
 _NATIVE_INPUT_TYPES = (str, dict, type(None), bool, int, float, list)

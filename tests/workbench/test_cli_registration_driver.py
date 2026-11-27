@@ -1,5 +1,4 @@
 import unittest
-from argparse import ArgumentParser
 
 from sms_tool import cli
 

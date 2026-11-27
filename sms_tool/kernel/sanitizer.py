@@ -8,15 +8,13 @@ Sensitive values are replaced in full; no token or secret prefix is retained.
 from __future__ import annotations
 
 import hashlib
-import importlib
 import json
-import os
 import re
-import sys
 from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from .native_loader import load_native_module
 
 POLICY_SCHEMA = "sensitive_policy.v1"
 
@@ -74,35 +72,7 @@ _LOG_TEXT_PATTERNS = tuple(
     if isinstance(item, dict) and item.get("pattern")
 )
 
-
-def _load_native_sanitizer() -> Any:
-    """Load the Rust `sanitize_text_rs` acceleration module when available.
-
-    Controlled by ``RUST_ANYTHING_MODE`` (``old`` disables, ``new`` requires) and
-    ``RUST_ANYTHING_UNIT_SANITIZE_TEXT=original``. Falls back cleanly to pure
-    Python when the compiled extension is absent (e.g. fresh checkout / CI).
-    """
-    mode = os.environ.get("RUST_ANYTHING_MODE")
-    if mode == "old" or os.environ.get("RUST_ANYTHING_UNIT_SANITIZE_TEXT") == "original":
-        return None
-    native_root = str(Path(__file__).resolve().parent.parent.parent / "rust" / "sanitize-text-rs" / "python")
-    if not os.path.isdir(native_root):
-        if mode == "new":
-            raise ImportError(f"sanitize_text_rs not found at {native_root}")
-        return None
-    sys.path.insert(0, native_root)
-    try:
-        return importlib.import_module("sanitize_text_rs")
-    except ImportError:
-        if mode == "new":
-            raise
-        return None
-    finally:
-        if native_root in sys.path:
-            sys.path.remove(native_root)
-
-
-_NATIVE_SANITIZER = _load_native_sanitizer()
+_NATIVE_SANITIZER = load_native_module("sanitize-text-rs", "sanitize_text_rs", "RUST_ANYTHING_UNIT_SANITIZE_TEXT")
 
 
 def sanitize_text(value: Any) -> str:
