@@ -383,8 +383,8 @@ def _try_browser_pay(
 
     if use_camoufox:
         try:
+            from camoufox.fingerprints import Screen
             from camoufox.sync_api import Camoufox
-            from browserforge.fingerprints import Screen
 
             del Camoufox, Screen
         except ImportError:
@@ -449,7 +449,7 @@ def _try_browser_pay_camoufox(
     """Attempt PayPal payment via Camoufox anti-detect browser."""
     import tempfile
 
-    from browserforge.fingerprints import Screen
+    from camoufox.fingerprints import Screen
     from camoufox.sync_api import Camoufox
 
     _LOGGER.info("%s", "[*] Starting Camoufox anti-detect browser automation...")
@@ -542,7 +542,7 @@ def _try_browser_pay_cloakbrowser(
     try:
         from cloakbrowser import launch
     except ImportError:
-        return {"ok": False, "error": "browser_not_installed: pip install camoufox[geoip] browserforge or cloakbrowser"}
+        return {"ok": False, "error": "browser_not_installed: pip install camoufox[geoip] or cloakbrowser"}
 
     _LOGGER.info("%s", "[*] Starting CloakBrowser automation (fallback)...")
     result: dict[str, Any] = {"ok": False, "email": alias_email}

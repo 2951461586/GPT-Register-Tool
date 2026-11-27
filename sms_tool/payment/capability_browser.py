@@ -29,6 +29,15 @@ from .capability import (
     CapabilityProbeError,
     ChatGPTStripeCapabilityTransport,
 )
+from .qualification_states import load_native_module
+
+_NATIVE_CAPABILITY_BROWSER_PARSE = load_native_module(
+    "capability-browser-parse-rs",
+    "capability_browser_parse_rs",
+    "RUST_ANYTHING_UNIT_CAPABILITY_BROWSER_PARSE",
+)
+_NATIVE_PLAYWRIGHT_PROXY = getattr(_NATIVE_CAPABILITY_BROWSER_PARSE, "_playwright_proxy", None)
+_NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
 
 
 #: Route fetched from the page. Relative on purpose: it inherits the real
@@ -71,6 +80,8 @@ def _cookies_from_header(cookie_header: str, device_id: str) -> list[dict[str, s
 
 def _playwright_proxy(proxy: Any) -> dict[str, str] | None:
     """Convert a proxy URL to Playwright's launch proxy dict."""
+    if _NATIVE_PLAYWRIGHT_PROXY is not None and isinstance(proxy, _NATIVE_SCALAR_TYPES):
+        return _NATIVE_PLAYWRIGHT_PROXY(proxy)
     value = str(proxy or "").strip()
     if not value:
         return None

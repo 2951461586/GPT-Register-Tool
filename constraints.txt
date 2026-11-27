@@ -4,7 +4,7 @@
 # Usage (CI / local install):
 #     python -m pip install -r requirements.txt -c constraints.txt
 #
-# This file is the version floor for the 15 direct dependencies. Their transitive
+# This file is the version floor for the 14 direct dependencies. Their transitive
 # closures are bounded by each package's own metadata, so a full lock is not required
 # to get reproducible installs. Regenerate after a deliberate major-version bump by
 # re-running `python -m pip freeze` and updating the lines below.
@@ -34,7 +34,6 @@ PyOTP==2.12.0
 psutil==7.2.2
 tzdata==2026.6
 camoufox==0.5.9
-browserforge==1.2.4
 cloakbrowser==0.5.9
 playwright==1.60.0
 playwright-stealth==2.0.3

@@ -24,7 +24,6 @@ psutil>=7.0,<8
 
 # Anti-detect browser (preferred)
 camoufox[geoip]>=0.5.9
-browserforge>=0.1.0
 
 # Browser automation fallback.
 # 🔴 `<0.6` is a ceiling on a *behaviour* change, not on style: from 0.7 on,

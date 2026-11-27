@@ -29,9 +29,11 @@ class _RecordingCamoufox:
     """Stand-in for ``camoufox.sync_api.Camoufox`` capturing the env at spawn."""
 
     seen_env: str | None = None
+    seen_kwargs: dict = {}
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs
+        _RecordingCamoufox.seen_kwargs = dict(kwargs)
         _RecordingCamoufox.seen_env = kwargs.get("env", {}).get(ENV)
 
     def __enter__(self):
@@ -98,6 +100,17 @@ class CamoufoxContentSandboxTests(unittest.TestCase):
         result = self._launch(disable_content_sandbox=False)
         self.assertEqual(result["during"], "0")
         self.assertEqual(result["after"], "0")
+
+    def test_screen_argument_uses_camoufox_screen_with_as_conditions(self):
+        """Regression for issue #32: Camoufox 0.5+ requires Screen.as_conditions()."""
+        self._launch(max_width=1366, max_height=768)
+        screen = _RecordingCamoufox.seen_kwargs.get("screen")
+        as_conditions = getattr(screen, "as_conditions", None)
+        assert callable(as_conditions)
+        conditions = as_conditions()
+        assert isinstance(conditions, dict)
+        self.assertIn("screen.width", conditions)
+        self.assertIn("screen.height", conditions)
 
 
 if __name__ == "__main__":

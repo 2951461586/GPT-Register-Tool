@@ -1,0 +1,55 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/payment/capability_browser.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "capability-browser-parse-rs",
+  "exports": [
+    {
+      "name": "_playwright_proxy",
+      "file": "sms_tool/payment/capability_browser.py",
+      "line": 72,
+      "params": [
+        {
+          "name": "proxy",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "Record<string, string> | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "browser_fallback_transport",
+      "file": "sms_tool/payment/capability_browser.py",
+      "line": 254,
+      "reason": "takes `**kwargs`"
+    },
+    {
+      "name": "BrowserCapabilityTransport",
+      "file": "sms_tool/payment/capability_browser.py",
+      "line": 95,
+      "reason": "class: public attribute `fingerprint`, public attribute `timeout_ms`"
+    },
+    {
+      "name": "browser_available",
+      "file": "sms_tool/payment/capability_browser.py",
+      "line": 47,
+      "reason": "stays in Python (I/O, orchestration, or non-hot helper)"
+    },
+    {
+      "name": "_cookies_from_header",
+      "file": "sms_tool/payment/capability_browser.py",
+      "line": 56,
+      "reason": "benchmarked at 0.38x due to PyO3 list-of-dicts allocation cost"
+    }
+  ]
+}

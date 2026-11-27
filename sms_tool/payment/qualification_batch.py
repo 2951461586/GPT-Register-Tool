@@ -47,7 +47,17 @@ from .qualification_states import (
     QUALIFICATION_INELIGIBLE,
     QUALIFICATION_PROBE_FAILED,
     QUALIFICATION_UNKNOWN,
+    load_native_module,
 )
+
+_NATIVE_QUALIFICATION_BATCH_PARSE = load_native_module(
+    "qualification-batch-parse-rs",
+    "qualification_batch_parse_rs",
+    "RUST_ANYTHING_UNIT_QUALIFICATION_BATCH_PARSE",
+)
+_NATIVE_PROXY_FINGERPRINT = getattr(_NATIVE_QUALIFICATION_BATCH_PARSE, "_proxy_fingerprint", None)
+_NATIVE_STRIPE_REASON_TEXT = getattr(_NATIVE_QUALIFICATION_BATCH_PARSE, "_stripe_reason_text", None)
+_NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
 
 logger = logging.getLogger(__name__)
 
@@ -493,6 +503,8 @@ def _budget_exhausted(index: int, limit: int, timeout: int) -> dict[str, Any]:
 
 def _proxy_fingerprint(proxy: str | None) -> dict[str, str]:
     """Credential-free identity for failure attribution (host + session hash)."""
+    if _NATIVE_PROXY_FINGERPRINT is not None and isinstance(proxy, _NATIVE_SCALAR_TYPES):
+        return _NATIVE_PROXY_FINGERPRINT(proxy)
     value = str(proxy or "").strip()
     if not value:
         return {"proxy_host": "", "proxy_session": "", "proxy_fingerprint": ""}
@@ -704,6 +716,8 @@ def _stripe_reason_text(text: str) -> str:
     * the actionable cause sits at the *end* of requests' exception chain, so the
       cut removed exactly the part the operator needed.
     """
+    if _NATIVE_STRIPE_REASON_TEXT is not None and isinstance(text, _NATIVE_SCALAR_TYPES):
+        return _NATIVE_STRIPE_REASON_TEXT(text)
     collapsed = " ".join(str(text or "").split())
     if not collapsed:
         return ""

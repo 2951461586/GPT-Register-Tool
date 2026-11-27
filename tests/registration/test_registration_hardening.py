@@ -41,7 +41,7 @@ def fake_camoufox(monkeypatch):
     manager.__enter__.return_value = context
     factory = MagicMock(return_value=manager)
     monkeypatch.setitem(__import__("sys").modules, "camoufox.sync_api", SimpleNamespace(Camoufox=factory))
-    monkeypatch.setitem(__import__("sys").modules, "browserforge.fingerprints", SimpleNamespace(Screen=MagicMock()))
+    monkeypatch.setitem(__import__("sys").modules, "camoufox.fingerprints", SimpleNamespace(Screen=MagicMock()))
     monkeypatch.setattr(managed, "apply_playwright_stealth", lambda *a, **k: {})
     return factory, manager
 

@@ -52,7 +52,7 @@ Directory layout (since 2026-09-06):
   `python -m sms_tool --doctor`）。每条清单按顺序可执行，并指向负责该行为的
   `file.py:line`。排错时**先读这个**，再去读契约文档。
 - [Rust Acceleration](current/rust-acceleration.md) - `native/sentinel_vm/` 进程内
-  Rust Sentinel FFI（零 Node.js 依赖）与 51 个 `rust-anything` PyO3 热点扩展的覆盖范围、实测加速比与开关约定。
+  Rust Sentinel FFI（零 Node.js 依赖）与 53 个 `rust-anything` PyO3 热点扩展的覆盖范围、实测加速比与开关约定。
 - [Type Checking](current/typing.md) - pyright 逐文件 ratchet：为什么是 ratchet、
   如何安装与运行、修一条类型错误的首选写法。
 - [C# Gates](current/dotnet-gates.md) - C# 构建告警门禁：零基线、为什么解析控制台

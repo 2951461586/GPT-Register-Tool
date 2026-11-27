@@ -1,0 +1,99 @@
+{"fn": "_playwright_proxy", "args": [{"a": {"b": "c"}}], "ok": null}
+{"fn": "_playwright_proxy", "args": ["x"], "ok": null}
+{"fn": "_playwright_proxy", "args": [{"a": "b"}], "ok": null}
+{"fn": "_playwright_proxy", "args": [[]], "ok": null}
+{"fn": "_playwright_proxy", "args": [{}], "ok": null}
+{"fn": "_playwright_proxy", "args": [0], "ok": null}
+{"fn": "_playwright_proxy", "args": [null], "ok": null}
+{"fn": "_playwright_proxy", "args": [["a", 1]], "ok": null}
+{"fn": "_playwright_proxy", "args": [true], "ok": null}
+{"fn": "_playwright_proxy", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": null}
+{"fn": "_playwright_proxy", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": null}
+{"fn": "_playwright_proxy", "args": [[3, 1, 2]], "ok": null}
+{"fn": "_playwright_proxy", "args": [null], "ok": null}
+{"fn": "_playwright_proxy", "args": [""], "ok": null}
+{"fn": "_playwright_proxy", "args": ["   "], "ok": null}
+{"fn": "_playwright_proxy", "args": ["http://127.0.0.1:8080"], "ok": {"server": "http://127.0.0.1:8080"}}
+{"fn": "_playwright_proxy", "args": ["https://user:pass@proxy.example.com:8443/path"], "ok": {"server": "https://proxy.example.com:8443", "username": "user", "password": "pass"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://u%401:p%3A2@10.0.0.1:1080"], "ok": {"server": "socks5://10.0.0.1:1080", "username": "u@1", "password": "p:2"}}
+{"fn": "_playwright_proxy", "args": ["socks5://user%20name:pass%2Fword@[::1]:10808"], "ok": {"server": "socks5://::1:10808", "username": "user name", "password": "pass/word"}}
+{"fn": "_playwright_proxy", "args": ["http://[::1]:8080"], "ok": {"server": "http://::1:8080"}}
+{"fn": "_playwright_proxy", "args": ["http://[bad-ipv6:8080"], "ok": null}
+{"fn": "_playwright_proxy", "args": ["http://[127.0.0.1]:8080"], "ok": null}
+{"fn": "_playwright_proxy", "args": ["http://proxy.example:0"], "ok": {"server": "http://proxy.example"}}
+{"fn": "_playwright_proxy", "args": ["http://proxy.example:99999"], "error": "ValueError: Port out of range 0-65535"}
+{"fn": "_playwright_proxy", "args": ["http://proxy.example:abc"], "error": "ValueError: Port could not be cast to integer value as 'abc'"}
+{"fn": "_playwright_proxy", "args": ["no-scheme.example:8080"], "ok": null}
+{"fn": "_playwright_proxy", "args": ["http:///no-host"], "ok": null}
+{"fn": "_playwright_proxy", "args": ["SOCKS5H://USER:PASS@HOST.EXAMPLE.COM:1080"], "ok": {"server": "socks5://host.example.com:1080", "username": "USER", "password": "PASS"}}
+{"fn": "_playwright_proxy", "args": ["http://onlyuser@proxy.example:8080"], "ok": {"server": "http://proxy.example:8080", "username": "onlyuser"}}
+{"fn": "_playwright_proxy", "args": ["http://:onlypass@proxy.example:8080"], "ok": {"server": "http://proxy.example:8080", "password": "onlypass"}}
+{"fn": "_playwright_proxy", "args": ["  https://u:p@sub.host.io:3128\r\n"], "ok": {"server": "https://sub.host.io:3128", "username": "u", "password": "p"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_1-session-abc1:pass%211@gate1.proxy.example:10001"], "ok": {"server": "socks5://gate1.proxy.example:10001", "username": "user_1-session-abc1", "password": "pass!1"}}
+{"fn": "_playwright_proxy", "args": ["http://u1%40mail:p1@192.0.2.2:8001"], "ok": {"server": "http://192.0.2.2:8001", "username": "u1@mail", "password": "p1"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_2-session-abc2:pass%212@gate2.proxy.example:10002"], "ok": {"server": "socks5://gate2.proxy.example:10002", "username": "user_2-session-abc2", "password": "pass!2"}}
+{"fn": "_playwright_proxy", "args": ["http://u2%40mail:p2@192.0.2.3:8002"], "ok": {"server": "http://192.0.2.3:8002", "username": "u2@mail", "password": "p2"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_3-session-abc3:pass%213@gate3.proxy.example:10003"], "ok": {"server": "socks5://gate3.proxy.example:10003", "username": "user_3-session-abc3", "password": "pass!3"}}
+{"fn": "_playwright_proxy", "args": ["http://u3%40mail:p3@192.0.2.4:8003"], "ok": {"server": "http://192.0.2.4:8003", "username": "u3@mail", "password": "p3"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_4-session-abc4:pass%214@gate4.proxy.example:10004"], "ok": {"server": "socks5://gate4.proxy.example:10004", "username": "user_4-session-abc4", "password": "pass!4"}}
+{"fn": "_playwright_proxy", "args": ["http://u4%40mail:p4@192.0.2.5:8004"], "ok": {"server": "http://192.0.2.5:8004", "username": "u4@mail", "password": "p4"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_5-session-abc5:pass%215@gate5.proxy.example:10005"], "ok": {"server": "socks5://gate5.proxy.example:10005", "username": "user_5-session-abc5", "password": "pass!5"}}
+{"fn": "_playwright_proxy", "args": ["http://u5%40mail:p5@192.0.2.6:8005"], "ok": {"server": "http://192.0.2.6:8005", "username": "u5@mail", "password": "p5"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_6-session-abc6:pass%216@gate6.proxy.example:10006"], "ok": {"server": "socks5://gate6.proxy.example:10006", "username": "user_6-session-abc6", "password": "pass!6"}}
+{"fn": "_playwright_proxy", "args": ["http://u6%40mail:p6@192.0.2.7:8006"], "ok": {"server": "http://192.0.2.7:8006", "username": "u6@mail", "password": "p6"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_7-session-abc7:pass%217@gate7.proxy.example:10007"], "ok": {"server": "socks5://gate7.proxy.example:10007", "username": "user_7-session-abc7", "password": "pass!7"}}
+{"fn": "_playwright_proxy", "args": ["http://u7%40mail:p7@192.0.2.8:8007"], "ok": {"server": "http://192.0.2.8:8007", "username": "u7@mail", "password": "p7"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_8-session-abc8:pass%218@gate8.proxy.example:10008"], "ok": {"server": "socks5://gate8.proxy.example:10008", "username": "user_8-session-abc8", "password": "pass!8"}}
+{"fn": "_playwright_proxy", "args": ["http://u8%40mail:p8@192.0.2.9:8008"], "ok": {"server": "http://192.0.2.9:8008", "username": "u8@mail", "password": "p8"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_9-session-abc9:pass%219@gate9.proxy.example:10009"], "ok": {"server": "socks5://gate9.proxy.example:10009", "username": "user_9-session-abc9", "password": "pass!9"}}
+{"fn": "_playwright_proxy", "args": ["http://u9%40mail:p9@192.0.2.10:8009"], "ok": {"server": "http://192.0.2.10:8009", "username": "u9@mail", "password": "p9"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_10-session-abc10:pass%2110@gate10.proxy.example:10010"], "ok": {"server": "socks5://gate10.proxy.example:10010", "username": "user_10-session-abc10", "password": "pass!10"}}
+{"fn": "_playwright_proxy", "args": ["http://u10%40mail:p10@192.0.2.11:8010"], "ok": {"server": "http://192.0.2.11:8010", "username": "u10@mail", "password": "p10"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_11-session-abc11:pass%2111@gate11.proxy.example:10011"], "ok": {"server": "socks5://gate11.proxy.example:10011", "username": "user_11-session-abc11", "password": "pass!11"}}
+{"fn": "_playwright_proxy", "args": ["http://u11%40mail:p11@192.0.2.12:8011"], "ok": {"server": "http://192.0.2.12:8011", "username": "u11@mail", "password": "p11"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_12-session-abc12:pass%2112@gate12.proxy.example:10012"], "ok": {"server": "socks5://gate12.proxy.example:10012", "username": "user_12-session-abc12", "password": "pass!12"}}
+{"fn": "_playwright_proxy", "args": ["http://u12%40mail:p12@192.0.2.13:8012"], "ok": {"server": "http://192.0.2.13:8012", "username": "u12@mail", "password": "p12"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_13-session-abc13:pass%2113@gate13.proxy.example:10013"], "ok": {"server": "socks5://gate13.proxy.example:10013", "username": "user_13-session-abc13", "password": "pass!13"}}
+{"fn": "_playwright_proxy", "args": ["http://u13%40mail:p13@192.0.2.14:8013"], "ok": {"server": "http://192.0.2.14:8013", "username": "u13@mail", "password": "p13"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_14-session-abc14:pass%2114@gate14.proxy.example:10014"], "ok": {"server": "socks5://gate14.proxy.example:10014", "username": "user_14-session-abc14", "password": "pass!14"}}
+{"fn": "_playwright_proxy", "args": ["http://u14%40mail:p14@192.0.2.15:8014"], "ok": {"server": "http://192.0.2.15:8014", "username": "u14@mail", "password": "p14"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_15-session-abc15:pass%2115@gate15.proxy.example:10015"], "ok": {"server": "socks5://gate15.proxy.example:10015", "username": "user_15-session-abc15", "password": "pass!15"}}
+{"fn": "_playwright_proxy", "args": ["http://u15%40mail:p15@192.0.2.16:8015"], "ok": {"server": "http://192.0.2.16:8015", "username": "u15@mail", "password": "p15"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_16-session-abc16:pass%2116@gate16.proxy.example:10016"], "ok": {"server": "socks5://gate16.proxy.example:10016", "username": "user_16-session-abc16", "password": "pass!16"}}
+{"fn": "_playwright_proxy", "args": ["http://u16%40mail:p16@192.0.2.17:8016"], "ok": {"server": "http://192.0.2.17:8016", "username": "u16@mail", "password": "p16"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_17-session-abc17:pass%2117@gate17.proxy.example:10017"], "ok": {"server": "socks5://gate17.proxy.example:10017", "username": "user_17-session-abc17", "password": "pass!17"}}
+{"fn": "_playwright_proxy", "args": ["http://u17%40mail:p17@192.0.2.18:8017"], "ok": {"server": "http://192.0.2.18:8017", "username": "u17@mail", "password": "p17"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_18-session-abc18:pass%2118@gate18.proxy.example:10018"], "ok": {"server": "socks5://gate18.proxy.example:10018", "username": "user_18-session-abc18", "password": "pass!18"}}
+{"fn": "_playwright_proxy", "args": ["http://u18%40mail:p18@192.0.2.19:8018"], "ok": {"server": "http://192.0.2.19:8018", "username": "u18@mail", "password": "p18"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_19-session-abc19:pass%2119@gate19.proxy.example:10019"], "ok": {"server": "socks5://gate19.proxy.example:10019", "username": "user_19-session-abc19", "password": "pass!19"}}
+{"fn": "_playwright_proxy", "args": ["http://u19%40mail:p19@192.0.2.20:8019"], "ok": {"server": "http://192.0.2.20:8019", "username": "u19@mail", "password": "p19"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_20-session-abc20:pass%2120@gate20.proxy.example:10020"], "ok": {"server": "socks5://gate20.proxy.example:10020", "username": "user_20-session-abc20", "password": "pass!20"}}
+{"fn": "_playwright_proxy", "args": ["http://u20%40mail:p20@192.0.2.21:8020"], "ok": {"server": "http://192.0.2.21:8020", "username": "u20@mail", "password": "p20"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_21-session-abc21:pass%2121@gate21.proxy.example:10021"], "ok": {"server": "socks5://gate21.proxy.example:10021", "username": "user_21-session-abc21", "password": "pass!21"}}
+{"fn": "_playwright_proxy", "args": ["http://u21%40mail:p21@192.0.2.22:8021"], "ok": {"server": "http://192.0.2.22:8021", "username": "u21@mail", "password": "p21"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_22-session-abc22:pass%2122@gate22.proxy.example:10022"], "ok": {"server": "socks5://gate22.proxy.example:10022", "username": "user_22-session-abc22", "password": "pass!22"}}
+{"fn": "_playwright_proxy", "args": ["http://u22%40mail:p22@192.0.2.23:8022"], "ok": {"server": "http://192.0.2.23:8022", "username": "u22@mail", "password": "p22"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_23-session-abc23:pass%2123@gate23.proxy.example:10023"], "ok": {"server": "socks5://gate23.proxy.example:10023", "username": "user_23-session-abc23", "password": "pass!23"}}
+{"fn": "_playwright_proxy", "args": ["http://u23%40mail:p23@192.0.2.24:8023"], "ok": {"server": "http://192.0.2.24:8023", "username": "u23@mail", "password": "p23"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_24-session-abc24:pass%2124@gate24.proxy.example:10024"], "ok": {"server": "socks5://gate24.proxy.example:10024", "username": "user_24-session-abc24", "password": "pass!24"}}
+{"fn": "_playwright_proxy", "args": ["http://u24%40mail:p24@192.0.2.25:8024"], "ok": {"server": "http://192.0.2.25:8024", "username": "u24@mail", "password": "p24"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_25-session-abc25:pass%2125@gate25.proxy.example:10025"], "ok": {"server": "socks5://gate25.proxy.example:10025", "username": "user_25-session-abc25", "password": "pass!25"}}
+{"fn": "_playwright_proxy", "args": ["http://u25%40mail:p25@192.0.2.26:8025"], "ok": {"server": "http://192.0.2.26:8025", "username": "u25@mail", "password": "p25"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_26-session-abc26:pass%2126@gate26.proxy.example:10026"], "ok": {"server": "socks5://gate26.proxy.example:10026", "username": "user_26-session-abc26", "password": "pass!26"}}
+{"fn": "_playwright_proxy", "args": ["http://u26%40mail:p26@192.0.2.27:8026"], "ok": {"server": "http://192.0.2.27:8026", "username": "u26@mail", "password": "p26"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_27-session-abc27:pass%2127@gate27.proxy.example:10027"], "ok": {"server": "socks5://gate27.proxy.example:10027", "username": "user_27-session-abc27", "password": "pass!27"}}
+{"fn": "_playwright_proxy", "args": ["http://u27%40mail:p27@192.0.2.28:8027"], "ok": {"server": "http://192.0.2.28:8027", "username": "u27@mail", "password": "p27"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_28-session-abc28:pass%2128@gate28.proxy.example:10028"], "ok": {"server": "socks5://gate28.proxy.example:10028", "username": "user_28-session-abc28", "password": "pass!28"}}
+{"fn": "_playwright_proxy", "args": ["http://u28%40mail:p28@192.0.2.29:8028"], "ok": {"server": "http://192.0.2.29:8028", "username": "u28@mail", "password": "p28"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_29-session-abc29:pass%2129@gate29.proxy.example:10029"], "ok": {"server": "socks5://gate29.proxy.example:10029", "username": "user_29-session-abc29", "password": "pass!29"}}
+{"fn": "_playwright_proxy", "args": ["http://u29%40mail:p29@192.0.2.30:8029"], "ok": {"server": "http://192.0.2.30:8029", "username": "u29@mail", "password": "p29"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_30-session-abc30:pass%2130@gate30.proxy.example:10030"], "ok": {"server": "socks5://gate30.proxy.example:10030", "username": "user_30-session-abc30", "password": "pass!30"}}
+{"fn": "_playwright_proxy", "args": ["http://u30%40mail:p30@192.0.2.31:8030"], "ok": {"server": "http://192.0.2.31:8030", "username": "u30@mail", "password": "p30"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_31-session-abc31:pass%2131@gate31.proxy.example:10031"], "ok": {"server": "socks5://gate31.proxy.example:10031", "username": "user_31-session-abc31", "password": "pass!31"}}
+{"fn": "_playwright_proxy", "args": ["http://u31%40mail:p31@192.0.2.32:8031"], "ok": {"server": "http://192.0.2.32:8031", "username": "u31@mail", "password": "p31"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_32-session-abc32:pass%2132@gate32.proxy.example:10032"], "ok": {"server": "socks5://gate32.proxy.example:10032", "username": "user_32-session-abc32", "password": "pass!32"}}
+{"fn": "_playwright_proxy", "args": ["http://u32%40mail:p32@192.0.2.33:8032"], "ok": {"server": "http://192.0.2.33:8032", "username": "u32@mail", "password": "p32"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_33-session-abc33:pass%2133@gate33.proxy.example:10033"], "ok": {"server": "socks5://gate33.proxy.example:10033", "username": "user_33-session-abc33", "password": "pass!33"}}
+{"fn": "_playwright_proxy", "args": ["http://u33%40mail:p33@192.0.2.34:8033"], "ok": {"server": "http://192.0.2.34:8033", "username": "u33@mail", "password": "p33"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://user_34-session-abc34:pass%2134@gate34.proxy.example:10034"], "ok": {"server": "socks5://gate34.proxy.example:10034", "username": "user_34-session-abc34", "password": "pass!34"}}
+{"fn": "_playwright_proxy", "args": ["http://u34%40mail:p34@192.0.2.35:8034"], "ok": {"server": "http://192.0.2.35:8034", "username": "u34@mail", "password": "p34"}}

@@ -296,8 +296,10 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
 
     def __enter__(self):
         try:
+            # Camoufox 0.5+ ships its own Screen dataclass with `.as_conditions()`
+            # for fpgen; browserforge's Screen lacks it and fails on launch.
+            from camoufox.fingerprints import Screen
             from camoufox.sync_api import Camoufox
-            from browserforge.fingerprints import Screen
         except ImportError as exc:
             raise BrowserRegistrationError("browser_dependency_missing", "camoufox") from exc
         raw_proxy = self.proxy if bool(self.driver_config.get("use_proxy", True)) else ""

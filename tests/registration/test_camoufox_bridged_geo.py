@@ -109,7 +109,7 @@ def fake_camoufox(monkeypatch):
     manager.__enter__.return_value = context
     factory = MagicMock(return_value=manager)
     monkeypatch.setitem(sys.modules, "camoufox.sync_api", SimpleNamespace(Camoufox=factory))
-    monkeypatch.setitem(sys.modules, "browserforge.fingerprints", SimpleNamespace(Screen=MagicMock()))
+    monkeypatch.setitem(sys.modules, "camoufox.fingerprints", SimpleNamespace(Screen=MagicMock()))
     monkeypatch.setattr(managed, "apply_playwright_stealth", lambda *a, **k: {})
     # Force the bridged branch without starting a real local SOCKS5 server.
     monkeypatch.setattr("sms_tool.proxy.bridge.needs_bridge", lambda *a, **k: True)
