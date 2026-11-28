@@ -14,8 +14,6 @@ pyo3 = { version = "0.30", features = ["extension-module", "abi3-py39"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip", "unbounded_depth"] }
 
-[profile.release]
-lto = true
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }

@@ -26,12 +26,12 @@ namespace SmsWorkbench.Views
                     Log($"[doctor] 环境自检通过{(warned > 0 ? $"({warned} 项警告,详见设置与代理配置)" : "")}");
                     return;
                 }
-                var detail = string.Join("\n  - ", fails);
+                var detail = BackendBatchCoordinator.JoinDoctorFailures(fails);
                 Log("[doctor] 环境自检发现 " + fails.Count + " 项缺失依赖");
                 await DialogFactory.ShowInfoAsync(
                     this,
                     Loc.T("环境自检"),
-                    Loc.F("环境自检发现 {0} 项必需依赖缺失:\n  - {1}\n\n可先运行: python -m pip install -r requirements.txt -c constraints.txt\n或使用命令 python chatgpt_phone_reg.py --doctor 查看完整报告。",
+                    Loc.F("环境自检发现 {0} 项必需依赖缺失:\n  - {1}\n\n可先运行: python -m pip install -r requirements.txt -c constraints.txt\n或使用命令 python -m sms_tool.cli --doctor 查看完整报告。",
                         fails.Count,
                         detail));
             }
@@ -41,7 +41,7 @@ namespace SmsWorkbench.Views
                 await DialogFactory.ShowInfoAsync(
                     this,
                     Loc.T("无法启动 Python 后端"),
-                    Loc.F("{0}\n\n桌面端依赖 Python 3.10+ 与 requirements.txt/constraints.txt 中的依赖包。\n安装后在 设置 → 数据与文件 → 运行环境 配置解释器路径,再重启本程序。",
+                    Loc.F("{0}\n\n桌面端依赖 Python 3.12+ 与 requirements.txt/constraints.txt 中的依赖包。\n安装后在 设置 → 数据与文件 → 运行环境 配置解释器路径,再重启本程序。",
                         SensitiveDataSanitizer.Redact(ex.Message)));
             }
         }
@@ -112,9 +112,7 @@ namespace SmsWorkbench.Views
             {
                 LogBackendProgress(taskName, progressEvent);
                 Metrics.Record(progressEvent);
-                if (progressEvent.Domain == "registration"
-                    && (progressEvent.Stage == "registration_status_changed"
-                        || progressEvent.Stage == "mailboxes_skipped"))
+                if (BackendBatchCoordinator.ShouldRefreshPoolOnRegistrationStage(progressEvent))
                 {
                     RefreshPoolsThrottled(preserveView: true);
                 }
@@ -129,9 +127,7 @@ namespace SmsWorkbench.Views
                         progressEvent.AccountRef,
                         progressEvent.Detail);
                 }
-                task.Info = progressEvent.Detail.Length > 0
-                    ? $"{progressEvent.Stage}: {progressEvent.Detail}"
-                    : progressEvent.Stage;
+                task.Info = BackendBatchCoordinator.FormatTaskProgressInfo(progressEvent);
             }
 
             var progress = new Progress<BackendOutputLine>(

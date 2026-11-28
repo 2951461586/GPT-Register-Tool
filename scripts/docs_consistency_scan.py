@@ -38,46 +38,33 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "sms_tool"
 
-DOCS = (
-    "README.md",
-    "README_EN.md",
-    "docs/README.md",
-    "docs/CONTEXT.md",
-    "docs/architecture.md",
-    "docs/directory-map.md",
-    "docs/current/registration-and-proxy-architecture.md",
-    "docs/current/paypal-zero-due-link.md",
-    "docs/current/protocol-payment-enhancement.md",
-    # Current-state and ADR documents are canonical too; excluding them lets
-    # stale symbol/line references survive CI even though maintainers read
-    # these files as active contracts. Historical audits intentionally remain
-    # outside the line-number gate because they preserve old snapshots.
-    "docs/current/README.md",
-    "docs/current/account-health.md",
-    "docs/current/configuration.md",
-    "docs/current/mailbox.md",
-    "docs/current/registration-architecture.md",
-    "docs/current/protocol-registration.md",
-    "docs/current/registration-recovery.md",
-    "docs/current/telemetry-and-runtime.md",
-    "docs/current/typing.md",
-    "docs/current/randomness.md",
-    "docs/adr/README.md",
-    "docs/adr/0001-provider-layout.md",
-    "docs/adr/0002-storage-events.md",
-    "docs/adr/0003-driver-registry.md",
-    "docs/adr/0004-browser-flow-split.md",
-    "docs/adr/0005-cooperative-cancellation.md",
-    "docs/adr/0006-browser-pool-and-pulse.md",
-    "docs/adr/0007-email-verification-stuck.md",
-    "docs/adr/0008-registration-result-contract.md",
-    "docs/adr/0009-registration-hardening.md",
-    # The troubleshooting checklists quote concrete file:line anchors
-    # (``mailbox/pool_writer.py:209`` and friends) so operators can jump
-    # straight to the owner. Those anchors rot exactly like the contract
-    # docs' do, so this file is canonical too -- not an audit snapshot.
-    "docs/TROUBLESHOOTING.md",
-)
+
+def _canonical_docs() -> tuple[str, ...]:
+    base = [
+        "README.md",
+        "README_EN.md",
+        "PROXY_GUIDE.md",
+        "docs/README.md",
+        "docs/CONTEXT.md",
+        "docs/architecture.md",
+        "docs/directory-map.md",
+        # Current-state and ADR documents are canonical too; auto-discovering
+        # every markdown file in both directories prevents newly added current
+        # docs or ADRs from silently bypassing symbol, path, and C# checks.
+        # Historical audits intentionally remain outside the line-number gate
+        # because they preserve old snapshots.
+        *(p.relative_to(ROOT).as_posix() for p in sorted((ROOT / "docs" / "current").glob("*.md"))),
+        *(p.relative_to(ROOT).as_posix() for p in sorted((ROOT / "docs" / "adr").glob("*.md"))),
+        # The troubleshooting checklists quote concrete file:line anchors
+        # (``mailbox/pool_writer.py:209`` and friends) so operators can jump
+        # straight to the owner. Those anchors rot exactly like the contract
+        # docs' do, so this file is canonical too -- not an audit snapshot.
+        "docs/TROUBLESHOOTING.md",
+    ]
+    return tuple(dict.fromkeys(base))
+
+
+DOCS = _canonical_docs()
 
 # ```mod.py:12``` or the shorthand ```:12``` (repeats the previous file on the line).
 # ``.json`` is tracked too -- the architecture doc chains bare ```:227`` refs off a
@@ -327,7 +314,10 @@ def check_csharp_file_refs(failures: list[str]) -> None:
                 if "*" in ref or "?" in ref:
                     continue
                 if "/" in ref:
-                    resolved = (ROOT / ref).is_file()
+                    if any(ref == root or ref.startswith(root + "/") for root in CSHARP_ROOTS):
+                        resolved = (ROOT / ref).is_file()
+                    else:
+                        resolved = (ROOT / ref).is_file() or any((ROOT / root / ref).is_file() for root in CSHARP_ROOTS)
                 else:
                     resolved = ref in index
                 if not resolved:

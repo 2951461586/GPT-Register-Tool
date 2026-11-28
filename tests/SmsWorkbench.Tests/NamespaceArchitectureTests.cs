@@ -38,7 +38,9 @@ namespace SmsWorkbench.Tests
             "AccountFilterBar",
             "AccountGridView",
             "Sidebar",
+            "SidebarFooterBar",
             "TitleBar",
+            "TitleBarStatusPill",
             "WorkbenchConsole",
             "DialogFactory",
             "InfoConfirmDialogWindow",
@@ -128,6 +130,39 @@ namespace SmsWorkbench.Tests
             }
 
             Assert.Empty(violations);
+        }
+
+        [Fact]
+        public void ViewsFolderExcludesPureInterpretersPresentersAndFormatters()
+        {
+            string viewsPath = Path.Combine(RepoFile.Root(), "SmsWorkbench", "Views");
+            string[] forbiddenSuffixes = { "Interpreter.cs", "Presenter.cs", "Formatter.cs" };
+            var violations = Directory.GetFiles(viewsPath, "*.cs", SearchOption.TopDirectoryOnly)
+                .Select(Path.GetFileName)
+                .Where(name => name != null && forbiddenSuffixes.Any(suffix => name.EndsWith(suffix, StringComparison.Ordinal)))
+                .ToList();
+
+            Assert.Empty(violations);
+        }
+
+        [Fact]
+        public void WorkbenchSettingsResolverAndBatchCoordinatorHandlePureLogic()
+        {
+            var settings = new SettingsService(new TestApplicationPaths(Path.GetTempPath()));
+            Assert.Equal("liziai.cloud", WorkbenchSettingsResolver.GetConfiguredCfWorkerDomain(settings));
+            Assert.Equal("smailr.com", WorkbenchSettingsResolver.GetConfiguredSmailrDomain(settings));
+            Assert.True(WorkbenchSettingsResolver.ShouldOpenWithNotepad("a.json"));
+            Assert.False(WorkbenchSettingsResolver.ShouldOpenWithNotepad("a.exe"));
+            Assert.True(WorkbenchSettingsResolver.IsHttpUrl("https://chatgpt.com"));
+            Assert.False(WorkbenchSettingsResolver.IsHttpUrl("socks5://127.0.0.1:7897"));
+            Assert.Equal("120", WorkbenchSettingsResolver.OnlyDigits(" 120s "));
+            Assert.Equal("0", WorkbenchSettingsResolver.OnlyDigits("abc"));
+            Assert.Equal("abcdef...3456", WorkbenchSettingsResolver.Mask("abcdef0123456"));
+
+            var regEvent = new BackendProgressEvent("registration", "run-1", "u@test.com", "email", "registration_status_changed", "ok", "saved");
+            Assert.True(BackendBatchCoordinator.ShouldRefreshPoolOnRegistrationStage(regEvent));
+            Assert.Equal("registration_status_changed: saved", BackendBatchCoordinator.FormatTaskProgressInfo(regEvent));
+            Assert.Equal("a\n  - b", BackendBatchCoordinator.JoinDoctorFailures(new[] { "a", "b" }));
         }
 
         [Fact]

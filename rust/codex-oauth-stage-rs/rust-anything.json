@@ -1,0 +1,43 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/codex/oauth_helpers.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "codex-oauth-stage-rs",
+  "exports": [
+    {
+      "name": "_detect_protocol_stage",
+      "file": "sms_tool/codex/oauth_helpers.py",
+      "line": 124,
+      "params": [
+        {
+          "name": "url",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_new_oauth_request",
+      "file": "sms_tool/codex/oauth_helpers.py",
+      "line": 242,
+      "reason": "stays in Python (cryptographic random PKCE nonce generation)"
+    },
+    {
+      "name": "build_browser_style_send_headers",
+      "file": "sms_tool/codex/oauth_helpers.py",
+      "line": 222,
+      "reason": "stays in Python (random UUID header generation and callback injection)"
+    }
+  ]
+}

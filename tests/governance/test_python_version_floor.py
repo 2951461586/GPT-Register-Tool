@@ -52,6 +52,12 @@ def _installer_floor() -> str:
     return _search(r"Python (\d+\.\d+)\+", "scripts/installer/Program.cs")
 
 
+def _all_csharp_floors(relative: str) -> list[str]:
+    found = re.findall(r"Python (\d+\.\d+)\+", _text(relative))
+    assert found, f"{relative}: expected at least one 'Python X.Y+' floor claim"
+    return found
+
+
 def _readme_claims(relative: str, requirements_word: str) -> tuple[str, str]:
     badge = _search(r"badge/Python-(\d+\.\d+)%2B-", relative)
     requirements = _search(rf"- Python (\d+\.\d+) {requirements_word}", relative)
@@ -66,7 +72,7 @@ def collect_claims() -> dict[str, str]:
     badge_zh, requirements_zh = _readme_claims("README.md", "或更高版本")
     badge_en, requirements_en = _readme_claims("README_EN.md", "or later")
 
-    return {
+    claims: dict[str, str] = {
         "pyproject.toml [project] requires-python": pyproject["project"]["requires-python"],
         "pyproject.toml [tool.ruff] target-version": pyproject["tool"]["ruff"]["target-version"],
         "pyrightconfig.json pythonVersion": pyright["pythonVersion"],
@@ -78,6 +84,14 @@ def collect_claims() -> dict[str, str]:
         "scripts/preflight_env.py runtime floor": _preflight_floor(),
         "scripts/installer/Program.cs dialog": _installer_floor(),
     }
+    for rel in (
+        "SmsWorkbench/Interop/PythonBackendClient.cs",
+        "SmsWorkbench/Views/MainWindow.Tasks.cs",
+        "SmsWorkbench/Localization/StringsEn.cs",
+    ):
+        for idx, version in enumerate(_all_csharp_floors(rel), 1):
+            claims[f"{rel} floor #{idx}"] = version
+    return claims
 
 
 def _normalize(label: str, value: str) -> str:

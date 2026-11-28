@@ -12,8 +12,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from ..transport import endpoints, http_backend
-from ..transport.tls_fingerprint import apply_to_session as _apply_tls_fingerprint
+from ..transport import endpoints, http_backend, tls_fingerprint
 from ..transport.auth_headers import (
     accept_encoding_for,
     auth_impersonate,
@@ -22,10 +21,18 @@ from ..transport.auth_headers import (
     sentinel_fingerprint,
 )
 from ..transport.http_client import request_with_retry
-from ..proxy.entry import normalize_proxy_url, redact_proxy_text
+from ..proxy.entry import load_native_module, normalize_proxy_url, redact_proxy_text
 from .bundle import sentinel_version
 from .runner import SentinelRunnerError, run_sentinel_sdk
 from .surface import random_probes
+
+_apply_tls_fingerprint = tls_fingerprint.apply_to_session
+_NATIVE_SENTINEL_CLIENT_DIGEST = load_native_module(
+    "sentinel-client-digest-rs",
+    "sentinel_client_digest_rs",
+    "RUST_ANYTHING_UNIT_SENTINEL_CLIENT_DIGEST",
+)
+_NATIVE_SECRET_DIGEST = getattr(_NATIVE_SENTINEL_CLIENT_DIGEST, "_secret_digest", None)
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -763,6 +770,8 @@ CHECKOUT_SENTINEL_CACHE_MAX_ENTRIES = 256
 
 
 def _secret_digest(value: str) -> str:
+    if _NATIVE_SECRET_DIGEST is not None and (value is None or isinstance(value, str)):
+        return _NATIVE_SECRET_DIGEST(value)
     text = str(value or "")
     return hashlib.sha256(text.encode("utf-8")).hexdigest() if text else ""
 

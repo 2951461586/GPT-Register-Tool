@@ -74,10 +74,6 @@
     [
       "sms_tool.cli",
       "sms_tool.commands.helpers"
-    ],
-    [
-      "sms_tool.cli",
-      "sms_tool.commands.proxy_admin"
     ]
   ],
   "registration_facade_fanout": [
@@ -109,7 +105,6 @@
     "sms_tool.registration.sentinel_tokens",
     "sms_tool.registration.state",
     "sms_tool.registration_drivers",
-    "sms_tool.registration_drivers.base",
     "sms_tool.registration_drivers.playwright",
     "sms_tool.session",
     "sms_tool.session.builder",

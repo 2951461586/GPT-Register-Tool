@@ -1,0 +1,241 @@
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["LLO", "emoji 👍🏽 mixHELLO"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["helloa😀b😀c", "abc"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["emoji 👍🏽 mix", "a.b.c"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ahello world", "src/a/b.tsns:key.path"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["İstanbul", "abc"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["é", "src/a/b.ts"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["", "ns:key.path"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["line1\nline2", "İstanbul"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["src/a/b.ts", "日本語のテキスト"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["日本語のテキスト", "key_name-1"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [".leading", "HELLO"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["line1\nline2{name} has {count} items", "it"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["src/a/b.ts", "trailing."], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["{name} has {count} items", "hello world"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["😀src/a/b.ts", "emoji 👍🏽 mix"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [".leading", "G"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["Hello Worldns:key.path", "abstraße"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["İstanbul", "é"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a.b.c", "a😀b😀c"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a", "{name} has {count} itemstab\tseparated"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["  padded  ", "straße"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["hello", "straßehello world"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ΣΊΣΥΦΟΣ", "src/a/b.ts"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [":", ".leading"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["stanb", "İstanbul"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["﻿bom", "ünïcödé"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["HELLO", "tab\tseparated"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["hello world", "a:b:c"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [":  padded  ", "  padded  "], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["oji", "emoji 👍🏽 mix"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["  padded  ", "trailing."], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ns:key.path", "pa"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["﻿B", "﻿bom"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["hello world", "akey_name-1"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["key_name-1", "  padded  "], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["helloline1\nline2", "abc"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["hello world", "{name} has {count} itemshello world"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["trailing.", "hello world"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["😀straße", "src/a/b.ts"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["İstanbul", "an"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["EA", ".leading"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ß", "straße"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["abc", "hello world"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["line1\nline2", ""], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["de", "  padded  "], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["line1\nline2", "./x/**/*.json"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ünïcödé", "﻿bom"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["Hell", "Hello World"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [":HELLO", "a..b"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a😀b😀c", "line1\nline2"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["  padded  ", "src/a/b.ts"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["hello world", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["src/a/b.ts", "sr"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a:b:c", "a.b.c﻿bom"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["emoji 👍🏽 mix", "ab"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["é", "e"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["", "İstanbul"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["key_name-1", "a"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [".leading", "a.b.c"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["A", "a"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["tab\tseparated", ""], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["emoji 👍🏽 mix", "x"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["éa😀b😀c", "﻿bom"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["{name} has {count} items", " {count} it"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [":c", "a:b:c"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ünïcödé", "Hello World"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["日本語のテキスト", "日本語のテキスト"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["tab\tseparated", "é"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ath", "ns:key.path"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["adin", ".leading"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["😀", "{name} has {count} itemsHello World"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["😀", "😀"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["./x/**/*.json", ":"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a.b.c", "a"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a..b", "ünïcödé"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [":", ""], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [".leading", "emoji 👍🏽 mix"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["key_name-1", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["abc", "a"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a:b:c", "ns:key.pathns:key.path"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["hello world", "key_name-1İstanbul"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["Hello World", ""], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["日本語のテキスト", "a:b:c"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["trailing.", "a"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["LLO", "HELLO"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["日本語のテキスト", "hello world"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ns:key.path", "./x/**/*.json"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [".leading", "é"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["Hello World", "a"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["key_name-1", "  padded  hello world"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["straße", ".leading"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["  padded  ", "emoji 👍🏽 mix"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["", "trailing."], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["src/a/b.ts", "a:b:c"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["İstanbul", ""], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ns:key.pathtab\tseparated", "HELLO"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["hello", "l"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["./x/**/*.json", "Hello World"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [":", "😀"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["tab\tseparated", ":"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ns:key.path", "ünïcödé"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["日本語のテキスト", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["line1\nline2", "abc"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["trailing.", "ünïcödéa😀b😀c"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["HELLO", "a..b"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a😀b😀c", "src/a/b.ts"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["HEL", "a.b.cHELLO"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["straße", "aß"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["./x/**/*.json", "ab"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["HELLO", "ns:key.path"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a", "a:b:c"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["src/a/b.ts", "😀"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["emoji 👍🏽 mix", "a😀b😀ca..b"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["./x/**/*.json", "a:b:ca😀b😀c"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["trailing.", "./x/**/*.json"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ns:key.path", "İstanbulab"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["./x/**/*.json", "src/a/b.ts"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ab", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["EADINGTRAI", ".leadingtrailing."], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ΊΣΥΦΟ", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a", "a..bHello World"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a😀b😀c", "straße"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["﻿bomtab\tseparated", ".leading"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["C", "a😀b😀c"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["hello", "a:b:c"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["./x/**/*.json", "/**"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["key_name-1", "1"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["b", "a..b"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a.b.ca", "é"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["Ο", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a", "a"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["straßeΣΊΣΥΦΟΣ", "ns:key.path"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["trailing.", "a:b:c"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["./x/**/*.json", "straße"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["key_name-1﻿bom", "./x/**/*.json"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["́", "é"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["2", "line1\nline2"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [".leading", "line1\nline2"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["key_name-1a:b:c", "ab"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["abc", "ab"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["キ", "日本語のテキスト"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["hello worlda.b.c", "o worlda"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["キ", "日本語のテキストé"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["İstanbulhello", ":"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["aé", "ae"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [":", "ab"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["src/a/b.ts", "é"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["trailing.", "trailing."], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [":é", "a:b:c"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["o", "hello"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["emoji 👍🏽 mix", "./x/**/*.json.leading"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["src/a/b.ts", "😀ns:key.path"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["D", "Hello World"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ab", "é"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["{name} has {count} items", "tab\tseparated"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["X/**", "é./x/**/*.json"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["trailing.", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a..b", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["  padded  ", "hello world"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["emoji 👍🏽 mix", ":"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["key_name-1", "helloİstanbul"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["hellostraße", "src/a/b.ts"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["tab\tseparated", "ab"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["src/a/b.tsé", "c/a/"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [".", "src/a/b.ts"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["L", "HELLO"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a.b.c.leading", "HELLOa"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["\tSEPA", "tab\tseparated"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["he", "hello"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["src/a/b.ts./x/**/*.json", "tab\tseparated"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["trailing.İstanbul", "emoji 👍🏽 mix"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["straße", "hello world"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [":", "a..b"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["é", "ns:key.path"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [" ", "  padded  "], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["hello world", ":"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": [":", ":"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["key_name-1", ""], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["A", "ab"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["日本語のテキスト", "😀"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["straße", "raße"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["./x/**/*.jsona", "ab"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["has {count}", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["tab\tseparated", "PARATED"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["line1\nline2", "﻿bom"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["key_name-1", "ey_n"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["trailing.", "./x/**/*.jsonabc"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a😀b😀c", "C"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["  padded  ", ":"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["straße", "abc"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["﻿bomΣΊΣΥΦΟΣ", "a..b"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ns:key.path", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["é", "a:b:cé"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["{name} has {count} items", "日本語のテキスト"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["HELLO", "abc"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["om", "﻿bom"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["😀", ":﻿bom"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ns:key.path.leading", "hello world"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["héllo wörld", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["👍🏽 thumbs", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["日本語", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["é", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["İstanbul", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["straße", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ılık ırmak", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["👨‍👩‍👧 family", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a b", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["ΣΊΣΥΦΟΣ", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a😀b", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["﻿bom", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a²b x½ y①", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["aⅠb Ⅻ", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["a𐐀b 𝐀bc", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["कि ٣٤", "{name} has {count} items"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "héllo wörld"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "👍🏽 thumbs"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "日本語"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", ""], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "é"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "İstanbul"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "straße"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "ılık ırmak"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "👨‍👩‍👧 family"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "a b"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "a😀b"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "﻿bom"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "a²b x½ y①"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "aⅠb Ⅻ"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "a𐐀b 𝐀bc"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["me} has {count} it", "कि ٣٤"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["https://chatgpt.com", "https://auth.openai.com/log-in"], "ok": true}
+{"fn": "needs_chat_base_navigation", "args": ["https://CHATGPT.COM:443/", "https://chatgpt.com/c/123"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["", "https://chatgpt.com/"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["http://[::1]:8080", "http://[::1]:8080/chat"], "ok": false}
+{"fn": "needs_chat_base_navigation", "args": ["http://[bad-ipv6:80", "https://chatgpt.com"], "error": "ValueError: Invalid IPv6 URL"}
+{"fn": "needs_chat_base_navigation", "args": ["http://[127.0.0.1]:80", "https://chatgpt.com"], "error": "ValueError: An IPv4 address cannot be in brackets"}
+{"fn": "needs_chat_base_navigation", "args": ["http://[not-ip]:80", "https://chatgpt.com"], "error": "ValueError: 'not-ip' does not appear to be an IPv4 or IPv6 address"}

@@ -148,13 +148,21 @@
       "reason": "deferred",
       "why": "proxy fingerprint attribution imports urlsplit/unquote inside the helper so the batch module keeps its existing startup edge count"
     },
+    "sms_tool/payment/routing.py -> sms_tool.paypal.proxy": {
+      "reason": "deferred",
+      "why": "Stage-proxy decoupling (2026-11-28): the former payment.routing <-> paypal.proxy cycle was broken when paypal.proxy switched to payment.method_config and stage-proxy health moved to proxy.stage_health. select_proxy_from_pool and rotate_proxy_session stay function-local so importing payment.routing never pulls requests/curl_cffi, while preserving the test patch seams on sms_tool.paypal.proxy."
+    },
     "sms_tool/payment/routing.py -> sms_tool.proxy.entry": {
       "reason": "deferred",
-      "why": "Proxy authority consolidation (2026-11-24): redact_proxy_url is imported from proxy.entry inside the helper so payment.routing stays free of a new module-level payment -> proxy edge and breaks the payment <-> paypal cycle."
+      "why": "Proxy authority consolidation (2026-11-24): redact_proxy_url is imported from proxy.entry inside public_dict so payment.routing stays free of a new module-level payment -> proxy edge."
     },
     "sms_tool/payment/routing.py -> sms_tool.proxy.routing": {
       "reason": "deferred",
       "why": "P1 (2026-10-23): proxy.routing imports phone_proxy at module scope, which imports requests; a module-level import here made every payment.routing consumer pay ~300 ms for a helper used by one branch (_named_pools). The planner is pure data shaping and must not pull a transport stack in."
+    },
+    "sms_tool/payment/routing.py -> sms_tool.proxy.stage_health": {
+      "reason": "deferred",
+      "why": "Stage-proxy decoupling (2026-11-28): proxy_state_from_config moved out of paypal.proxy into neutral proxy.stage_health and is imported only when a caller does not inject proxy_state, keeping payment.routing module-scope imports unchanged."
     },
     "sms_tool/paypal/proxy.py -> sms_tool.payment.method_config": {
       "reason": "deferred",
@@ -207,6 +215,10 @@
     "sms_tool/proxy/asn_registry.py -> sms_tool.proxy.health": {
       "reason": "deferred",
       "why": "ProxyHealthTracker.key is imported inside _proxy_key to keep the two journals on one credential-free key without a module-level proxy->health edge"
+    },
+    "sms_tool/proxy/routing.py -> sms_tool.accounts.account_identity": {
+      "reason": "deferred",
+      "why": "Cycle ledger cleanup (2026-11-28): the former five-module cycle through fingerprint_pool -> paypal.proxy -> payment.routing was broken when fingerprint_pool moved to proxy.entry and paypal.proxy moved to payment.method_config. proxy.routing (layer 5) still defers accounts.account_identity (layer 3) inside _saved_registration_proxy for opt-in registration affinity without inverting the module-scope layer order."
     },
     "sms_tool/proxy/screening.py -> sms_tool.geo.resolver": {
       "reason": "deferred",
@@ -292,10 +304,6 @@
       "reason": "deferred",
       "why": "the refresh/decode helpers import the stdlib helper where the token body is parsed, so account-health callers that only probe a token never pay for the decode path"
     },
-    "sms_tool/transport/auth_headers.py -> sms_tool.transport.http_backend": {
-      "reason": "deferred",
-      "why": "Protocol transport seam (2026-11-19): the profile table must filter on whichever transport is active, and http_backend imports auth_headers back for the profile names. A module-level import either way closes the cycle; auth_headers is on the CLI help path and must stay transport-agnostic."
-    },
     "sms_tool/transport/fingerprint_pool.py -> sms_tool.proxy.entry": {
       "reason": "deferred",
       "why": "Cycle A break (2026-11-24): infer_proxy_country moved from phone_proxy (Layer 4) to proxy.entry (Layer 3), kept function-local so transport.fingerprint_pool stays transport-only at import time."
@@ -303,10 +311,6 @@
     "sms_tool/transport/http_backend.py -> sms_tool.config": {
       "reason": "deferred",
       "why": "Protocol transport seam (2026-11-19): the selected backend is read from email_registration.protocol_http_backend at call time, so a hot-reloaded shard changes the next session instead of requiring a restart. Deferred to keep the module importable by tests and by doctor before any config exists."
-    },
-    "sms_tool/transport/http_backend.py -> sms_tool.transport.auth_headers": {
-      "reason": "deferred",
-      "why": "Protocol transport seam (2026-11-19): the backend needs the profile table and the current impersonation, and auth_headers needs this module to answer 'which profiles can the ACTIVE backend run'. Importing at module scope would close that cycle: auth_headers is imported everywhere (including the CLI's help path) and must not pull the transport selector with it."
     },
     "sms_tool/transport/http_backend.py -> wreq": {
       "reason": "deferred",

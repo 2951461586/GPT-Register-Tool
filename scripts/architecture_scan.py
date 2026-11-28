@@ -113,11 +113,13 @@ def main() -> int:
         text = path.read_text(encoding="utf-8", errors="replace")
         if path.name != "config.py" and "from .config import CFG" in text:
             failures.append(f"{path.relative_to(ROOT)}: command seam imports CFG")
-    for path in WPF_ROOT.glob("MainWindow*.cs"):
+    for path in sorted(WPF_ROOT.rglob("*.cs")):
+        if "bin" in path.parts or "obj" in path.parts:
+            continue
         text = path.read_text(encoding="utf-8", errors="replace")
         text = re.sub(r"#if LEGACY_DELETE_CODE.*?#endif", "", text, flags=re.S)
-        if "SqliteNative." in text and path.name != "MainWindow.Tasks.cs":
-            warnings.append(f"{path.relative_to(ROOT)}: WPF direct SQLite access (migration debt)")
+        if "SqliteNative." in text:
+            failures.append(f"{path.relative_to(ROOT)}: WPF direct SQLite access is forbidden")
     storage_accounts = PY_ROOT / "store" / "accounts.py"
     try:
         storage_text = storage_accounts.read_text(encoding="utf-8")
@@ -145,19 +147,10 @@ def main() -> int:
     # No forwarding shell is kept at sms_tool/account_*.py on purpose -- a
     # shell would silently absorb the 50+ `patch("sms_tool.accounts.*")`
     # targets without production code ever reading it.
-    #
-    # registration/account_creation.py and account_seed.py are exempt: both were relocated
-    # to the package root on 2026-10-17 because every internal dependency
-    # (http_utils, auth_headers, codex_sentinel, config, http_client, storage)
-    # lives at the top level, and accounts/ itself only consumed 2 symbols from
-    # account_creation via a delayed import.  They are top-level auth/seed
-    # helpers that registration and payments reach inward toward, not account
-    # lifecycle workflows.  Relocation cut the sms_tool->accounts minority edge
-    # set 9 -> 5 and the total module edge count 287 -> 277.
-    _ALLOWED_TOP_LEVEL_ACCOUNT_HELPERS = {"registration/account_creation.py"}
-    stray_accounts = sorted(
-        p.name for p in PY_ROOT.glob("account_*.py") if p.name not in _ALLOWED_TOP_LEVEL_ACCOUNT_HELPERS
-    )
+    # (`account_creation.py` moved to `sms_tool/registration/account_creation.py`
+    # and `account_seed.py` moved to `sms_tool/store/account_seed.py`, so zero
+    # `account_*.py` files remain at the package root.)
+    stray_accounts = sorted(p.name for p in PY_ROOT.glob("account_*.py"))
     if stray_accounts:
         failures.append(
             "account workflow modules must live in sms_tool/accounts/, "

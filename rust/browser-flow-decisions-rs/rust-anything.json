@@ -1,0 +1,49 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/registration_drivers/browser_flow/decisions.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "browser-flow-decisions-rs",
+  "exports": [
+    {
+      "name": "needs_chat_base_navigation",
+      "file": "sms_tool/registration_drivers/browser_flow/decisions.py",
+      "line": 173,
+      "params": [
+        {
+          "name": "chat_base",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "page_url",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "attempt_number",
+      "file": "sms_tool/registration_drivers/browser_flow/decisions.py",
+      "line": 40,
+      "reason": "stays in Python (tiny dict int fallback)"
+    },
+    {
+      "name": "proxy_country_check_mode",
+      "file": "sms_tool/registration_drivers/browser_flow/decisions.py",
+      "line": 73,
+      "reason": "stays in Python (tiny config dict lookup)"
+    }
+  ]
+}

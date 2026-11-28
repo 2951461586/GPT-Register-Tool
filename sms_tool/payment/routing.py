@@ -207,7 +207,7 @@ class PaymentRoutePlanner:
         _protocol_raw: object = config.get("protocol_payments")
         self.protocol: Mapping[str, Any] = _protocol_raw if isinstance(_protocol_raw, Mapping) else {}
         if proxy_state is None:
-            from ..paypal.proxy import proxy_state_from_config
+            from ..proxy.stage_health import proxy_state_from_config
 
             proxy_state = proxy_state_from_config(config)
         self.proxy_state = proxy_state

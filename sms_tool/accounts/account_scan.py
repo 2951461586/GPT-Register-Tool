@@ -8,11 +8,20 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Iterable
 from ..kernel.native_loader import load_native_module
+from ..observability.operator_output import emit
+
+_LOGGER = logging.getLogger(__name__)
+
+
+def _emit(text: str) -> None:
+    emit(_LOGGER, "%s", text)
+
 
 _NATIVE_ACCOUNT_SCAN_JWT = load_native_module(
     "account-scan-jwt-rs", "account_scan_jwt_rs", "RUST_ANYTHING_UNIT_ACCOUNT_SCAN_JWT"
@@ -90,7 +99,7 @@ def scan_accounts(
 ) -> dict[str, Any]:
     emails = _unique_emails(emails)
     workers = max(1, min(int(workers or 1), 8, len(emails) or 1))
-    print(f"[*] One-click account scan: {len(emails)} account(s), workers={workers}")
+    _emit(f"[*] One-click account scan: {len(emails)} account(s), workers={workers}")
 
     ordered: list[dict[str, Any] | None] = [None] * len(emails)
     if workers <= 1:
@@ -166,7 +175,7 @@ def scan_accounts(
     if quota_refresh:
         summary["quota_refresh"] = quota_refresh
     _print_scan_overview(results)
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    _emit(json.dumps(summary, ensure_ascii=False, indent=2))
     return summary
 
 
@@ -181,7 +190,7 @@ def _scan_one(
     relogin_mode: str = "auto",
     deep_probe: bool = False,
 ) -> dict[str, Any]:
-    print(f"\n[{index + 1}/{total}] Account scan: {email}")
+    _emit(f"\n[{index + 1}/{total}] Account scan: {email}")
     started = time.time()
     data, json_path = load_seed_session(email=email, session_file=session_file)
     data.setdefault("email", email)
@@ -199,7 +208,7 @@ def _scan_one(
         result["terminal"] = True
         result["skipped_relogin"] = True
         _persist_scan(data, json_path, result)
-        print(f"[DEACTIVATED] {email}; terminal account skipped")
+        _emit(f"[DEACTIVATED] {email}; terminal account skipped")
         return result
 
     token_probe = _probe_existing_access_token(data, proxy=proxy, timeout=timeout)
@@ -218,7 +227,7 @@ def _scan_one(
             data.update(refresh_result.get("data") or {})
             data["refresh_token_status"] = "oauth_present"
             data["refresh_token_updated_at"] = int(time.time())
-            print(f"[OK] {email} OAuth RT refresh ok")
+            _emit(f"[OK] {email} OAuth RT refresh ok")
         elif _looks_account_deactivated(refresh_result):
             result = _result(
                 index,
@@ -232,10 +241,10 @@ def _scan_one(
                 started=started,
             )
             _persist_scan(data, json_path, result)
-            print(f"[DEACTIVATED] {email}")
+            _emit(f"[DEACTIVATED] {email}")
             return result
         else:
-            print(f"[!] {email} RT refresh failed: {refresh_result.get('error', 'unknown')}")
+            _emit(f"[!] {email} RT refresh failed: {refresh_result.get('error', 'unknown')}")
 
     if recovering_401:
         relogin_result, data, json_path, token_probe = _attempt_scan_relogin(
@@ -250,7 +259,7 @@ def _scan_one(
         if relogin_result.get("ok"):
             had_rt = had_rt or bool(str(data.get("oauth_refresh_token") or "").strip())
         else:
-            print(f"[!] {email} relogin failed: {_oauth_error(relogin_result)}")
+            _emit(f"[!] {email} relogin failed: {_oauth_error(relogin_result)}")
 
     if relogin_result:
         oauth_result = relogin_result
@@ -264,8 +273,6 @@ def _scan_one(
             phone_probe_only=True,
         )
     else:
-        # The default scan is deliberately probe-only.  A valid AT is the
-        # liveness answer; OAuth/OTP recovery is an explicit deep operation.
         oauth_result = {"ok": False, "mode": "probe_only", "error": "deep_probe_disabled"}
 
     if not deep_probe and not relogin_result and _token_probe_is_active(token_probe):
@@ -284,9 +291,38 @@ def _scan_one(
         result["phone_verification_required_label"] = "否"
         result["dropped"] = "否"
         _persist_scan(data, json_path, result)
-        print(f"[OK] {email} alive (probe-only)")
+        _emit(f"[OK] {email} alive (probe-only)")
         return result
 
+    return _finalize_scan_outcome(
+        index=index,
+        email=email,
+        data=data,
+        json_path=json_path,
+        had_rt=had_rt,
+        had_phone=had_phone,
+        refresh_result=refresh_result,
+        oauth_result=oauth_result,
+        relogin_result=relogin_result,
+        token_probe=token_probe,
+        started=started,
+    )
+
+
+def _finalize_scan_outcome(
+    *,
+    index: int,
+    email: str,
+    data: dict[str, Any],
+    json_path: str,
+    had_rt: bool,
+    had_phone: bool,
+    refresh_result: dict[str, Any],
+    oauth_result: dict[str, Any],
+    relogin_result: dict[str, Any],
+    token_probe: dict[str, Any],
+    started: float,
+) -> dict[str, Any]:
     if oauth_result.get("ok"):
         _raw_tokens: object = oauth_result.get("tokens")
         tokens: dict = _raw_tokens if isinstance(_raw_tokens, dict) else {}
@@ -318,7 +354,7 @@ def _scan_one(
         result["phone_verification_required_label"] = "是" if result.get("phone_verification_required") else "否"
         result["dropped"] = "否"
         _persist_scan(data, json_path, result)
-        print(f"[OK] {email} alive")
+        _emit(f"[OK] {email} alive")
         return result
 
     if _looks_account_deactivated(oauth_result):
@@ -340,11 +376,10 @@ def _scan_one(
         result["phone_verification_required_label"] = "是" if result.get("phone_verification_required") else "否"
         result["dropped"] = "是"
         _persist_scan(data, json_path, result)
-        print(f"[DEACTIVATED] {email}")
+        _emit(f"[DEACTIVATED] {email}")
         return result
 
-    phone_required = _looks_phone_required(oauth_result)
-    if phone_required:
+    if _looks_phone_required(oauth_result):
         status = "secondary_phone_verification_required" if had_rt else "phone_verification_required"
         result = _result(
             index,
@@ -367,12 +402,9 @@ def _scan_one(
         result["dropped"] = "否"
         _persist_scan(data, json_path, result)
         label = "SECONDARY_PHONE" if had_rt else "PHONE_REQUIRED"
-        print(f"[{label}] {email}")
+        _emit(f"[{label}] {email}")
         return result
 
-    # If the account still has a usable AT (either from RT refresh or from the
-    # existing local AT probe), do not downgrade it to a failed scan merely
-    # because the deeper auth/add-phone probe could not finish.
     if refresh_result.get("ok") or _token_probe_is_active(token_probe):
         result = _result(
             index,
@@ -392,7 +424,7 @@ def _scan_one(
         result["phone_verification_required_label"] = "是" if result.get("phone_verification_required") else "否"
         result["dropped"] = "否"
         _persist_scan(data, json_path, result)
-        print(f"[OK] {email} alive; OAuth probe inconclusive: {_oauth_error(oauth_result)}")
+        _emit(f"[OK] {email} alive; OAuth probe inconclusive: {_oauth_error(oauth_result)}")
         return result
 
     failure_class = classify_error(relogin_result or oauth_result or refresh_result)
@@ -416,7 +448,7 @@ def _scan_one(
     result["phone_verification_required_label"] = "是" if result.get("phone_verification_required") else "否"
     result["dropped"] = "否"
     _persist_scan(data, json_path, result)
-    print(f"[FAIL] {email}: {_oauth_error(relogin_result or oauth_result or refresh_result)}")
+    _emit(f"[FAIL] {email}: {_oauth_error(relogin_result or oauth_result or refresh_result)}")
     return result
 
 
@@ -606,10 +638,10 @@ def _scan_overview(result):
 def _print_scan_overview(results):
     if not results:
         return
-    print("[*] 扫号概览:")
+    _emit("[*] 扫号概览:")
     for index, result in enumerate(results, 1):
         overview = _scan_overview(result)
-        print(
+        _emit(
             f"{index}. {overview['email']} | "
             f"AT: {overview['at_status']} | "
             f"需要手机号验证: {overview['phone_verification_required']} | "
@@ -679,7 +711,7 @@ def _jwt_plan_type(token):
             return ""
         payload = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
         body = json.loads(base64.urlsafe_b64decode(payload.encode("ascii")))
-    except Exception:
+    except (ValueError, TypeError, KeyError, UnicodeDecodeError):
         return ""
     auth = body.get("https://api.openai.com/auth") if isinstance(body, dict) else {}
     if isinstance(auth, dict):
@@ -789,9 +821,9 @@ def _refresh_quota_after_scan(results, workers=4, timeout=120, proxy=None, relog
             fresh_probes=fresh_probes,
         )
         if quota.get("total", 0):
-            print(f"[*] Local quota refreshed: {quota.get('success', 0)}/{quota.get('total', 0)}")
+            _emit(f"[*] Local quota refreshed: {quota.get('success', 0)}/{quota.get('total', 0)}")
         elif quota.get("error"):
-            print(f"[*] Local quota refresh skipped: {quota.get('error')}")
+            _emit(f"[*] Local quota refresh skipped: {quota.get('error')}")
         return quota
     except Exception as exc:
         return {"ok": False, "error": str(exc)[:300]}
@@ -864,7 +896,7 @@ def _attempt_scan_relogin(email, data, json_path="", proxy=None, timeout=120, fa
     if json_path:
         account["json_path"] = json_path
     relogin_mode = _normalize_relogin_mode(relogin_mode)
-    print(f"[*] {email} AT invalid; trying the configured AT recovery chain...")
+    _emit(f"[*] {email} AT invalid; trying the configured AT recovery chain...")
     relogin = relogin_codex_account(
         account,
         proxy=proxy,

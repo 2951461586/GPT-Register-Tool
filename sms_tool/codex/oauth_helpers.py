@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any, Callable
 
-from ..kernel.sanitizer import sanitize_text
+from ..kernel.sanitizer import load_native_module, sanitize_text
 from ..mailbox.router import (
     MailboxAccount,
     MailboxTokenExpiredError as MailboxTokenExpiredError,
@@ -68,6 +68,13 @@ SCOPE = "openid profile email offline_access"
 LOGIN_EMAIL_OTP_SUBJECT_KEYWORD = "login code"
 
 _SEND_OTP_MODE_ENUM = frozenset({"passwordless_signup", "passwordless_login", "login_challenge"})
+
+_NATIVE_CODEX_OAUTH_STAGE = load_native_module(
+    "codex-oauth-stage-rs",
+    "codex_oauth_stage_rs",
+    "RUST_ANYTHING_UNIT_CODEX_OAUTH_STAGE",
+)
+_NATIVE_DETECT_PROTOCOL_STAGE = getattr(_NATIVE_CODEX_OAUTH_STAGE, "_detect_protocol_stage", None)
 
 
 def _b64url(raw):
@@ -122,6 +129,8 @@ def _has_callback_code(url):
 
 
 def _detect_protocol_stage(url):
+    if _NATIVE_DETECT_PROTOCOL_STAGE is not None and (url is None or isinstance(url, str)):
+        return _NATIVE_DETECT_PROTOCOL_STAGE(url)
     value = str(url or "")
     lower = value.lower()
     if _has_callback_code(value):

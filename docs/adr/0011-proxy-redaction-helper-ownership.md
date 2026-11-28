@@ -37,9 +37,9 @@ Rule 13 的权威名单是 `parse_proxy` / `rebuild_proxy_credentials` /
 
 | helper | 定义处 | `proxy_entry` 是否定义 |
 | --- | --- | --- |
-| `normalize_proxy_url` | `sms_tool/phone/phone_proxy.py:103` | ✗ |
-| `redact_proxy_url` | `sms_tool/phone/phone_proxy.py:130` | ✗ |
-| `redact_proxy_text` | `sms_tool/phone/phone_proxy.py:154` | ✗ |
+| `normalize_proxy_url` | `sms_tool/phone/phone_proxy.py:110` | ✗ |
+| `redact_proxy_url` | `sms_tool/phone/phone_proxy.py:117` | ✗ |
+| `redact_proxy_text` | `sms_tool/phone/phone_proxy.py:129` | ✗ |
 
 ⇒ 「收一跳」不是删一行 import，而是**把三个定义搬进 `proxy_entry`**。这是
 Rule 13 权威名单的扩张，不是一次清理。

@@ -48,8 +48,8 @@ class RegistrationDriver(str, Enum):
 > `adspower` 已于 2026-09-09 移除（前后端模块、配置、CLI/UI 选项同步删除）。
 > 现存 4 个浏览器驱动：playwright / camoufox / cloak / roxy。
 
-关键切分在 `BROWSER_REGISTRATION_DRIVERS`（`registration_drivers/base.py:95`）—— 除 `protocol` 之外的全部成员。
-`normalize_registration_driver()`（`registration_drivers/base.py:104`）负责把 `None` / 字符串 / 配置值归一化，**默认落回 `protocol`**。
+关键切分在 `BROWSER_REGISTRATION_DRIVERS`（`kernel/driver_env.py:110`）—— 除 `protocol` 之外的全部成员。
+`normalize_registration_driver()`（`kernel/driver_env.py:119`）负责把 `None` / 字符串 / 配置值归一化，**默认落回 `protocol`**。
 
 ### 两条路径的异同
 
@@ -58,7 +58,7 @@ class RegistrationDriver(str, Enum):
 | 执行体 | curl_cffi HTTP 直登 | 无头浏览器驱动完成 signup |
 | 指纹/鉴权头 | `sentinel_fingerprint()` + `openai_auth_headers()` | **同一套**，注入到浏览器上下文 |
 | Sentinel 事务 | 独立事务 + 独立 `oai-did` | 独立事务 + 独立 `oai-did` |
-| 异常处理 | 标准网络/鉴权重试 | `BrowserRegistrationError`（`registration_drivers/base.py:130`）封装浏览器层错误 |
+| 异常处理 | 标准网络/鉴权重试 | `BrowserRegistrationError`（`registration_drivers/base.py:30`）封装浏览器层错误 |
 
 **核心结论**：两条路径在「指纹 → 鉴权头 → Sentinel Token → AT 探活 → 持久化」这条主干上**完全共用**，差异只在最前端的 signup 执行方式。这意味着无论走哪条路，反关联与反爬强度是一致的，不存在「浏览器路径更稳」或「协议路径更弱」的本质区别——强弱由指纹/头/Sentinel 一致性决定，而非驱动选择。
 
@@ -263,10 +263,10 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 
 | 符号 | 位置 | 作用 |
 | --- | --- | --- |
-| `RegistrationDriver` | `registration_drivers/base.py:23` | 驱动枚举 |
-| `BROWSER_REGISTRATION_DRIVERS` | `registration_drivers/base.py:95` | browser vs protocol 切分 |
-| `normalize_registration_driver` | `registration_drivers/base.py:104` | 归一化，默认 protocol |
-| `BrowserRegistrationError` | `registration_drivers/base.py:140` | 浏览器层错误封装 |
+| `RegistrationDriver` | `kernel/driver_env.py:38` | 驱动枚举 |
+| `BROWSER_REGISTRATION_DRIVERS` | `kernel/driver_env.py:110` | browser vs protocol 切分 |
+| `normalize_registration_driver` | `kernel/driver_env.py:119` | 归一化，默认 protocol |
+| `BrowserRegistrationError` | `registration_drivers/base.py:30` | 浏览器层错误封装 |
 | `AUTH_FINGERPRINT_PROFILES` | `transport/auth_headers.py:81` | Chrome 124–152 / Firefox 133–155 / Safari 17–27 设备档案 |
 | `sentinel_fingerprint` | `transport/auth_headers.py:508` | 确定性指纹派生 |
 | `openai_auth_headers` | `transport/auth_headers.py:662` | `oai-*` 头注入 |

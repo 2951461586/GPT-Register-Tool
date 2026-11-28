@@ -1,0 +1,215 @@
+{"fn": "_account_ref", "args": ["a.b.c"], "ok": "845e30448809e2bc"}
+{"fn": "_account_ref", "args": ["straße"], "ok": "787f4770613d3824"}
+{"fn": "_account_ref", "args": ["ns:key.path"], "ok": "090ed4bc851381c0"}
+{"fn": "_account_ref", "args": ["a:b:c.leading"], "ok": "9fe4eedcd8f8a404"}
+{"fn": "_account_ref", "args": [".leadinga.b.c"], "ok": "280f9f219f4aaa01"}
+{"fn": "_account_ref", "args": [".leading"], "ok": "9c74491a21e8fc7a"}
+{"fn": "_account_ref", "args": ["  padded  "], "ok": "3d4a55719d2ebc89"}
+{"fn": "_account_ref", "args": ["trailing."], "ok": "44c12a4e432eba3f"}
+{"fn": "_account_ref", "args": ["a😀b😀cstraße"], "ok": "0e11caa966cd51ef"}
+{"fn": "_account_ref", "args": ["﻿bom"], "ok": "2623148f0d047ef6"}
+{"fn": "_account_ref", "args": ["日本語のテキスト"], "ok": "d4192d3b01dfa9f5"}
+{"fn": "_account_ref", "args": ["abc"], "ok": "ba7816bf8f01cfea"}
+{"fn": "_account_ref", "args": ["tab\tseparated"], "ok": "737304a727e038b1"}
+{"fn": "_account_ref", "args": ["  padded  Hello World"], "ok": "42f955c9d9192a41"}
+{"fn": "_account_ref", "args": ["İstanbul"], "ok": "24ec8f72b5eac459"}
+{"fn": "_account_ref", "args": ["src/a/b.ts"], "ok": "eb7041468cb32fea"}
+{"fn": "_account_ref", "args": ["a..b"], "ok": "f62b42414c514fa6"}
+{"fn": "_account_ref", "args": ["hello"], "ok": "2cf24dba5fb0a30e"}
+{"fn": "_account_ref", "args": ["HELLO"], "ok": "3733cd977ff8eb18"}
+{"fn": "_account_ref", "args": ["😀"], "ok": "f0443a342c5ef547"}
+{"fn": "_account_ref", "args": ["ab😀"], "ok": "3f081536ae8da48f"}
+{"fn": "_account_ref", "args": ["hello world"], "ok": "b94d27b9934d3e08"}
+{"fn": "_account_ref", "args": ["ΣΊΣΥΦΟΣ"], "ok": "5b04c6021d490c76"}
+{"fn": "_account_ref", "args": ["./x/**/*.json"], "ok": "018071a777fc8b56"}
+{"fn": "_account_ref", "args": ["a😀b😀c"], "ok": "3b0fa9d763b5cb38"}
+{"fn": "_account_ref", "args": ["key_name-1"], "ok": "4184db5447df2761"}
+{"fn": "_account_ref", "args": ["日本語のテキストHELLO"], "ok": "5d9dc27bdb6c81a9"}
+{"fn": "_account_ref", "args": ["tab\tseparateda"], "ok": "a57710b922729419"}
+{"fn": "_account_ref", "args": ["ünïcödé"], "ok": "b09ad3e278dfb341"}
+{"fn": "_account_ref", "args": ["tab\tseparated.leading"], "ok": "b167cb74d4277303"}
+{"fn": "_account_ref", "args": ["emoji 👍🏽 mix"], "ok": "7839fd7a65ab6e7d"}
+{"fn": "_account_ref", "args": [":a.b.c"], "ok": "919a6f245f24cb9d"}
+{"fn": "_account_ref", "args": ["﻿bomsrc/a/b.ts"], "ok": "664f2e7ba92a51ef"}
+{"fn": "_account_ref", "args": [""], "ok": "e3b0c44298fc1c14"}
+{"fn": "_account_ref", "args": ["a..b😀"], "ok": "fa4da30d5b586b6b"}
+{"fn": "_account_ref", "args": ["😀abc"], "ok": "34fe23ed3807c88f"}
+{"fn": "_account_ref", "args": ["{name} has {count} items.leading"], "ok": "5a0c739b8b8f5b3c"}
+{"fn": "_account_ref", "args": ["line1\nline2"], "ok": "683376e290829b48"}
+{"fn": "_account_ref", "args": ["a:b:c./x/**/*.json"], "ok": "996990e4bc57958e"}
+{"fn": "_account_ref", "args": ["a:b:c"], "ok": "b0ee04f880c4ff42"}
+{"fn": "_account_ref", "args": [":"], "ok": "e7ac0786668e0ff0"}
+{"fn": "_account_ref", "args": ["é"], "ok": "bf12767b0f2a56b2"}
+{"fn": "_account_ref", "args": ["ns:key.patha:b:c"], "ok": "46a59bba5989c499"}
+{"fn": "_account_ref", "args": ["ünïcödésrc/a/b.ts"], "ok": "b74c2dfc544713d9"}
+{"fn": "_account_ref", "args": ["tab\tseparated:"], "ok": "8dc6e1c9933a71b1"}
+{"fn": "_account_ref", "args": ["  padded    padded  "], "ok": "f257fa199b2f75c9"}
+{"fn": "_account_ref", "args": ["abc./x/**/*.json"], "ok": "6123103b9b570951"}
+{"fn": "_account_ref", "args": ["Hello World"], "ok": "a591a6d40bf42040"}
+{"fn": "_account_ref", "args": ["ns:key.pathns:key.path"], "ok": "4ce9aed3a91b7640"}
+{"fn": "_account_ref", "args": ["ΣΊΣΥΦΟΣns:key.path"], "ok": "f0d42a6b3ee7de59"}
+{"fn": "_account_ref", "args": ["日本語のテキストa:b:c"], "ok": "c0b68a5276c471c6"}
+{"fn": "_account_ref", "args": ["a:b:chello"], "ok": "f847f22a9967362c"}
+{"fn": "_account_ref", "args": ["日本語のテキストstraße"], "ok": "6ebc6f73da150950"}
+{"fn": "_account_ref", "args": ["trailing.ab"], "ok": "d326c601f25b049d"}
+{"fn": "_account_ref", "args": ["a"], "ok": "ca978112ca1bbdca"}
+{"fn": "_account_ref", "args": ["ünïcödéab"], "ok": "f665373df402e7c6"}
+{"fn": "_account_ref", "args": ["atrailing."], "ok": "e5ad46d5817e871f"}
+{"fn": "_account_ref", "args": ["étab\tseparated"], "ok": "04026c4c1aae8ffb"}
+{"fn": "_account_ref", "args": ["{name} has {count} items./x/**/*.json"], "ok": "e576d934116b4667"}
+{"fn": "_account_ref", "args": ["ab"], "ok": "fb8e20fc2e4c3f24"}
+{"fn": "_account_ref", "args": ["line1\nline2😀"], "ok": "bcfa7dc8dce5c0b9"}
+{"fn": "_account_ref", "args": ["HELLOünïcödé"], "ok": "c8af0c6e1a4f4fb5"}
+{"fn": "_account_ref", "args": ["{name} has {count} items"], "ok": "42ff2ad309da81ff"}
+{"fn": "_account_ref", "args": ["abchello"], "ok": "2cb9c710242d0e38"}
+{"fn": "_account_ref", "args": ["a.b.cab"], "ok": "5ffa1c4544d7c8f0"}
+{"fn": "_account_ref", "args": ["ünïcödéİstanbul"], "ok": "ad08f58d993968cd"}
+{"fn": "_account_ref", "args": ["ünïcödéa:b:c"], "ok": "50700e5001254a5e"}
+{"fn": "_account_ref", "args": ["a:b:cab"], "ok": "6478aefec30b7ed3"}
+{"fn": "_account_ref", "args": ["﻿bom日本語のテキスト"], "ok": "e2e80bc18347729f"}
+{"fn": "_account_ref", "args": ["日本語のテキスト./x/**/*.json"], "ok": "e3ed6001e5262c86"}
+{"fn": "_account_ref", "args": ["hello worlda:b:c"], "ok": "5821fd1d796e3419"}
+{"fn": "_account_ref", "args": ["abctrailing."], "ok": "64267f61f0610a18"}
+{"fn": "_account_ref", "args": ["abcemoji 👍🏽 mix"], "ok": "40858ea1a34b4b35"}
+{"fn": "_account_ref", "args": ["a.b.cemoji 👍🏽 mix"], "ok": "82cb7a3609d714ac"}
+{"fn": "_account_ref", "args": ["a..ba:b:c"], "ok": "70c86e297e493ca2"}
+{"fn": "_account_ref", "args": ["éhello"], "ok": "ce6e3052a8fd7f4d"}
+{"fn": "_account_ref", "args": [":abc"], "ok": "6e850a0e91c14c7d"}
+{"fn": "_account_ref", "args": ["a.b.cΣΊΣΥΦΟΣ"], "ok": "94f7a1639a9d55fd"}
+{"fn": "_account_ref", "args": ["hello worldns:key.path"], "ok": "a1d759f7d76b39e8"}
+{"fn": "_account_ref", "args": ["ns:key.pathsrc/a/b.ts"], "ok": "b1cf0190a03c6285"}
+{"fn": "_account_ref", "args": ["trailing.src/a/b.ts"], "ok": "e9c94830ff871252"}
+{"fn": "_account_ref", "args": ["Hello Worldline1\nline2"], "ok": "aa218990b385a0c7"}
+{"fn": "_account_ref", "args": [":./x/**/*.json"], "ok": "ca121fea089a712e"}
+{"fn": "_account_ref", "args": [":.leading"], "ok": "03942d354f49d7a4"}
+{"fn": "_account_ref", "args": ["line1\nline2a.b.c"], "ok": "3513a14479b6d4ec"}
+{"fn": "_account_ref", "args": ["a😀b😀ca..b"], "ok": "90207f2b0e31a7c6"}
+{"fn": "_account_ref", "args": ["trailing.ns:key.path"], "ok": "470701f318310f1a"}
+{"fn": "_account_ref", "args": ["trailing.hello world"], "ok": "2c9722f9075b7fa2"}
+{"fn": "_account_ref", "args": ["helloemoji 👍🏽 mix"], "ok": "a2c690d0f89aa35c"}
+{"fn": "_account_ref", "args": ["a.b.cline1\nline2"], "ok": "ee48b38735b186d3"}
+{"fn": "_account_ref", "args": ["key_name-1a.b.c"], "ok": "f63428748909484c"}
+{"fn": "_account_ref", "args": ["./x/**/*.json.leading"], "ok": "7f3e794e3072e88c"}
+{"fn": "_account_ref", "args": ["ΣΊΣΥΦΟΣ:"], "ok": "ace444646a39ed1f"}
+{"fn": "_account_ref", "args": ["straßestraße"], "ok": "ac18405c832bdfdb"}
+{"fn": "_account_ref", "args": ["abcns:key.path"], "ok": "3020dea77a7ff1fa"}
+{"fn": "_account_ref", "args": ["ns:key.pathünïcödé"], "ok": "e3f26e387e1172c0"}
+{"fn": "_account_ref", "args": ["aé"], "ok": "f7e7d9d8707d8947"}
+{"fn": "_account_ref", "args": ["a..b日本語のテキスト"], "ok": "d18d8d58c7620b20"}
+{"fn": "_account_ref", "args": [".leading:"], "ok": "e9ac6dfcbbb512ee"}
+{"fn": "_account_ref", "args": ["ns:key.patha"], "ok": "063a24cb624128ca"}
+{"fn": "_account_ref", "args": ["ünïcödéa.b.c"], "ok": "75b006bc6a4c19dc"}
+{"fn": "_account_ref", "args": ["line1\nline2straße"], "ok": "e4497c6787d0ca69"}
+{"fn": "_account_ref", "args": ["﻿bomns:key.path"], "ok": "857073b913c1fdb6"}
+{"fn": "_account_ref", "args": ["straßetab\tseparated"], "ok": "81073c686bb4b509"}
+{"fn": "_account_ref", "args": ["hello world  padded  "], "ok": "c16f0ce4316a4098"}
+{"fn": "_account_ref", "args": ["ünïcödé﻿bom"], "ok": "bc64ee6902a31452"}
+{"fn": "_account_ref", "args": ["line1\nline2HELLO"], "ok": "736409fab076d251"}
+{"fn": "_account_ref", "args": ["key_name-1a😀b😀c"], "ok": "7d42b7d1319c56e6"}
+{"fn": "_account_ref", "args": ["straßeemoji 👍🏽 mix"], "ok": "64253d7cd34accd7"}
+{"fn": "_account_ref", "args": ["é:"], "ok": "0a5572f0269c8273"}
+{"fn": "_account_ref", "args": ["日本語のテキストé"], "ok": "c5f0a509c62cb7c0"}
+{"fn": "_account_ref", "args": ["a😀b😀c﻿bom"], "ok": "440e3820ca1b7f36"}
+{"fn": "_account_ref", "args": ["日本語のテキスト:"], "ok": "de3b8ac717ae0131"}
+{"fn": "_account_ref", "args": ["{name} has {count} itemsa"], "ok": "ac4e4997f1ea3d88"}
+{"fn": "_account_ref", "args": ["éİstanbul"], "ok": "e47692c0d49cfeca"}
+{"fn": "_account_ref", "args": ["éline1\nline2"], "ok": "b9cdab582dcfc6e5"}
+{"fn": "_account_ref", "args": ["a.b.cabc"], "ok": "33e8f2306d43b1ed"}
+{"fn": "_account_ref", "args": ["日本語のテキスト日本語のテキスト"], "ok": "f932d28cc2d9b6ca"}
+{"fn": "_account_ref", "args": [".leadingünïcödé"], "ok": "d04941678afd2974"}
+{"fn": "_account_ref", "args": ["日本語のテキストhello"], "ok": "1d9e309f9bf56235"}
+{"fn": "_account_ref", "args": ["a:b:ca..b"], "ok": "b851aaa96e24ab60"}
+{"fn": "_account_ref", "args": ["Hello Worldİstanbul"], "ok": "308fd0e0e105f713"}
+{"fn": "_account_ref", "args": ["emoji 👍🏽 mixab"], "ok": "22cd8036afde136c"}
+{"fn": "_account_ref", "args": ["line1\nline2ns:key.path"], "ok": "c7202533db04de74"}
+{"fn": "_account_ref", "args": ["ns:key.path日本語のテキスト"], "ok": "2928cd56c531cc39"}
+{"fn": "_account_ref", "args": ["trailing.tab\tseparated"], "ok": "5a1fa01045ca4ffc"}
+{"fn": "_account_ref", "args": ["emoji 👍🏽 mixstraße"], "ok": "bd24d84eb4d9b704"}
+{"fn": "_account_ref", "args": ["  padded  ﻿bom"], "ok": "2d7d5bd492d53db1"}
+{"fn": "_account_ref", "args": ["{name} has {count} items:"], "ok": "64699bb29fefb413"}
+{"fn": "_account_ref", "args": ["日本語のテキストtrailing."], "ok": "c1d40d1d79078989"}
+{"fn": "_account_ref", "args": ["HELLO😀"], "ok": "9f635ac998af93e8"}
+{"fn": "_account_ref", "args": ["hellotab\tseparated"], "ok": "995aa635ed82f3ac"}
+{"fn": "_account_ref", "args": ["a.b.csrc/a/b.ts"], "ok": "5d35e9b15ec4702c"}
+{"fn": "_account_ref", "args": ["étrailing."], "ok": "692a1bd4c824308a"}
+{"fn": "_account_ref", "args": ["emoji 👍🏽 mixa:b:c"], "ok": "2dbe2378db99ed90"}
+{"fn": "_account_ref", "args": ["a..bé"], "ok": "c91189cdef741c0d"}
+{"fn": "_account_ref", "args": ["trailing.abc"], "ok": "693a6f5d4d37734d"}
+{"fn": "_account_ref", "args": ["a:b:ckey_name-1"], "ok": "d5d95ed9befa1cd0"}
+{"fn": "_account_ref", "args": ["日本語のテキストHello World"], "ok": "77337d4b27aa8315"}
+{"fn": "_account_ref", "args": ["İstanbula:b:c"], "ok": "1776f7063b508aa9"}
+{"fn": "_account_ref", "args": ["emoji 👍🏽 mix﻿bom"], "ok": "7a07c1e522435088"}
+{"fn": "_account_ref", "args": ["aHello World"], "ok": "2d4401087fa3d50c"}
+{"fn": "_account_ref", "args": ["straßeünïcödé"], "ok": "3e366a7bc5ffc451"}
+{"fn": "_account_ref", "args": ["./x/**/*.jsonline1\nline2"], "ok": "d2a02b6297e65f08"}
+{"fn": "_account_ref", "args": ["straßeline1\nline2"], "ok": "d378b3915b769c81"}
+{"fn": "_account_ref", "args": [".leadinga:b:c"], "ok": "5b1ebf11c8456ce1"}
+{"fn": "_account_ref", "args": ["abstraße"], "ok": "c13da615f5ca1ec8"}
+{"fn": "_account_ref", "args": ["aHELLO"], "ok": "7e78c44043e2453c"}
+{"fn": "_account_ref", "args": ["a😀b😀c{name} has {count} items"], "ok": "5b00e48c81470ae5"}
+{"fn": "_account_ref", "args": ["./x/**/*.jsonHELLO"], "ok": "22a2a0d0a7192efa"}
+{"fn": "_account_ref", "args": ["HELLOa"], "ok": "1bf560f2ddb45f3d"}
+{"fn": "_account_ref", "args": ["atab\tseparated"], "ok": "f41aaf535a32391a"}
+{"fn": "_account_ref", "args": ["ünïcödé:"], "ok": "3a6f533de428c35d"}
+{"fn": "_account_ref", "args": ["é﻿bom"], "ok": "a1a41629b5319fd4"}
+{"fn": "_account_ref", "args": ["a😀b😀ca.b.c"], "ok": "3f6bdc5a4daf8f24"}
+{"fn": "_account_ref", "args": ["key_name-1line1\nline2"], "ok": "fb08ed3d2070b5b1"}
+{"fn": "_account_ref", "args": ["line1\nline2tab\tseparated"], "ok": "6980c094bd391b4b"}
+{"fn": "_account_ref", "args": ["ünïcödéabc"], "ok": "8fce8192db7fd1a2"}
+{"fn": "_account_ref", "args": ["  padded  hello world"], "ok": "3bd188d8b8bdc08a"}
+{"fn": "_account_ref", "args": ["﻿bomΣΊΣΥΦΟΣ"], "ok": "7e8174d07ceb7144"}
+{"fn": "_account_ref", "args": ["a:b:ctab\tseparated"], "ok": "fc433ceb8605f566"}
+{"fn": "_account_ref", "args": ["a:b:c日本語のテキスト"], "ok": "ed43527342a2f530"}
+{"fn": "_account_ref", "args": ["İstanbul{name} has {count} items"], "ok": "148efa761b6bf65c"}
+{"fn": "_account_ref", "args": ["abline1\nline2"], "ok": "ea38ae9863c5bb4d"}
+{"fn": "_account_ref", "args": ["straße:"], "ok": "7ab1d98af03c3525"}
+{"fn": "_account_ref", "args": ["line1\nline2﻿bom"], "ok": "152b898b5698034a"}
+{"fn": "_account_ref", "args": ["Hello WorldHELLO"], "ok": "03ab6e47a6ebfc5e"}
+{"fn": "_account_ref", "args": ["{name} has {count} itemsa.b.c"], "ok": "8a82376661c417a2"}
+{"fn": "_account_ref", "args": ["abc.leading"], "ok": "44b29710406d6a15"}
+{"fn": "_account_ref", "args": ["line1\nline2a"], "ok": "840b36ed095be927"}
+{"fn": "_account_ref", "args": ["a😀b😀cİstanbul"], "ok": "c8c65d718510548d"}
+{"fn": "_account_ref", "args": ["tab\tseparated{name} has {count} items"], "ok": "26782b8f47f0eb87"}
+{"fn": "_account_ref", "args": ["abtab\tseparated"], "ok": "1ab664e2cc7adffb"}
+{"fn": "_account_ref", "args": ["ΣΊΣΥΦΟΣHello World"], "ok": "389c5d381871eeab"}
+{"fn": "_account_ref", "args": ["akey_name-1"], "ok": "75d4cf726be3ed72"}
+{"fn": "_account_ref", "args": ["éab"], "ok": "040687a9de6eaefa"}
+{"fn": "_account_ref", "args": ["a😀b😀cline1\nline2"], "ok": "c83e0c344594a5fa"}
+{"fn": "_account_ref", "args": ["ünïcödéhello world"], "ok": "aa699099b5f43847"}
+{"fn": "_account_ref", "args": ["ns:key.path﻿bom"], "ok": "8974bb7f648c6a17"}
+{"fn": "_account_ref", "args": ["a..ba"], "ok": "eb024435b5187009"}
+{"fn": "_account_ref", "args": ["HELLOtrailing."], "ok": "58b4012643cde7fb"}
+{"fn": "_account_ref", "args": ["helloΣΊΣΥΦΟΣ"], "ok": "13e6c4acf6b0558d"}
+{"fn": "_account_ref", "args": ["a..bİstanbul"], "ok": "dffe75c40f1c0b9c"}
+{"fn": "_account_ref", "args": ["İstanbulstraße"], "ok": "71b22215a65fec2b"}
+{"fn": "_account_ref", "args": ["trailing.a😀b😀c"], "ok": "983edbaca7f6ca6f"}
+{"fn": "_account_ref", "args": ["helloa"], "ok": "9abfe77d5eb12f4a"}
+{"fn": "_account_ref", "args": ["tab\tseparatedns:key.path"], "ok": "1d3e61e0374767ec"}
+{"fn": "_account_ref", "args": ["a😀b😀chello"], "ok": "f1da0bb92d4c426d"}
+{"fn": "_account_ref", "args": ["hellostraße"], "ok": "77b47a19dc837341"}
+{"fn": "_account_ref", "args": ["src/a/b.tsstraße"], "ok": "4b95a639da5939bb"}
+{"fn": "_account_ref", "args": ["ns:key.pathHello World"], "ok": "62d1fb809e3d5f19"}
+{"fn": "_account_ref", "args": ["{name} has {count} itemssrc/a/b.ts"], "ok": "507c2a38a18d55dd"}
+{"fn": "_account_ref", "args": ["İstanbulé"], "ok": "0ea475986429f73e"}
+{"fn": "_account_ref", "args": ["a:b:cHello World"], "ok": "07374227dfa22340"}
+{"fn": "_account_ref", "args": ["tab\tseparatedhello world"], "ok": "60ebbaa54f965f7c"}
+{"fn": "_account_ref", "args": ["😀日本語のテキスト"], "ok": "0a1c799318a5767e"}
+{"fn": "_account_ref", "args": ["a😀b😀ca:b:c"], "ok": "48b6322f96c07ca2"}
+{"fn": "_account_ref", "args": ["İstanbulhello"], "ok": "2d2a0f1d01db0188"}
+{"fn": "_account_ref", "args": ["  padded  hello"], "ok": "4ad6932bf2bdfdb4"}
+{"fn": "_account_ref", "args": [":a..b"], "ok": "3f1f359def6d2134"}
+{"fn": "_account_ref", "args": ["héllo wörld"], "ok": "a1003f7d04a41157"}
+{"fn": "_account_ref", "args": ["👍🏽 thumbs"], "ok": "2752e65dacf50732"}
+{"fn": "_account_ref", "args": ["日本語"], "ok": "77710aedc74ecfa3"}
+{"fn": "_account_ref", "args": ["ılık ırmak"], "ok": "60dc09d56c2ba920"}
+{"fn": "_account_ref", "args": ["👨‍👩‍👧 family"], "ok": "bb5f3770a5817fd9"}
+{"fn": "_account_ref", "args": ["a b"], "ok": "9507017c6d887511"}
+{"fn": "_account_ref", "args": ["a😀b"], "ok": "6fba5b2ea783ded0"}
+{"fn": "_account_ref", "args": ["a²b x½ y①"], "ok": "a950cdbd5ee71632"}
+{"fn": "_account_ref", "args": ["aⅠb Ⅻ"], "ok": "da9cf8ae08a90546"}
+{"fn": "_account_ref", "args": ["a𐐀b 𝐀bc"], "ok": "abf46dba5dae8b50"}
+{"fn": "_account_ref", "args": ["कि ٣٤"], "ok": "9dc1759d14c77f74"}
+{"fn": "_account_ref", "args": ["user@example.com"], "ok": "b4c9a289323b21a0"}
+{"fn": "_account_ref", "args": ["  USER+tag@Example.COM "], "ok": "a4991a18b1126505"}
+{"fn": "_account_ref", "args": ["中文@example.com"], "ok": "5927863b75a1911d"}
+{"fn": "_account_ref", "args": [""], "ok": "e3b0c44298fc1c14"}

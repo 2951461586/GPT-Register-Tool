@@ -73,14 +73,15 @@ pool moves persistence off its event loop.
 
 ### Known function-level lazy cycles
 
-Four module pairs import each other **inside function bodies only**, and one
-five-module cycle is closed by a single lazy edge. They are not import-time
-cycles, but they are real coupling. They are listed here so a future reader
-neither re-discovers them as a surprise nor "fixes" them by lifting the import
-to module scope (which would create a genuine cycle).
-`scripts/delayed_import_ratchet.py` freezes every delayed import by
-`(importer, target)` and fails on a new edge or a changed reason; this table is
-the *reason* behind the ones that form cycles.
+Three module pairs import each other **inside function bodies** (and four
+intra-/cross-package workflow loops are closed only through delayed `provider` /
+`deferred` seams). They are not import-time cycles, but they are real coupling.
+They are listed here so a future reader neither re-discovers them as a surprise
+nor "fixes" them by lifting the import to module scope (which would create a
+genuine cycle). `scripts/delayed_import_ratchet.py` freezes every delayed import
+by `(importer, target)` and fails on a new edge or a changed reason; this table
+is the *reason* behind the ones classified as `cycle` (plus the three former
+cycles retired in 2026-11).
 
 Each frozen edge also carries a reason, derived by rule: `cycle` (one of the
 documented pairs above), `startup` (the CLI/command seam, or a heavy optional
@@ -108,11 +109,11 @@ Recompute the exact form before adding a row here.
 
 | Pair / cycle | Edge(s) | Why it stays lazy |
 | --- | --- | --- |
-| `checkout_contract` ↔ `payment_catalog` | `checkout_contract` reads `payment_catalog.PAYMENT_METHODS`; `payment_catalog.validate_catalog_consistency()` reads `checkout_contract.PAYMENT_METHOD_PROFILES` | The catalog is the method vocabulary; the profile comparison is an on-demand assertion. Lifting it would make the catalog import the contract it validates. |
-| `payment_catalog` ↔ `payment_flow` | `payment_flow` reads `payment_catalog.PAYMENT_METHODS`; `payment_catalog.validate_catalog_consistency()` reads `payment_flow.FLOW_PROFILES` | Same reason as above, for the flow vocabulary. |
-| `payment_routing` ↔ `paypal_proxy` | `payment_routing` reads `paypal_proxy.{redact_proxy_url, proxy_state_from_config, select_proxy_from_pool, rotate_proxy_session}`; `paypal_proxy` reads `payment_routing.method_payment_config` | `paypal_proxy` is the legacy stage-proxy owner and `payment_routing` the newer planner. The proxy helpers are consumed only while building route options, so both edges are function-local. |
-| `sentinel_tokens` ↔ `sentinel.client` | `sentinel_tokens` reads `sentinel.client.issue_sentinel_bundle`; `sentinel.client` reads `sentinel_tokens._extract_sentinel` for its legacy fallback | `sentinel_tokens` deliberately imports the **submodule**, not the `sentinel` package entry, because the package `__init__` re-exports from `client` and would close the cycle through the package. |
-| `proxy_routing` → `accounts.account_identity`, closing a five-module cycle: `account_identity` → `fingerprint_pool` → `paypal_proxy` → `payment_routing` → `proxy_routing` | `proxy_routing._saved_registration_proxy` reads `accounts.account_identity.resolve_account_proxy` | The lookup is the opt-in `account_health.use_registration_affinity` path, so it stays function-local alongside the other three lazy edges in the cycle (`fingerprint_pool` → `paypal_proxy`, `paypal_proxy` → `payment_routing`); the remaining two (`account_identity` → `fingerprint_pool`, `payment_routing` → `proxy_routing`) are top-level. Lifting this edge would close the cycle at import time. |
+| `payment/checkout_contract` ↔ `payment/catalog` | `checkout_contract` reads `catalog.PAYMENT_METHODS`; `catalog.validate_catalog_consistency()` reads `checkout_contract.PAYMENT_METHOD_PROFILES` | The catalog is the method vocabulary; the profile comparison is an on-demand assertion. Lifting it would make the catalog import the contract it validates. |
+| `payment/catalog` ↔ `payment/flow` | `flow` reads `catalog.PAYMENT_METHODS`; `catalog.validate_catalog_consistency()` reads `flow.FLOW_PROFILES` | Same reason as above, for the flow vocabulary. |
+| `transport/auth_headers` ↔ `transport/http_backend` | `auth_headers` filters impersonation profiles through `http_backend`; `http_backend` reads profile tables and current impersonation from `auth_headers` | Both sides stay function-local so `auth_headers` remains transport-agnostic on lightweight CLI paths and neither module closes the cycle at import time. |
+
+*Retired cycles (now one-way `deferred` / `provider` edges):* `payment/routing` ↔ `paypal/proxy` was broken when `paypal/proxy` switched to leaf `payment/method_config` and stage-proxy health moved to `proxy/stage_health`; the five-module cycle through `proxy/routing` → `accounts/account_identity` was broken when `fingerprint_pool` moved to `proxy/entry`; and `registration/sentinel_tokens` ↔ `sentinel/client` became one-way (`provider`) when `sentinel/client` retired its legacy `_extract_sentinel` fallback in favor of native Rust FFI.
 
 Any further lazy edge that closes a cycle must be added here with the same
 evidence, or refactored so the edge disappears. `tests/governance/test_delayed_import_ratchet.py`
@@ -141,7 +142,7 @@ audits make under `runtime/tmp/refrepos/`), and it grows without bound.
 
 | In scope (the product) | Excluded (tooling, generated, state, vendored) |
 | --- | --- |
-| `sms_tool/`, `SmsWorkbench/`, `SmsWorkbench.Contracts/` | `scripts/`, `dist/`, `runtime/`, `sessions/`, `.dotnet/`, `.workbuddy*/`, .NET `bin/`+`obj/`, `native/` |
+| `sms_tool/`, `SmsWorkbench/`, `SmsWorkbench.Contracts/` | `scripts/`, `dist/`, `runtime/`, `sessions/`, `.dotnet/`, `.workbuddy*/`, .NET `bin/`+`obj/`, `native/`, `rust/` |
 
 `scripts/` is excluded **on purpose**, and the trade-off is stated so it is not
 re-litigated. The review graph is an architecture view of the *product*, and the
@@ -208,13 +209,13 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 531 |
+| Module-level cross-directory edges | 538 |
 | Directory pairs | 133 |
-| Mutual pairs / minority-direction edges | 14 / 26 |
-| Delayed cross-directory edges | 316 |
-| Delayed imports in the package | 456 (baseline 456) |
-| Functions at or above 150 lines | 31 (frozen, `scripts/function_length_ratchet.py`) |
-| Claimed tracked `sms_tool` modules | 305 of 305 (0 unclaimed, 38 directory-map groups) |
+| Mutual pairs / minority-direction edges | 13 / 25 |
+| Delayed cross-directory edges | 310 |
+| Delayed imports in the package | 450 (baseline 450) |
+| Functions at or above 150 lines | 29 (frozen, `scripts/function_length_ratchet.py`) |
+| Claimed tracked `sms_tool` modules | 309 of 309 (0 unclaimed, 38 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->
 
 `tests/config/test_pilens_scope_config.py` pins the scope and the formatting
@@ -239,6 +240,9 @@ foreground commands.
 (`scripts/root_module_ratchet.py` + `scripts/root_module_baseline.json`): "one
 more file" adds no edge on day one, only a place where the next edge can be born,
 so a new root module needs a decision recorded here before the baseline grows.
+
+**2026-11-28 — Cargo workspace consolidation, driver-vocabulary kernel downshift, and stage-proxy decoupling.**
+All 67 `rust/*-rs/` PyO3 crates (127 functions, 21,972 recorded cases) now build under a single shared Cargo workspace (`rust/Cargo.toml` + `rust/Cargo.lock`), verified in one pass by `scripts/rust_crates_guard.py --cargo-check`. The registration-driver vocabulary (`RegistrationDriver`, `DRIVERS`, `KNOWN_DRIVER_ALIASES`, `normalize_registration_driver`) moved from `registration_drivers/base.py` into `kernel/driver_env.py`, removing `config/schema.py`'s delayed upward imports into `registration_drivers`, eliminating the `sms_tool/registration -> sms_tool/registration_drivers` mutual directory edge, and extending `scripts/kernel_boundary_ratchet.py` to enforce zero application module-scope imports inside `sms_tool/config/`. Neutral stage-proxy health and geo-probe caching (`StageProxyState`, `ProxyProbeResult`, `proxy_state_from_config`) moved from `paypal/proxy.py` to `proxy/stage_health.py` (re-exported identically from `paypal/proxy.py`), root `start_proxy_pool.py` and `verify_proxy.py` became thin compatibility entrypoints over `scripts/`, and `scripts/docs_consistency_scan.py` auto-discovers every `docs/current/*.md` and `docs/adr/*.md` document.
 
 **2026-11-27 — Root trim to 7 modules, zero allow-listed inward edges, and monolith splits.**
 Four remaining domain/kernel modules left the `sms_tool/` root (`batch_circuit_breaker.py` →

@@ -1,0 +1,436 @@
+{"fn": "proxy_key", "args": ["😀"], "ok": "d75b53cfa05fc0da4c090e19"}
+{"fn": "proxy_key", "args": ["ünïcödé"], "ok": "0d1582bec490ba401271a239"}
+{"fn": "proxy_key", "args": ["abc"], "ok": "7516f3507d008b86b0be6e7a"}
+{"fn": "proxy_key", "args": [":"], "ok": "e0ec4abeaf7a71cf17a373c9"}
+{"fn": "proxy_key", "args": ["hello world"], "ok": "f7b4e5193a059e3a29d00e56"}
+{"fn": "proxy_key", "args": ["a😀b😀c"], "ok": "428e5c077d703d807ebc6451"}
+{"fn": "proxy_key", "args": ["tab\tseparated"], "ok": "2f3ab2ba9117d609669660ac"}
+{"fn": "proxy_key", "args": ["ab"], "ok": "1d6874f677487df640ef7733"}
+{"fn": "proxy_key", "args": ["a..b"], "ok": "f9237ff06b26500fe2a084ae"}
+{"fn": "proxy_key", "args": ["./x/**/*.json.leading"], "ok": "707a8ec346cbdf5e2ebd374d"}
+{"fn": "proxy_key", "args": ["hello worldab"], "ok": "dd1a7e9e487fe711a6b23b42"}
+{"fn": "proxy_key", "args": ["straßesrc/a/b.ts"], "ok": "ae9d7ba6baf2d006b4ca8e2b"}
+{"fn": "proxy_key", "args": ["İstanbul"], "ok": "e502edda3ab771a7d7a60b7d"}
+{"fn": "proxy_key", "args": ["ΣΊΣΥΦΟΣ"], "ok": "084a1430840cbb9b1a54c594"}
+{"fn": "proxy_key", "args": ["HELLO"], "ok": "5b8213a32ee18da1bf35ca9c"}
+{"fn": "proxy_key", "args": ["éa.b.c"], "ok": "7024e84096ca3982c9eb5fc8"}
+{"fn": "proxy_key", "args": ["  padded  "], "ok": "90a85295934b7958397f4acf"}
+{"fn": "proxy_key", "args": ["ns:key.path"], "ok": "c520a61fa9e6a4afa48cb32f"}
+{"fn": "proxy_key", "args": ["日本語のテキスト"], "ok": "e6199275dd32b39f7574c316"}
+{"fn": "proxy_key", "args": ["a:b:c"], "ok": "61e6518f39c2b9a162788867"}
+{"fn": "proxy_key", "args": ["trailing."], "ok": "c04af489e5a09b343c9c71d7"}
+{"fn": "proxy_key", "args": ["key_name-1"], "ok": "470cd8f88ccdaf5d429c9fcf"}
+{"fn": "proxy_key", "args": ["line1\nline2"], "ok": "2e034435a29ba0810cf0fe31"}
+{"fn": "proxy_key", "args": [".leading"], "ok": "0be4f02504e8dfa88286c380"}
+{"fn": "proxy_key", "args": ["Hello World"], "ok": "b7461ed28ed86859d2e797a4"}
+{"fn": "proxy_key", "args": ["ΣΊΣΥΦΟΣns:key.path"], "ok": "bad23c0ab9093de8a8f03e18"}
+{"fn": "proxy_key", "args": ["İstanbulabc"], "ok": "21dbab9e0f0d22da518feb35"}
+{"fn": "proxy_key", "args": ["abİstanbul"], "ok": "27531697929838f6296a3da6"}
+{"fn": "proxy_key", "args": ["hello"], "ok": "c2f4b0c54c38087f5537a331"}
+{"fn": "proxy_key", "args": ["a.b.c"], "ok": "edf4bb2525cf19fbc3592b4c"}
+{"fn": "proxy_key", "args": ["abctab\tseparated"], "ok": "baad027c74776f032be8f101"}
+{"fn": "proxy_key", "args": ["{name} has {count} itemsline1\nline2"], "ok": "597bb9b0124a88fa749ff709"}
+{"fn": "proxy_key", "args": ["{name} has {count} items"], "ok": "422edf56e6014113a06f4721"}
+{"fn": "proxy_key", "args": ["a"], "ok": "54df484bb282e7e472b74675"}
+{"fn": "proxy_key", "args": ["key_name-1ΣΊΣΥΦΟΣ"], "ok": "e35b4851f601ef8797e8ff92"}
+{"fn": "proxy_key", "args": ["aabc"], "ok": "b79055e40cf64982be2d87db"}
+{"fn": "proxy_key", "args": ["abca.b.c"], "ok": "68d5b9c7d120773f8596ac62"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["İstanbultab\tseparated"], "ok": "0d894391336051bdbb53ef20"}
+{"fn": "proxy_key", "args": ["src/a/b.ts"], "ok": "ad699656118a399002b8a489"}
+{"fn": "proxy_key", "args": ["﻿bom"], "ok": "a55fa6c7d9b831c7d5d00e2b"}
+{"fn": "proxy_key", "args": ["İstanbulHello World"], "ok": "0f556f645fb7414b9f108d8b"}
+{"fn": "proxy_key", "args": ["emoji 👍🏽 mix"], "ok": "5ece028a4c7b7c0eab6c4894"}
+{"fn": "proxy_key", "args": ["  padded    padded  "], "ok": "b76621cc1fe21e404049c2c3"}
+{"fn": "proxy_key", "args": ["hellotab\tseparated"], "ok": "409946e1228e32e6ed488d28"}
+{"fn": "proxy_key", "args": ["é"], "ok": "e148fe00303e54394d0f2e15"}
+{"fn": "proxy_key", "args": ["éns:key.path"], "ok": "227cba58f213182bf7683885"}
+{"fn": "proxy_key", "args": ["﻿bom{name} has {count} items"], "ok": "6821918d0daf90ac8a8958ee"}
+{"fn": "proxy_key", "args": ["{name} has {count} itemsa..b"], "ok": "f978547ceacc37218155f13d"}
+{"fn": "proxy_key", "args": ["straße"], "ok": "6989fdc06bc4ea22ebbdc069"}
+{"fn": "proxy_key", "args": ["ΣΊΣΥΦΟΣhello world"], "ok": "e31d675c3e578713133faeb2"}
+{"fn": "proxy_key", "args": ["éhello"], "ok": "c2d6c549e445eb04d763790b"}
+{"fn": "proxy_key", "args": ["  padded  日本語のテキスト"], "ok": "43d5959f64ae0542369dadc3"}
+{"fn": "proxy_key", "args": ["{name} has {count} items{name} has {count} items"], "ok": "52c4046a5fa52cfd798433bc"}
+{"fn": "proxy_key", "args": ["a:b:cΣΊΣΥΦΟΣ"], "ok": "8b273475550be44fac26a5df"}
+{"fn": "proxy_key", "args": ["./x/**/*.json"], "ok": "c5c63850dcb4907244a228c4"}
+{"fn": "proxy_key", "args": ["a..bline1\nline2"], "ok": "186bf07ec352d768d0589a0e"}
+{"fn": "proxy_key", "args": ["line1\nline2﻿bom"], "ok": "fa632474c348cd8557efc712"}
+{"fn": "proxy_key", "args": ["aHELLO"], "ok": "d18138dba7231accc440f1de"}
+{"fn": "proxy_key", "args": ["trailing.Hello World"], "ok": "8dd6848fae705f7b40509501"}
+{"fn": "proxy_key", "args": ["İstanbulab"], "ok": "6074525bfd4bb6a1fba7a398"}
+{"fn": "proxy_key", "args": ["hello worldemoji 👍🏽 mix"], "ok": "2a3d1284450e6242680c87c6"}
+{"fn": "proxy_key", "args": ["abhello"], "ok": "3ac1502b479854b4d1078b5f"}
+{"fn": "proxy_key", "args": ["tab\tseparated  padded  "], "ok": "55fb1bfb6607cf52409e775b"}
+{"fn": "proxy_key", "args": ["a.b.chello world"], "ok": "76cc282d09e52b8bf053d3eb"}
+{"fn": "proxy_key", "args": ["./x/**/*.jsona😀b😀c"], "ok": "283fded76db4d2c6643f61db"}
+{"fn": "proxy_key", "args": ["ünïcödéΣΊΣΥΦΟΣ"], "ok": "39f10ac7b986c325b31dd425"}
+{"fn": "proxy_key", "args": ["Hello Worldstraße"], "ok": "52a1cddb56507b0ac2a62910"}
+{"fn": "proxy_key", "args": [":.leading"], "ok": "0c83c95353db6982b26dc3bc"}
+{"fn": "proxy_key", "args": ["{name} has {count} itemstrailing."], "ok": "e1c03c96f8d9085b18f12121"}
+{"fn": "proxy_key", "args": ["a:b:ctab\tseparated"], "ok": "d4de6e243ec6b0c635b0017f"}
+{"fn": "proxy_key", "args": ["a😀b😀cstraße"], "ok": "6cf3d2611abe25cb13fdc6eb"}
+{"fn": "proxy_key", "args": ["key_name-1a..b"], "ok": "4f5b5f2e9146be5d162cda02"}
+{"fn": "proxy_key", "args": ["{name} has {count} items:"], "ok": "ff464337771bcd4025192973"}
+{"fn": "proxy_key", "args": ["a..b﻿bom"], "ok": "ed9192172fef235413679868"}
+{"fn": "proxy_key", "args": ["Hello World﻿bom"], "ok": "a837cc26a4b3f5c2e4858470"}
+{"fn": "proxy_key", "args": ["a./x/**/*.json"], "ok": "026bfd27e465bd3c0467cc77"}
+{"fn": "proxy_key", "args": ["﻿bomemoji 👍🏽 mix"], "ok": "f39419df1c86b9e4bc681fa5"}
+{"fn": "proxy_key", "args": ["emoji 👍🏽 mixHello World"], "ok": "0a869c89cbc2e274ed094708"}
+{"fn": "proxy_key", "args": ["😀ab"], "ok": "8646c41f07aef2a5f88030e8"}
+{"fn": "proxy_key", "args": ["﻿bom﻿bom"], "ok": "289e69a27cc40df64e301260"}
+{"fn": "proxy_key", "args": ["a..bΣΊΣΥΦΟΣ"], "ok": "e147ca19ca02d8ab6da9d351"}
+{"fn": "proxy_key", "args": ["😀hello world"], "ok": "f296415d943dd35a1d5aa882"}
+{"fn": "proxy_key", "args": ["a:b:cé"], "ok": "09fcc6456a429d2f67c66073"}
+{"fn": "proxy_key", "args": ["😀  padded  "], "ok": "236e83430ad89dff25fc0a9d"}
+{"fn": "proxy_key", "args": ["étab\tseparated"], "ok": "f786e96d7a26f5a85486326e"}
+{"fn": "proxy_key", "args": [".leadingabc"], "ok": "e09b11b46073d1d64e645a6e"}
+{"fn": "proxy_key", "args": ["a:b:c:"], "ok": "e6f39cc5b131be12f3eb372b"}
+{"fn": "proxy_key", "args": ["a..bHello World"], "ok": "b42e2d94784c0eb72dff07aa"}
+{"fn": "proxy_key", "args": [":a"], "ok": "1db5b0c1d11f77a4f9640b1d"}
+{"fn": "proxy_key", "args": ["hellohello world"], "ok": "dc476645d9cf9f09d56de79a"}
+{"fn": "proxy_key", "args": ["a.b.ctrailing."], "ok": "17b1538813ceaf57a1077a26"}
+{"fn": "proxy_key", "args": ["﻿boma😀b😀c"], "ok": "6ea1117db55324c970d2f290"}
+{"fn": "proxy_key", "args": ["line1\nline2abc"], "ok": "82af24ac53283d5ae0b38efc"}
+{"fn": "proxy_key", "args": ["ns:key.pathtab\tseparated"], "ok": "8d3eb5ea992deb43d1edbf43"}
+{"fn": "proxy_key", "args": ["src/a/b.ts:"], "ok": "9ae492a26fd8c352d745a4e9"}
+{"fn": "proxy_key", "args": ["İstanbul./x/**/*.json"], "ok": "ef371da8cf4597b22d348fa8"}
+{"fn": "proxy_key", "args": ["line1\nline2日本語のテキスト"], "ok": "1eeccdf776675abd40ff902c"}
+{"fn": "proxy_key", "args": ["a.b.cİstanbul"], "ok": "a00ed76cefebe80947801c54"}
+{"fn": "proxy_key", "args": ["a.b.ctab\tseparated"], "ok": "77039ef534662bd74d5f4cd5"}
+{"fn": "proxy_key", "args": ["HELLOns:key.path"], "ok": "912c2803408865f6eca760f5"}
+{"fn": "proxy_key", "args": [":hello"], "ok": "f5148e9a06da76f3b9b2a062"}
+{"fn": "proxy_key", "args": ["{name} has {count} items😀"], "ok": "5df76173f1dc83a2861137af"}
+{"fn": "proxy_key", "args": ["abca..b"], "ok": "592c34f0a407feea6430db48"}
+{"fn": "proxy_key", "args": ["İstanbul﻿bom"], "ok": "2aa8ef59b33524257ba09d0c"}
+{"fn": "proxy_key", "args": ["a..b./x/**/*.json"], "ok": "a8041df5d47bebf8e4e7cfc8"}
+{"fn": "proxy_key", "args": ["ΣΊΣΥΦΟΣline1\nline2"], "ok": "5d5b3899e007374abb6ac287"}
+{"fn": "proxy_key", "args": ["a..bsrc/a/b.ts"], "ok": "bfc76e7c5c142a1cf2a18fe2"}
+{"fn": "proxy_key", "args": ["HELLOhello world"], "ok": "e7ae54ec0fe031dd26f5c14d"}
+{"fn": "proxy_key", "args": ["日本語のテキストkey_name-1"], "ok": "bc426b2f5ec1b50155c21f63"}
+{"fn": "proxy_key", "args": ["éa😀b😀c"], "ok": "05542b12a7d3a88df98692a6"}
+{"fn": "proxy_key", "args": ["😀İstanbul"], "ok": "f092bf0d8860da9b5575d78f"}
+{"fn": "proxy_key", "args": ["a:b:ca.b.c"], "ok": "11b2a6647d0781276ca0c78a"}
+{"fn": "proxy_key", "args": ["abckey_name-1"], "ok": "96d0fcb06dbd5724e5f4e871"}
+{"fn": "proxy_key", "args": ["a﻿bom"], "ok": "4f826a4ce74743d49aea94aa"}
+{"fn": "proxy_key", "args": ["abchello world"], "ok": "3bfee25268a1e630fb4e4979"}
+{"fn": "proxy_key", "args": ["aline1\nline2"], "ok": "59bdecbd2f5eff48be94c8f4"}
+{"fn": "proxy_key", "args": [".leading{name} has {count} items"], "ok": "86c812fb89e9c2cd16cc9f7e"}
+{"fn": "proxy_key", "args": ["./x/**/*.json./x/**/*.json"], "ok": "b162013f9df651b39065249e"}
+{"fn": "proxy_key", "args": ["{name} has {count} items日本語のテキスト"], "ok": "bc4d1c9cd661ded6338a10c8"}
+{"fn": "proxy_key", "args": ["hello worlda..b"], "ok": "f53f79879b3a4bc912328ea1"}
+{"fn": "proxy_key", "args": ["{name} has {count} itemstab\tseparated"], "ok": "8385b1660a674067fd54ad43"}
+{"fn": "proxy_key", "args": ["ab:"], "ok": "79a63da15bc0c983a129aecf"}
+{"fn": "proxy_key", "args": ["a😀b😀ca😀b😀c"], "ok": "9fe131be82bc18132a7bd059"}
+{"fn": "proxy_key", "args": ["ns:key.pathé"], "ok": "fb099d1c204baed68c937f41"}
+{"fn": "proxy_key", "args": ["abé"], "ok": "267e456ebc66e5a227f903c5"}
+{"fn": "proxy_key", "args": ["ünïcödé.leading"], "ok": "6a371b39e9537b232d64149a"}
+{"fn": "proxy_key", "args": ["tab\tseparateda.b.c"], "ok": "e217b4f289c5d28553e97899"}
+{"fn": "proxy_key", "args": ["éline1\nline2"], "ok": "6427a3056a26c9cd9610140c"}
+{"fn": "proxy_key", "args": ["  padded  Hello World"], "ok": "b438e8ae7eec019c5ad0a2cb"}
+{"fn": "proxy_key", "args": ["hello worldsrc/a/b.ts"], "ok": "60bb4caf7072bd230d25b547"}
+{"fn": "proxy_key", "args": ["ünïcödéHello World"], "ok": "d81c11e73b75209c8dad9b97"}
+{"fn": "proxy_key", "args": ["{name} has {count} itemssrc/a/b.ts"], "ok": "01c31bfabb75a306dc4fb521"}
+{"fn": "proxy_key", "args": ["src/a/b.tsab"], "ok": "f2feea45555ddea5078b46f4"}
+{"fn": "proxy_key", "args": ["line1\nline2src/a/b.ts"], "ok": "2af7907501feea781c30fc4e"}
+{"fn": "proxy_key", "args": ["ΣΊΣΥΦΟΣ﻿bom"], "ok": "9ff6f95aeb6af83250be3289"}
+{"fn": "proxy_key", "args": ["HELLOünïcödé"], "ok": "8c24899288aec028f2c34025"}
+{"fn": "proxy_key", "args": ["ns:key.pathtrailing."], "ok": "7e56dabb1616b209cae2676b"}
+{"fn": "proxy_key", "args": [":a😀b😀c"], "ok": "c382bc156b459451f1bf4295"}
+{"fn": "proxy_key", "args": ["a..bünïcödé"], "ok": "656ccd3e36f0fea5cf56c0cf"}
+{"fn": "proxy_key", "args": [".leadingstraße"], "ok": "46258533c5b44d337f3d1296"}
+{"fn": "proxy_key", "args": ["straßeé"], "ok": "bafa3904e839b4929d440487"}
+{"fn": "proxy_key", "args": ["trailing.İstanbul"], "ok": "eb010da61b67858edd4439c2"}
+{"fn": "proxy_key", "args": ["a:b:cemoji 👍🏽 mix"], "ok": "1eb7364231ee4b0e334d1e5e"}
+{"fn": "proxy_key", "args": ["ns:key.pathabc"], "ok": "726c553c8f7dc870c7a9165f"}
+{"fn": "proxy_key", "args": ["a😀b😀cns:key.path"], "ok": "d009fecd74361e658b379df4"}
+{"fn": "proxy_key", "args": ["İstanbul{name} has {count} items"], "ok": "e7f1e34e929173d877adcee8"}
+{"fn": "proxy_key", "args": [".leadinghello world"], "ok": "4b7cad30536716055104f3e3"}
+{"fn": "proxy_key", "args": ["Hello Worldabc"], "ok": "a423863e5cac6b3846bf250d"}
+{"fn": "proxy_key", "args": ["abab"], "ok": "fee16998242f4ed5ce07338c"}
+{"fn": "proxy_key", "args": ["éİstanbul"], "ok": "af73bed9dd6cfb07e89f36c2"}
+{"fn": "proxy_key", "args": ["tab\tseparated./x/**/*.json"], "ok": "6e3451cb241e570ad17f0741"}
+{"fn": "proxy_key", "args": ["line1\nline2a😀b😀c"], "ok": "2b4c7ca416bb8da44d546be5"}
+{"fn": "proxy_key", "args": ["atab\tseparated"], "ok": "7cbf75ad272d502f96d90c30"}
+{"fn": "proxy_key", "args": ["line1\nline2emoji 👍🏽 mix"], "ok": "32efda535a08c5633acb7017"}
+{"fn": "proxy_key", "args": ["﻿bomns:key.path"], "ok": "d0d57574fc3f63c447783271"}
+{"fn": "proxy_key", "args": ["hello worlda:b:c"], "ok": "55a6c0d1c89b85f543cb754a"}
+{"fn": "proxy_key", "args": ["hello world{name} has {count} items"], "ok": "b055438d1129f0815efbe278"}
+{"fn": "proxy_key", "args": ["a..ba"], "ok": "2184b8a5313b7a377768d50f"}
+{"fn": "proxy_key", "args": ["ΣΊΣΥΦΟΣHello World"], "ok": "b287f8d15d96ce5fd96d7b85"}
+{"fn": "proxy_key", "args": ["é﻿bom"], "ok": "ddedc30274f213c45eb1c715"}
+{"fn": "proxy_key", "args": ["HELLOa..b"], "ok": "342d3ce56c69faf9d7fb4786"}
+{"fn": "proxy_key", "args": ["abcline1\nline2"], "ok": "165dfd5f54d7a42a67a68e87"}
+{"fn": "proxy_key", "args": ["  padded  a..b"], "ok": "b354c6a8d7608e99c7a95d6c"}
+{"fn": "proxy_key", "args": ["./x/**/*.jsonHELLO"], "ok": "e0d51e31c26c32804a0a66da"}
+{"fn": "proxy_key", "args": [":ab"], "ok": "560ca02d0df4eeb532b55552"}
+{"fn": "proxy_key", "args": ["a😀b😀cİstanbul"], "ok": "8847abdb7d3854c3b3c45efa"}
+{"fn": "proxy_key", "args": ["é./x/**/*.json"], "ok": "963a7fe1615fd691b6003d2e"}
+{"fn": "proxy_key", "args": ["hello world  padded  "], "ok": "f01c70f1830593d839b18af9"}
+{"fn": "proxy_key", "args": ["  padded  line1\nline2"], "ok": "895966c6bc20105ca8fa5812"}
+{"fn": "proxy_key", "args": ["hellons:key.path"], "ok": "e32292f9dc0da14336278b40"}
+{"fn": "proxy_key", "args": ["line1\nline2hello world"], "ok": "047530777aa3d8015a13d3b3"}
+{"fn": "proxy_key", "args": ["src/a/b.tsa"], "ok": "779b666aaeb91c7645856376"}
+{"fn": "proxy_key", "args": ["HELLOkey_name-1"], "ok": "58df6f4f11d448195b2cb663"}
+{"fn": "proxy_key", "args": [":{name} has {count} items"], "ok": "f68a9a54b0cd0f5050427aeb"}
+{"fn": "proxy_key", "args": ["abcab"], "ok": "bcc3599c7b908e27c87327da"}
+{"fn": "proxy_key", "args": ["Hello World./x/**/*.json"], "ok": "9208b5b23530b8e21d576874"}
+{"fn": "proxy_key", "args": ["key_name-1  padded  "], "ok": "74e7d877a13710c58bf93556"}
+{"fn": "proxy_key", "args": ["ΣΊΣΥΦΟΣemoji 👍🏽 mix"], "ok": "7a43679d68753f414ae0c050"}
+{"fn": "proxy_key", "args": ["abcHello World"], "ok": "594b15bc6e36566294539dc8"}
+{"fn": "proxy_key", "args": ["key_name-1emoji 👍🏽 mix"], "ok": "9fe9bb8562b13a605624cc46"}
+{"fn": "proxy_key", "args": ["abünïcödé"], "ok": "2a7c474cfdcc9f04431c727d"}
+{"fn": "proxy_key", "args": ["tab\tseparatedemoji 👍🏽 mix"], "ok": "3b6b761bdc586ee5c8532a85"}
+{"fn": "proxy_key", "args": ["日本語のテキストa.b.c"], "ok": "628e686de3b187d4a64b1962"}
+{"fn": "proxy_key", "args": ["abca:b:c"], "ok": "604fb7349ee384090ac877b4"}
+{"fn": "proxy_key", "args": ["./x/**/*.jsonsrc/a/b.ts"], "ok": "eddcd556b50ac0ccc9df0628"}
+{"fn": "proxy_key", "args": ["{name} has {count} items.leading"], "ok": "9831203583ea5f53816f7926"}
+{"fn": "proxy_key", "args": ["ab😀"], "ok": "649b439afecdbb858e0a1213"}
+{"fn": "proxy_key", "args": ["hello worldHELLO"], "ok": "caa78b2e95affe33cb96d794"}
+{"fn": "proxy_key", "args": ["😀line1\nline2"], "ok": "fdd9f2ee92df132221048f6b"}
+{"fn": "proxy_key", "args": ["😀{name} has {count} items"], "ok": "c937b3bd2e57a0d0e0185f46"}
+{"fn": "proxy_key", "args": ["aba:b:c"], "ok": "0fd7c8e5316cd4d82493dd43"}
+{"fn": "proxy_key", "args": ["atrailing."], "ok": "603e473ee1039b49816ea9e2"}
+{"fn": "proxy_key", "args": ["  padded  trailing."], "ok": "50444cca8d08245d8709d3bf"}
+{"fn": "proxy_key", "args": ["Hello WorldHello World"], "ok": "3a32045d74d2bd576b7daa53"}
+{"fn": "proxy_key", "args": ["emoji 👍🏽 mixa.b.c"], "ok": "e8f70941c94f25e0014822ee"}
+{"fn": "proxy_key", "args": ["./x/**/*.json{name} has {count} items"], "ok": "df37c0b45d5cbe8b72f6c182"}
+{"fn": "proxy_key", "args": ["a..bkey_name-1"], "ok": "081a682020def849124fe614"}
+{"fn": "proxy_key", "args": ["ünïcödé./x/**/*.json"], "ok": "870eb5831594aef65a6f9deb"}
+{"fn": "proxy_key", "args": ["a..bns:key.path"], "ok": "e009d7e821268c1c8744bbfd"}
+{"fn": "proxy_key", "args": ["héllo wörld"], "ok": "ee9c2e219e8fb8760242ba66"}
+{"fn": "proxy_key", "args": ["👍🏽 thumbs"], "ok": "389983faadaa32b865b0f4b0"}
+{"fn": "proxy_key", "args": ["日本語"], "ok": "f6730a8c79f51af3157c6248"}
+{"fn": "proxy_key", "args": ["ılık ırmak"], "ok": "c0add7e68ccfd79e28381efd"}
+{"fn": "proxy_key", "args": ["👨‍👩‍👧 family"], "ok": "f5a1381f69b8d0c48afb85d1"}
+{"fn": "proxy_key", "args": ["a b"], "ok": "8826177ea27c14abb50a95ba"}
+{"fn": "proxy_key", "args": ["a😀b"], "ok": "f931470a507be3798958f9d3"}
+{"fn": "proxy_key", "args": ["a²b x½ y①"], "ok": "7505674dcca8e9eea9cdd070"}
+{"fn": "proxy_key", "args": ["aⅠb Ⅻ"], "ok": "f005f561987d901a9fdc3adc"}
+{"fn": "proxy_key", "args": ["a𐐀b 𝐀bc"], "ok": "6021841907cbe84aa54f8c5f"}
+{"fn": "proxy_key", "args": ["कि ٣٤"], "ok": "f0c6efbabac2db4542de6a52"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-abc12345:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8080"], "ok": "23f440d84221348c40abd63c"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-s000018:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8019"], "ok": "07fb017be7851e6a4ac6c7b8"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8024"], "ok": "26771efe91d8b958bb3e948c"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-s000031:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8032"], "ok": "86ed13356b232dc230be9a07"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8037"], "ok": "2f6923c3a46e027adf980c4d"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-s000044:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8045"], "ok": "d8a38c5c6916fb6e859e4877"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8050"], "ok": "b862ec269fb0d3b8f23b2537"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-s000057:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8058"], "ok": "bbcbe92d8885fe410332dd2c"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8063"], "ok": "22853cc3a3367f5ee2ad4534"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-s000070:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8071"], "ok": "86e3d64bc9464d8b6a83abff"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8076"], "ok": "d4e872b6d87c14100c5c5801"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-s000083:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8084"], "ok": "b34fa719c1cf4f1e05a43d51"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8089"], "ok": "2f172b060280d0bfbaa03b12"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-s000096:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8097"], "ok": "eedcf865f96de04293fe0436"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8102"], "ok": "6f32946985f77a970ada438f"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-s000109:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8110"], "ok": "339ffb8a6ea79cb9699d60fb"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8115"], "ok": "eaf8f255c3a3275d3a8e4d8d"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-s000122:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8123"], "ok": "51e69a8e5db518c72622b784"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8128"], "ok": "1176f66f4f361fb5cd29e4e7"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-s000135:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8136"], "ok": "1cb29596810f5155473386d5"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8141"], "ok": "9f976cb0e016ae9971a94556"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-s000148:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8149"], "ok": "b1d658a7962f44526650b7c3"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8154"], "ok": "d9230a8dd961d2ec9c893caa"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-s000161:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8162"], "ok": "296bad42dc63d691e8662600"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8167"], "ok": "39888a72c43e70016218680a"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-s000174:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8175"], "ok": "1343b742a79e308db90c342b"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8180"], "ok": "e32db9a9fed83657aba9da33"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-s000187:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8188"], "ok": "3d00a8134ed90ac4d6a7b851"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8193"], "ok": "f719135058457c8732ada99c"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-s000200:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8201"], "ok": "4ea2dfa6c60ad2b6a7d80209"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8206"], "ok": "b837e774667e417d7bd0e5b0"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}
+{"fn": "proxy_key", "args": ["socks5h://127.0.0.1:1080"], "ok": "da7b8f51d27264f9fb424ed8"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-s000213:secret@gate.provider.io:8080"], "ok": "0f57f697c192c9e247d54524"}
+{"fn": "proxy_key", "args": ["http://user-region-us-sid-xyz98765:secret@gate.provider.io:8214"], "ok": "df383929798901fd734ade62"}
+{"fn": "proxy_key", "args": ["socks5://acct_session_ff001122:pw@res.proxy.example:10000"], "ok": "b0b225a3cd924acf07f32e40"}
+{"fn": "proxy_key", "args": ["gate.example.com:9000:customer-country-jp-sessid-998877:pass123"], "ok": "abda0707d2ba9e5eb7bdd00f"}
+{"fn": "proxy_key", "args": ["http://rola_abc123-region-de:pass@1.2.3.4:3128"], "ok": "b381622063b70a98ce35e182"}
+{"fn": "proxy_key", "args": ["http://user:base-US-sid999-30m@kookeey.example.com:8000"], "ok": "321cea656428cc30e680bd32"}
+{"fn": "proxy_key", "args": ["http://[::1]:8219"], "ok": "e37c6017c2847d2485f4214c"}
+{"fn": "proxy_key", "args": ["socks5://user%40mail:p%3Ass-session-tok123@proxy.host.net:1080"], "ok": "e6a4dc406c89ad03df471a3b"}
+{"fn": "proxy_key", "args": [null], "ok": "direct"}
+{"fn": "proxy_key", "args": [""], "ok": "direct"}
+{"fn": "proxy_key", "args": ["   "], "ok": "direct"}
+{"fn": "proxy_key", "args": ["http://127.0.0.1:7897"], "ok": "813477bf51a0efb3b5926c37"}

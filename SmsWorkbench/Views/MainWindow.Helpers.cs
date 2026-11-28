@@ -72,34 +72,14 @@ namespace SmsWorkbench.Views
         /// <summary>Configured registration proxy, or <c>""</c> when none is set.
         /// Never substitutes a localhost default -- see <see cref="GetRegistrationProxyRoute"/>.</summary>
         private string GetRegistrationProxy()
-        {
-            return FirstNonEmpty(
-                settingsService.GetString("proxy.registration"),
-                settingsService.GetString("registration_proxy"),
-                settingsService.GetString("proxy.default"));
-        }
+            => WorkbenchSettingsResolver.GetRegistrationProxy(settingsService);
 
         private List<string> GetRegistrationProxyPool()
-        {
-            var values = new List<string>();
-            string primary = GetRegistrationProxy();
-            if (primary.Length > 0) values.Add(primary);
-            values.AddRange(settingsService.GetStringList("proxy.pool"));
-            return values
-                .Select(item => item.Trim())
-                .Where(item => item.Length > 0)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-        }
+            => WorkbenchSettingsResolver.GetRegistrationProxyPool(settingsService);
 
         /// <summary>Configured mailbox (inbox-read) proxy, or <c>""</c> when none is set.</summary>
         private string GetMailboxProxy()
-        {
-            return FirstNonEmpty(
-                settingsService.GetString("mailbox_proxy"),
-                settingsService.GetString("email_registration.mailbox_proxy"),
-                settingsService.GetString("proxy.mailbox"));
-        }
+            => WorkbenchSettingsResolver.GetMailboxProxy(settingsService);
 
         /// <summary>
         /// Access-token/session operations must preserve the registration proxy +
@@ -109,25 +89,13 @@ namespace SmsWorkbench.Views
         /// stays empty and lets the backend choose.
         /// </summary>
         private List<string> GetLivenessProxyPool()
-        {
-            return GetRegistrationProxyPool();
-        }
+            => GetRegistrationProxyPool();
 
         private string GetConfiguredCfWorkerDomain()
-        {
-            string domain = settingsService.GetString("email_registration.cfworker_domain").Trim().TrimStart('@');
-            if (domain.Length > 0) return domain;
-            domain = settingsService.GetString("email_registration.cfworker.domain").Trim().TrimStart('@');
-            return domain.Length > 0 ? domain : "liziai.cloud";
-        }
+            => WorkbenchSettingsResolver.GetConfiguredCfWorkerDomain(settingsService);
 
         private string GetConfiguredSmailrDomain()
-        {
-            string domain = settingsService.GetString("email_registration.smailr.default_domain").Trim().TrimStart('@');
-            if (domain.Length > 0) return domain;
-            domain = settingsService.GetString("email_registration.smailr.domain").Trim().TrimStart('@');
-            return domain.Length > 0 ? domain : "smailr.com";
-        }
+            => WorkbenchSettingsResolver.GetConfiguredSmailrDomain(settingsService);
 
         private string NormalizePaymentMethod(string paymentMethod)
             => PaymentMethods.Normalize(paymentMethod);
@@ -139,29 +107,13 @@ namespace SmsWorkbench.Views
         }
 
         private string GetSessionsDir()
-        {
-            return Path.Combine(rootDir, "sessions");
-        }
+            => Path.Combine(rootDir, "sessions");
 
         private string GetDatabasePath()
-        {
-            string configured = settingsService.GetString("storage.sqlite_path");
-            if (configured.Length == 0) return Path.Combine(rootDir, "runtime", "accounts.sqlite3");
-            string expanded = Environment.ExpandEnvironmentVariables(configured);
-            return Path.IsPathRooted(expanded) ? expanded : Path.Combine(rootDir, expanded);
-        }
+            => WorkbenchSettingsResolver.GetDatabasePath(rootDir, settingsService);
 
         private string GetMailboxTokenFile()
-        {
-            string configured = settingsService.GetString("email_registration.token_file");
-            string expanded = configured.Length > 0 ? Environment.ExpandEnvironmentVariables(configured) : "mailbox_tokens.txt";
-            if (Path.IsPathRooted(expanded)) return expanded;
-            string inConfigDir = Path.Combine(configDir, expanded);
-            // A pool that predates the config directory stays usable until the
-            // startup migration has moved it.
-            string legacy = Path.Combine(rootDir, expanded);
-            return !File.Exists(inConfigDir) && File.Exists(legacy) ? legacy : inConfigDir;
-        }
+            => WorkbenchSettingsResolver.GetMailboxTokenFile(rootDir, configDir, settingsService);
 
         // ── Thin delegates to the shared JSON plumbing (BackendJson) ─────
         // Kept so the control-event partials stay readable without qualifying
@@ -201,16 +153,10 @@ namespace SmsWorkbench.Views
             => BackendJson.ParseBoolean(value);
 
         private string OnlyDigits(string raw)
-        {
-            string digits = new string((raw ?? "").Where(char.IsDigit).ToArray());
-            return digits.Length == 0 ? "0" : digits;
-        }
+            => WorkbenchSettingsResolver.OnlyDigits(raw);
 
         private string Mask(string value)
-        {
-            value = (value ?? "").Trim();
-            return value.Length <= 12 ? value : value.Substring(0, 6) + "..." + value.Substring(value.Length - 4);
-        }
+            => WorkbenchSettingsResolver.Mask(value);
 
         private string SafeTime(DateTime time) => time.ToString("yyyy-MM-dd HH:mm:ss");
 
@@ -256,10 +202,7 @@ namespace SmsWorkbench.Views
         }
 
         private bool ShouldOpenWithNotepad(string path)
-        {
-            string extension = Path.GetExtension(path).ToLowerInvariant();
-            return extension == ".json" || extension == ".txt" || extension == ".log";
-        }
+            => WorkbenchSettingsResolver.ShouldOpenWithNotepad(path);
 
         // Not IFileLauncher: this needs to name the executable (notepad.exe)
         // and pass an argument, which IFileLauncher.Open(path) cannot express.
@@ -379,10 +322,7 @@ namespace SmsWorkbench.Views
         }
 
         private bool IsHttpUrl(string url)
-        {
-            return Uri.TryCreate(url, UriKind.Absolute, out Uri? uri)
-                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
-        }
+            => WorkbenchSettingsResolver.IsHttpUrl(url);
 
         private void Log(string text)
         {

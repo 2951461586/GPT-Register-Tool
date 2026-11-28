@@ -252,6 +252,7 @@ from sms_tool.transport.auth_headers import (
 from sms_tool.transport.auth_state import fetch_client_auth_session_dump as _fetch_client_auth_session_dump
 from sms_tool.config import (
     current_config_data,
+    normalize_registration_driver,
     resolve_runtime_config,
     runtime_config_scope,
     validate_config,
@@ -301,7 +302,6 @@ from sms_tool.registration.state import (
     _stored_registration_password,
     _stored_registration_totp,
 )
-from sms_tool.registration_drivers.base import normalize_registration_driver
 from sms_tool.registration.sentinel_tokens import (
     extract_sentinel as _extract_sentinel,
     import_sentinel_cookies as _import_sentinel_cookies,

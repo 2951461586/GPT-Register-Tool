@@ -139,6 +139,7 @@ local/*
 native/sentinel_vm/target/
 
 # rust-anything generated crate build artefacts, scratch caches & compiled extensions
+rust/target/
 rust/*/target/
 rust/*/.rust-anything/
 rust/*/test-inputs.jsonl

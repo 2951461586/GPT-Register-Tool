@@ -22,6 +22,15 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlsplit
 
+from ..data_saver import load_native_module
+
+_NATIVE_BROWSER_FLOW_DECISIONS = load_native_module(
+    "browser-flow-decisions-rs",
+    "browser_flow_decisions_rs",
+    "RUST_ANYTHING_UNIT_BROWSER_FLOW_DECISIONS",
+)
+_NATIVE_NEEDS_CHAT_BASE_NAVIGATION = getattr(_NATIVE_BROWSER_FLOW_DECISIONS, "needs_chat_base_navigation", None)
+
 DEFAULT_VIEWPORT_WIDTH = 1440
 DEFAULT_VIEWPORT_HEIGHT = 900
 
@@ -176,6 +185,12 @@ def needs_chat_base_navigation(chat_base: str, page_url: str) -> bool:
     Hostname comparison is lowercased on both sides; an unparseable or empty
     ``chat_base`` means "do not navigate".
     """
+    if (
+        _NATIVE_NEEDS_CHAT_BASE_NAVIGATION is not None
+        and (chat_base is None or isinstance(chat_base, str))
+        and (page_url is None or isinstance(page_url, str))
+    ):
+        return _NATIVE_NEEDS_CHAT_BASE_NAVIGATION(chat_base, page_url)
     chat_host = str(urlsplit(chat_base or "").hostname or "").lower()
     if not chat_host:
         return False

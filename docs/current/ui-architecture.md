@@ -10,9 +10,9 @@
 | 层 | 位置 | 拥有 | 不拥有 |
 | --- | --- | --- | --- |
 | 应用壳 | `SmsWorkbench/App.xaml(.cs)`、`AppHost.cs`、`Themes/` | 依赖注入容器、启动窗口、全局资源字典合并（令牌 / 字形 / 光暗色板 / 控件样式） | 任何业务流程 |
-| 窗口与呈现 | `Views/`（`MainWindow.*` 分部类、`TitleBar`、`Sidebar`、`AccountFilterBar`、`AccountGridView`、`WorkbenchConsole`、`SettingsWindow`、`PaymentBatchWindow`、`ProtocolCardPaymentWindow`、`ProxyPoolWindow`） | 布局、绑定、交互反馈、窗口级状态（主题、侧栏折叠、分页游标） | 命令语义、HTTP、持久化 |
+| 窗口与呈现 | `Views/`（`MainWindow.*` 分部类、`TitleBar`、`TitleBarStatusPill`、`Sidebar`、`SidebarFooterBar`、`AccountFilterBar`、`AccountGridView`、`WorkbenchConsole`、`SettingsWindow`、`PaymentBatchWindow`、`ProtocolCardPaymentWindow`、`ProxyPoolWindow`） | 布局、绑定、交互反馈、窗口级状态（主题、侧栏折叠、分页游标） | 命令语义、HTTP、持久化 |
 | 视图模型 | `ViewModels/`（`PoolViewModel`、`TaskListViewModel`、`LogViewModel`、`StatusBarViewModel`、`SettingsViewModel`、`PaymentBatchViewModel`、`ProtocolCardPaymentViewModel`、`ExportViewModel`、`RegisterViewModel`） | 可观察状态、展示格式化、输入校验 | 直接写配置或发 HTTP |
-| 服务 | `Services/`（`ConfigStore`、`SettingsService`、`PaymentBatchService`、`ProtocolCardPaymentService`、`MailboxPoolFileStore`、`WindowThemeService`、`ApplicationPaths`、`FileLauncher`、`LegacyConfigMigration`、`BackendTaskCoordinator`、`RegistrationRequestBuilder`、`AccountExportAssembler`、`AccountDeleteService`、`AccountRowFactory`、`TransientArtifactCleanup`、`AppVersion`、`VersionComparer`、`UpdateChecker`） | 读写本地配置/池文件、组装后端任务、迁移旧配置、清理临时凭据 | 解析厂商协议 |
+| 服务 | `Services/`（`ConfigStore`、`SettingsService`、`WorkbenchSettingsResolver`、`PaymentBatchService`、`ProtocolCardPaymentService`、`MailboxPoolFileStore`、`WindowThemeService`、`ApplicationPaths`、`FileLauncher`、`LegacyConfigMigration`、`BackendTaskCoordinator`、`BackendBatchCoordinator`、`BackendLogPresenter`、`AccountStatusInterpreter`、`MailBodyFormatter`、`RegistrationRequestBuilder`、`AccountExportAssembler`、`AccountDeleteService`、`AccountRowFactory`、`TransientArtifactCleanup`、`AppVersion`、`VersionComparer`、`UpdateChecker`） | 读写本地配置/池文件、设置与路由解析、组装后端任务与展示解释、迁移旧配置、清理临时凭据 | 解析厂商协议 |
 | 后端边界 | `Interop/`（`PythonBackendClient`、`DesktopReadClient`、`BackendResultInterpreter`、`PythonPathResolver`、`SmsVendorPayloadMapper`） | 启动 Python 进程、只读快照、把 JSON 结果翻译成领域对象 | 业务规则 |
 | 模型 | `Models/` | 桌面侧契约（`AccountBatchProgress`、`DesktopThemePreference`、`PaymentBatchModels`、`ProtocolCardPaymentModels`、`RegistrationModels`、`SettingsModels`、`SmsProviderCatalog`…）**不含窗口**（窗口在 `Views/` 或 `Dialogs/`） | 与 `SmsWorkbench.Contracts` 重复的定义 |
 | 对话框 | `Dialogs/`（`DialogFactory`、`SettingsDialogService`、`RegisterDialogService`、`ExportDialogService`、`SmsProviderDialogService`、`PaymentBatchDialogService`、`ProtocolCardPaymentDialogService`、`ChangeEmailDialogService`、`AccountBatchProgressDialog`） | 代码构造的对话框：窗口外壳、表单行、动作行、异步信息/确认框 | 业务流程；对话框里不拼 CLI 参数 |
@@ -23,23 +23,27 @@
 
 ## 2. 启动与资源
 
-`App.xaml` 合并六个字典，顺序即优先级。其中**两套**主题字典各自换：Wpf.Ui 的
+`App.xaml` 合并十个字典，顺序即优先级。其中**两套**主题字典各自换：Wpf.Ui 的
 `Resources/Theme/*.xaml` 归 `ApplicationThemeManager`，`Themes/Colors.*.xaml` 归
 `MainWindow.SwapColorScheme`。
 
 ```text
-Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xaml -> Themes/Colors.Light.xaml -> Themes/Controls.xaml
-基础模板        WPF-UI 主题键（换主题）      间距/圆角/字阶/动效     字形几何            颜色（运行时整体替换）        工作台覆盖样式
+Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xaml -> Themes/Colors.Light.xaml -> Themes/Controls*.xaml
+基础模板        WPF-UI 主题键（换主题）      间距/圆角/字阶/动效     字形几何            颜色（运行时整体替换）        工作台覆盖样式（基础/按钮/输入/表格/侧栏）
 ```
 
 | 文件 | 行数 | 内容 |
 | --- | ---: | --- |
-| `SmsWorkbench/App.xaml` | 35 | `ResourceDictionary.MergedDictionaries`，无内联样式 |
-| `SmsWorkbench/Themes/Tokens.xaml` | 97 | 与主题无关的刻度：同心圆角（`Corner.*` / `Radius.*`）、间距、图标光学刻度（`Icon.Size.*` / `Icon.Stroke.*`）、字阶（`Type.Display/Kpi/Title/Subtitle/Data/Body/Mono/Caption/Micro.Size`）、`Font.Ui`（内嵌 `Atkinson Hyperlegible Next` + `Microsoft YaHei UI` 复合栈）、`Font.Mono`、`Size.ScrollBar.*`（8px 轨道 / 4px 滑块）/`Size.Splitter.*` |
-| `SmsWorkbench/Themes/Glyphs.xaml` | 131 | 50 个 Tabler v3.50.0 线框字形（`Glyph.*`，MIT）+ 4 个手绘窗口 chrome 字形；全仓清零内联路径与 `Segoe MDL2 Assets`，每个键上方注明来源图标名 |
-| `SmsWorkbench/Themes/Colors.Light.xaml` | 112 | 光色：DeepAI 壳层-悬浮画布表面阶梯（`Surface.Chrome/Page/Card/Block/Inset/Terminal` + `WorkspaceFrameOutline`）、3 级文字 + `IconMuted`、紫罗兰聚焦主色（`#6A20D0`）、状态徽章、`Divider`、`ShadowColor`、ComboBox 弹层键 |
-| `SmsWorkbench/Themes/Colors.Dark.xaml` | 106 | 暗色，**与光色同一套键**（含深曜石画布 `#141416`、抬升石墨壳层 `#202023`、独立深色日志井 `Surface.Terminal=#111113` 与 `#7C3AED`/`#9D6BFF` 聚焦色） |
-| `SmsWorkbench/Themes/Controls.xaml` | 911 | 隐式/具名控件样式、`ControlTemplate`、滚动条与分隔条重模板、`DialogWindow`、`FocusRingStyle` |
+| `SmsWorkbench/App.xaml` | 39 | `ResourceDictionary.MergedDictionaries`，无内联样式 |
+| `SmsWorkbench/Themes/Tokens.xaml` | 91 | 与主题无关的刻度：同心圆角（`Corner.*` / `Radius.*`）、间距、图标光学刻度（`Icon.Size.*` / `Icon.Stroke.*`）、字阶（`Type.Display/Kpi/Title/Subtitle/Data/Body/Mono/Caption/Micro.Size`）、`Font.Ui`（内嵌 `Atkinson Hyperlegible Next` + `Microsoft YaHei UI` 复合栈）、`Font.Mono`、`Size.ScrollBar.*`（8px 轨道 / 4px 滑块）/`Size.Splitter.*` |
+| `SmsWorkbench/Themes/Glyphs.xaml` | 130 | 50 个 Tabler v3.50.0 线框字形（`Glyph.*`，MIT）+ 4 个手绘窗口 chrome 字形；全仓清零内联路径与 `Segoe MDL2 Assets`，每个键上方注明来源图标名 |
+| `SmsWorkbench/Themes/Colors.Light.xaml` | 103 | 光色：DeepAI 壳层-悬浮画布表面阶梯（`Surface.Chrome/Page/Card/Block/Inset/Terminal` + `WorkspaceFrameOutline`）、3 级文字 + `IconMuted`、紫罗兰聚焦主色（`#6A20D0`）、状态徽章、`Divider`、`ShadowColor`、ComboBox 弹层键 |
+| `SmsWorkbench/Themes/Colors.Dark.xaml` | 98 | 暗色，**与光色同一套键**（含深曜石画布 `#141416`、抬升石墨壳层 `#202023`、独立深色日志井 `Surface.Terminal=#111113` 与 `#7C3AED`/`#9D6BFF` 聚焦色） |
+| `SmsWorkbench/Themes/Controls.xaml` | 316 | 窗口外壳、`DialogWindow`、滚动条与分隔条重模板、`FocusRingStyle` 与公共呈现模板 |
+| `SmsWorkbench/Themes/Controls.Buttons.xaml` | 220 | 主按钮、次按钮、危险按钮、紧凑胶囊与工具栏图标按钮样式 |
+| `SmsWorkbench/Themes/Controls.Inputs.xaml` | 362 | 单行/多行 `TextBox`、`PasswordBox`、`ComboBox`、`CheckBox` 与设置表单输入样式 |
+| `SmsWorkbench/Themes/Controls.DataGrid.xaml` | 147 | 账号表与任务表 `DataGrid` 行、表头、单元格与低饱和徽章样式 |
+| `SmsWorkbench/Themes/Controls.Sidebar.xaml` | 365 | 侧栏导航与底部工具坞按钮样式（`SidebarNavButtonStyle` / `IconNavButtonStyle` / `SidebarUtilityDockButtonStyle`）、折叠标签与分组标题样式 |
 
 三条规则，来自 WPF 的解析时机与类型而不是口味：
 
@@ -77,47 +81,50 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 
 ## 3. `MainWindow` 的组合方式
 
-`MainWindow.xaml`（73 行）现在只剩窗口骨架与五个 UserControl 的摆放；
-`MainWindow.xaml.cs` 与 16 个 `MainWindow.*.cs` 分部类合计 5201 行（2026-10-28 实测），
-按**功能**而不是按控件切分。五个控件的 code-behind 合计 958 行。
+`MainWindow.xaml`（127 行）只保留窗口骨架与五个 UserControl 的摆放；
+`MainWindow.xaml.cs` 与 19 个 `MainWindow.*.cs` 分部类（共 20 个文件）合计 2,915 行，
+按**功能**而不是按控件切分。
 
-| 分部类 | 行数 | 职责 |
+| 分部类 / 关联服务 | 行数 | 职责 |
 | --- | ---: | --- |
-| `MainWindow.xaml.cs` | 255 | 字段/依赖注入、`INotifyPropertyChanged`、窗口生命周期、主题与图标几何 |
-| `MainWindow.Commands.cs` | 49 | 工具栏命令（注册、支付、导出、体检）到 `IPaymentBatchService` / 后端的编排 |
-| `MainWindow.ContextMenu.cs` | 223 | 账户右键菜单与批量操作 |
-| `MainWindow.Detail.cs` | 287 | 详情面板外壳与按钮（数据在 `AccountDetailAssembler`） |
-| `MainWindow.Export.cs` | 190 | 导入/导出流程：选格式 → 收集 → 落盘 → 调用 converter（2026-11-01 拆分前 710 行） |
+| `MainWindow.xaml.cs` | 243 | 字段/依赖注入、`INotifyPropertyChanged`、窗口生命周期、主题与图标几何 |
+| `MainWindow.Commands.cs` | 51 | 工具栏命令（注册、支付、导出、体检）到 `IPaymentBatchService` / 后端的编排 |
+| `MainWindow.ContextMenu.cs` | 236 | 账户右键菜单与批量操作 |
+| `MainWindow.Detail.cs` | 102 | 详情面板入口委托（面板 XAML 在 `Dialogs/AccountDetailDialog.xaml`，数据在 `AccountDetailAssembler`） |
+| `MainWindow.Export.cs` | 125 | 导入/导出流程：选格式 → 收集 → 落盘 → 调用 converter |
 | `Services/AccountExportAssembler.cs` | 173 | 行 → TXT 凭据行 / 原始 session JSON；不引用任何 WPF 类型（`ModuleSizeTests` 钉住） |
-| `Dialogs/ExportDialogService.cs` | 504 | 导出格式、导出完成、账号批结果面板、导入目标四个对话框 |
-| `Dialogs/SmsProviderDialogService.cs` | 514 | 一键接码对话框：供应商目录、国家/档位、选择写回配置 |
+| `Dialogs/ExportDialogService.cs` | 429 | 导出格式、导出完成、账号批结果面板、导入目标四个 XAML 对话框编排 |
+| `Dialogs/SmsProviderDialogService.cs` | 341 | 一键接码对话框：供应商目录、国家/档位、选择写回配置 |
 | `Services/AccountRowFactory.cs` | 178 | 后端账号 JSON → `PoolRow`（含 identity 块渲染）；不引用任何 WPF 类型 |
 | `Services/BackendRunService.cs` | 129 | 后端运行的**非窗口**部分：捕获流、进度信封折叠、任务行结果 |
 | `Services/AccountRefreshPlan.cs` | 122 | accounts 载荷分类（全量/增量/形状漂移）与增量游标预算 |
-| `Services/DesktopEgress.cs` | 160 | 桌面进程唯一的直连 HTTP 入口：host 白名单（P7-B 后只剩 GitHub Release）、mailbox lane 代理（读 `proxy.lanes.mailbox.pool`，经 `ProxyInputNormalizer` 归一；坏值只丢代理不丢启动）、每请求一行日志 |
+| `Services/DesktopEgress.cs` | 160 | 桌面进程唯一的直连 HTTP 入口：host 白名单（仅 GitHub Release）、mailbox lane 代理、每请求一行日志 |
 | `SmsWorkbench.Contracts/DesktopEgressAllowlist.cs` | 32 | 允许直连的 host 集合（**仅 GitHub Release**；厂商目录已走 Python 通道），仅 HTTPS |
 | `Services/AccountDetailAssembler.cs` | 185 | 详情面板的数据：AT 解析、JSON 路径、脱敏明细 |
 | `Services/InboxReader.cs` | 43 | 收件箱失败文案与 OTP 提取 |
 | `Services/MailboxRowClassifier.cs` | 45 | CFWorker / ReMail / Smailr 行判别（注册与收件箱共用） |
-| `Interop/SmsVendorPayloadMapper.cs` | 96 | 后端 `provider-catalog`/`provider-balance` 载荷 → 对话框视图类型（P7-B） |
-| `Models/SmsProviderChoices.cs` | 84 | `SmsProviderCountryChoice` / `SmsProviderPriceTier`（从被删除的 wire 客户端搬出） |
-| `Models/MailItem.cs` | 25 | 收件箱消息模型（原 `MainWindow.Inbox.cs` 私有嵌套类） |
+| `Interop/SmsVendorPayloadMapper.cs` | 96 | 后端 `provider-catalog`/`provider-balance` 载荷 → 对话框视图类型 |
+| `Models/SmsProviderChoices.cs` | 84 | `SmsProviderCountryChoice` / `SmsProviderPriceTier` |
+| `Models/MailItem.cs` | 25 | 收件箱消息模型 |
 | `Services/AccountDeleteService.cs` | 88 | 批量删除命令、失败计数与临时文件清理；不引用任何 WPF 类型 |
-| `MainWindow.Helpers.cs` | 455 | 剪贴板、对话框、日志落盘与共用小工具 |
-| `MainWindow.Inbox.cs` | 301 | 收件箱与邮件详情对话框（供应商判别在 `MailboxRowClassifier`） |
-| `MainWindow.Language.cs` | 37 | EN/CN 切换：`Loc` 切换、偏好落盘、刷新缓存的展示串 |
-| `MainWindow.Navigation.cs` | 114 | 分页游标、筛选导航与选中行回退 |
-| `MainWindow.Payment.cs` | 68 | 支付链接提取窗口入场 |
-| `MainWindow.Pools.cs` | 385 | 池文件加载/切池/合并与增量应用（行映射在 `AccountRowFactory`） |
-| `MainWindow.Register.cs` | 403 | 注册/接码/测活动作的接线：CLI 参数交给 `BackendCommandPlanner`，批次邮箱文件交给 `RegistrationRequestBuilder`，三个选项对话框交给 `RegisterDialogService`（2026-11-01 拆分前 721 行） |
+| `MainWindow.Helpers.cs` | 451 | 剪贴板、对话框、日志落盘与共用小工具 |
+| `MainWindow.Inbox.cs` | 148 | 收件箱与邮件详情对话框（窗口在 `Dialogs/InboxDialogWindow.xaml`，判别在 `MailboxRowClassifier`） |
+| `MainWindow.Language.cs` | 33 | EN/CN 切换：`Loc` 切换、偏好落盘、刷新缓存的展示串 |
+| `MainWindow.Navigation.cs` | 147 | 分页游标、筛选导航与选中行回退 |
+| `MainWindow.Payment.cs` | 95 | 支付链接提取与协议绑卡支付窗口入场 |
+| `MainWindow.Pools.cs` | 53 | 池文件切池与刷新委托（协调逻辑在 `Services/PoolRefreshCoordinator.cs`，行映射在 `AccountRowFactory`） |
+| `MainWindow.Register.cs` | 232 | 注册/接码/测活动作接线：CLI 参数交给 `BackendCommandPlanner`，批次文件交给 `RegistrationRequestBuilder`，选项弹窗交给 `RegisterDialogService` |
 | `Services/RegistrationRequestBuilder.cs` | 115 | 选中行 → 临时邮箱批次文件；不引用任何 WPF 类型（`ModuleSizeTests` 钉住） |
 | `Models/RegistrationModels.cs` | 58 | `RegisterOptions` / `ScanOptions` / `MailboxFileSelection` / `PendingMailboxSelection` |
-| `Dialogs/RegisterDialogService.cs` | 323 | 一键注册 / 选中邮箱注册 / 账号测活三个选项对话框；默认并发数与初始数量由调用方传入 |
-| `MainWindow.Sidebar.cs` | 74 | 侧栏列宽动画（视觉状态在 `Sidebar` 控件里） |
-| `MainWindow.SmsProvider.cs` | 22 | 一进入口委托：对话框在 `SmsProviderDialogService`（拆分前 481 行） |
-| `MainWindow.Tasks.cs` | 533 | 任务列表、后端运行与取消（批量删除在 `AccountDeleteService`） |
-| `MainWindow.Theme.cs` | 113 | 浅/深主题切换：换色板字典 + DWM 标题栏 + `DesktopThemePreference` 落盘 |
-| `MainWindow.NavigationState.cs` | 56 | 侧栏「运行中」状态：`ActiveNavKey` DP、pending key 的交接与清除 |
+| `Dialogs/RegisterDialogService.cs` | 241 | 一键注册 / 选中邮箱注册 / 账号测活三个 XAML 选项对话框服务 |
+| `MainWindow.Shell.cs` | 74 | 托盘驻留、全局热键与外壳设置弹窗（`Dialogs/ShellSettingsDialog.xaml`）接线 |
+| `MainWindow.Sidebar.cs` | 100 | 侧栏列宽动画与路由同步（视觉状态在 `Sidebar` 控件里） |
+| `MainWindow.SmsProvider.cs` | 18 | 一键接码入口委托（对话框在 `SmsProviderDialogService`） |
+| `MainWindow.Tasks.cs` | 327 | 启动自检、任务列表、后端运行与取消（批量删除在 `AccountDeleteService`） |
+| `MainWindow.Theme.cs` | 139 | 浅/深/跟随系统三态主题切换：换色板字典 + DWM 标题栏 + `DesktopThemePreference` 落盘 |
+| `MainWindow.NavigationState.cs` | 33 | 侧栏「运行中」状态：`ActiveNavKey` DP、pending key 的交接与清除 |
+| `MainWindow.Update.cs` | 244 | 版本号展示、自动/手动检查更新与跳转 GitHub Release 下载页 |
+| `MainWindow.Workspace.cs` | 64 | 工作区一键备份与恢复动作接线（核心逻辑在 `Services/WorkspaceBackupService.cs`） |
 
 三条阅读要点：
 
@@ -342,19 +349,16 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 
 ## 7. 已知缺口与下一步
 
-0. **对话框已开始 XAML 化（2026-11-20）。** `ExportFormatDialog`、`AccountDetailDialog`、
-   `SmsProviderDialog` 三个从代码建 UI 改成 XAML + 可测 VM：
-   `ExportDialogService` 504→429 行、`SmsProviderDialogService` 515→345 行、
-   `MainWindow.Detail.cs` 287→116 行（面板整体搬进 `Dialogs/AccountDetailDialog.xaml`，
-   `PartialSizeTests` 的上限同步下调到 116）。行为经 `DesktopWindowSmokeTests`
-   在真实模板上断言：格式选择器 9 个 tag 与 CPA 预选、详情面板 4 个按钮各自只到一个
+0. **全部 14 个对话框已完成 XAML 化。** `Dialogs/` 下的 `AccountBatchProgressWindow`、`AccountDetailDialog`、
+   `AccountScanResultDialog`、`ChangeEmailDialog`、`ExportCompleteDialog`、`ExportFormatDialog`、
+   `ImportTargetDialog`、`InboxDialogWindow`、`InfoConfirmDialogWindow`、`RegisterOptionsDialog`、
+   `ScanOptionsDialog`、`SelectedRegisterOptionsDialog`、`ShellSettingsDialog`、`SmsProviderDialog`
+   均采用独立 `.xaml` 模板（`DialogFactory` 仅保留打开 XAML 弹窗的薄辅助入口），行为经
+   `DesktopWindowSmokeTests` 在真实模板上断言：格式选择器 9 个 tag 与 CPA 预选、详情面板 4 个按钮各自只到一个
    command、`CanStart=false` 时「开始接码」不可确认。
-   **仍留在代码里**：`AccountBatchProgressDialog`、`ChangeEmailDialogService`、
-   `RegisterDialogService`、`DialogFactory` 的辅助方法（`DialogFactory` 本身是共享
-   工厂，保留）。
 
 
-1. **`MainWindow.xaml` 已从 874 行降到 54 行（A0–A5 全部落地，2026-10-24）。**
+1. **`MainWindow.xaml` 已从早期 874 行收敛至 127 行骨架（A0–A5 全部落地）。**
    五个控件：`TitleBar`、`Sidebar`、`AccountFilterBar`、`AccountGridView`、
    `WorkbenchConsole`；`MainWindow.WindowChrome.cs` 与 `Themes/MainWindowResources.xaml`
    已删除，窗口级样式/转换器分别归入各自的控件字典或 `Themes/Controls.xaml`。

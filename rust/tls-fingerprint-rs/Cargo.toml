@@ -12,8 +12,6 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 pyo3 = { version = "0.30", features = ["extension-module", "abi3-py39"] }
 
-[profile.release]
-lto = true
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }

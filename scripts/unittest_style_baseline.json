@@ -1,13 +1,12 @@
 {
   "schema": "unittest_style.v1",
   "files": {
-    "accounts": 17,
+    "accounts": 16,
     "config": 7,
-    "governance": 6,
     "mailbox": 12,
     "payment": 26,
     "proxy": 7,
     "registration": 47,
-    "workbench": 14
+    "workbench": 12
   }
 }

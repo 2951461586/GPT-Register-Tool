@@ -6,8 +6,8 @@
 > [mailbox.md](mailbox.md); registration stages stay in
 > [registration-architecture.md](registration-architecture.md).
 >
-> **Owner.** `sms_tool/providers/mailbox_remail.py`. `sms_tool/mailbox/remail.py`
-> is a compatibility facade (ADR-0001) and holds no wire logic.
+> **Owner.** `sms_tool/providers/mailbox_remail.py` (the legacy `mailbox/remail`
+> compatibility facade from ADR-0001 was retired once all importers migrated).
 
 ## Source of truth
 

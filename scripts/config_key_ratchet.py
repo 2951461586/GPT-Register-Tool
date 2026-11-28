@@ -29,6 +29,7 @@ silent typo never gets.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import sys
@@ -48,11 +49,14 @@ def _section_keys(path: Path) -> dict[str, set]:
 
 
 def _validator_keys() -> dict[str, set]:
-    """Keys validate_config references under each watched section."""
+    """Keys validate_config (and its extracted _validate_* helpers) reference under each watched section."""
     src = (ROOT / "sms_tool" / "config" / "schema.py").read_text(encoding="utf-8")
-    i = src.find("def validate_config")
-    j = src.find("\ndef ", i + 5)
-    body = src[i:j]
+    tree = ast.parse(src)
+    body = "\n".join(
+        ast.get_source_segment(src, node) or ""
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and (node.name == "validate_config" or node.name.startswith("_validate_"))
+    )
     out = {s: set() for s in SECTIONS}
     for sec in SECTIONS:
         # Word-boundary the section name: ``email_registration.x`` contains the

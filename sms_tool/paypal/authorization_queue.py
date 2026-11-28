@@ -17,9 +17,15 @@ from typing import Any, Callable
 
 from ..kernel.paths import runtime_file
 from .protocol import extract_ba_token
-from ..kernel.sanitizer import sanitize_text
+from ..kernel.sanitizer import load_native_module, sanitize_text
 
 
+_NATIVE_PAYPAL_AUTH_QUEUE = load_native_module(
+    "paypal-auth-queue-rs",
+    "paypal_auth_queue_rs",
+    "RUST_ANYTHING_UNIT_PAYPAL_AUTH_QUEUE",
+)
+_NATIVE_ACCOUNT_REF = getattr(_NATIVE_PAYPAL_AUTH_QUEUE, "_account_ref", None)
 _LOCK = threading.Lock()
 _TERMINAL = {"completed", "failed", "cancelled", "unknown"}
 
@@ -187,6 +193,8 @@ def _public_item(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _account_ref(email: str) -> str:
+    if _NATIVE_ACCOUNT_REF is not None and (email is None or isinstance(email, str)):
+        return _NATIVE_ACCOUNT_REF(email)
     return hashlib.sha256(str(email or "").encode("utf-8")).hexdigest()[:16]
 
 

@@ -17,13 +17,13 @@ the *gate* (per-pair, only-down); this file is the *view*.
 
 | Measure | Value |
 | --- | ---: |
-| Modules | 305 |
-| Module-level import edges | 971 |
-| Delayed (function-local) edges | 309 |
+| Modules | 309 |
+| Module-level import edges | 992 |
+| Delayed (function-local) edges | 308 |
 | Type-only (`if TYPE_CHECKING`) edges | 66 |
 | Strongly connected components (size > 1) | 0 |
 | Modules inside a cycle | 0 |
-| Mutually dependent directory pairs | 14 |
+| Mutually dependent directory pairs | 13 |
 
 ## Cycles
 
@@ -46,24 +46,23 @@ None.
 | `sms_tool/payment` ↔ `sms_tool/store` |
 | `sms_tool/phone` ↔ `sms_tool/registration` |
 | `sms_tool/proxy` ↔ `sms_tool/transport` |
-| `sms_tool/registration` ↔ `sms_tool/registration_drivers` |
 
 ## Most imported modules
 
 | Module | Importers |
 | --- | ---: |
 | `sms_tool.config` | 60 |
-| `sms_tool.kernel.native_loader` | 50 |
+| `sms_tool.kernel.native_loader` | 54 |
 | `sms_tool.transport` | 33 |
 | `sms_tool.transport.endpoints` | 33 |
 | `sms_tool.kernel.sanitizer` | 31 |
 | `sms_tool.kernel.paths` | 30 |
-| `sms_tool.proxy.entry` | 27 |
+| `sms_tool.proxy.entry` | 28 |
 | `sms_tool.transport.auth_headers` | 26 |
-| `sms_tool.observability.operator_output` | 18 |
-| `sms_tool.transport.http_client` | 15 |
+| `sms_tool.observability.operator_output` | 20 |
+| `sms_tool.transport.http_client` | 16 |
 | `sms_tool.registration.state` | 12 |
-| `sms_tool.registration_drivers.base` | 12 |
 | `sms_tool.storage` | 12 |
+| `sms_tool.registration_drivers.base` | 11 |
 | `sms_tool.kernel.cross_process_gate` | 10 |
 | `sms_tool.kernel.failure_registry` | 10 |

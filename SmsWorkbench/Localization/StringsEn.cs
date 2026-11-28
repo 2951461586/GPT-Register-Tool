@@ -650,11 +650,11 @@ namespace SmsWorkbench.Localization
                 = "A backend task is already running. Wait for it to finish or cancel it before starting a batch payment.",
             ["已有批次正在运行，请先取消或等待完成。"] = "A batch is already running. Cancel it or wait for it to finish.",
             ["环境自检"] = "Environment check",
-            ["环境自检发现 {0} 项必需依赖缺失:\n  - {1}\n\n可先运行: python -m pip install -r requirements.txt -c constraints.txt\n或使用命令 python chatgpt_phone_reg.py --doctor 查看完整报告。"]
-                = "The environment check found {0} missing required dependencies:\n  - {1}\n\nTry: python -m pip install -r requirements.txt -c constraints.txt\nor run python chatgpt_phone_reg.py --doctor for the full report.",
+            ["环境自检发现 {0} 项必需依赖缺失:\n  - {1}\n\n可先运行: python -m pip install -r requirements.txt -c constraints.txt\n或使用命令 python -m sms_tool.cli --doctor 查看完整报告。"]
+                = "The environment check found {0} missing required dependencies:\n  - {1}\n\nTry: python -m pip install -r requirements.txt -c constraints.txt\nor run python -m sms_tool.cli --doctor for the full report.",
             ["无法启动 Python 后端"] = "Cannot start the Python backend",
-            ["{0}\n\n桌面端依赖 Python 3.10+ 与 requirements.txt/constraints.txt 中的依赖包。\n安装后在 设置 → 数据与文件 → 运行环境 配置解释器路径,再重启本程序。"]
-                = "{0}\n\nThe desktop app needs Python 3.10+ and the packages in requirements.txt/constraints.txt.\nAfter installing, set the interpreter path in Settings → Data & files → Runtime, then restart.",
+            ["{0}\n\n桌面端依赖 Python 3.12+ 与 requirements.txt/constraints.txt 中的依赖包。\n安装后在 设置 → 数据与文件 → 运行环境 配置解释器路径,再重启本程序。"]
+                = "{0}\n\nThe desktop app needs Python 3.12+ and the packages in requirements.txt/constraints.txt.\nAfter installing, set the interpreter path in Settings → Data & files → Runtime, then restart.",
             ["正在准备账号..."] = "Preparing accounts...",
             ["取消任务"] = "Cancel task",
             ["正在取消..."] = "Cancelling...",

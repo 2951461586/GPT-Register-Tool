@@ -6,8 +6,16 @@ import json
 import re
 from typing import Any, Mapping
 
+from ..transport.http_client import load_native_module
 from .bundle import SentinelBundleError, sentinel_version, validate_runtime_bundle
 from .native_ffi import SentinelNativeError, native_version, solve_challenge
+
+_NATIVE_SENTINEL_RUNNER_PARSE = load_native_module(
+    "sentinel-runner-parse-rs",
+    "sentinel_runner_parse_rs",
+    "RUST_ANYTHING_UNIT_SENTINEL_RUNNER_PARSE",
+)
+_NATIVE_IMPERSONATE_VERSION = getattr(_NATIVE_SENTINEL_RUNNER_PARSE, "_impersonate_version", None)
 
 
 class SentinelRunnerError(RuntimeError):
@@ -35,6 +43,8 @@ def _impersonate_family(impersonate: str) -> str:
 
 def _impersonate_version(impersonate: str) -> str:
     """Extract the numeric major version from an impersonate token (e.g. '144')."""
+    if _NATIVE_IMPERSONATE_VERSION is not None and (impersonate is None or isinstance(impersonate, str)):
+        return _NATIVE_IMPERSONATE_VERSION(impersonate)
     match = re.match(r"^[a-z]+(\d+)", str(impersonate or "").lower())
     return match.group(1) if match else ""
 

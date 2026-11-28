@@ -54,6 +54,7 @@ REQUIRED_IGNORES = {
     "native/*/target/**",
     "rust/*/target/**",
     "rust/*/.rust-anything/**",
+    "rust/*/python/**",
     "scripts/**",
     "dist/**",
     "runtime/**",
@@ -130,8 +131,10 @@ def test_every_required_exclusion_is_declared():
 
 
 def test_the_vendored_tree_stays_ignored():
-    """Compiled native runtime binaries stay excluded from the review graph."""
-    assert "sms_tool/sentinel/runtime/**" in _config()["ignore"]
+    """Compiled native runtime binaries and generated PyO3 wrappers stay excluded."""
+    ignore = _config()["ignore"]
+    assert "sms_tool/sentinel/runtime/**" in ignore
+    assert "rust/*/python/**" in ignore
 
 
 @pytest.mark.parametrize("path", IN_SCOPE)

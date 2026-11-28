@@ -99,10 +99,14 @@ def _check_doc_totals(doc_texts: dict[str, str], facts: dict[str, dict[str, obje
             f"**{gate_count} / {gate_count} `rust-anything gate` checks passing**",
         ),
         "README.md": (
+            f"[{crate_count} 个 PyO3 热点加速扩展]",
+            f"{crate_count} 个 `rust-anything` PyO3 扩展加速 {fn_count} 个热点函数",
             f"（{crate_count} 个 PyO3 热点扩展 · {fn_count} 函数）",
             f"{crate_count} 个由 `rust-anything` 管理的 PyO3 扩展加速 {fn_count} 个热点函数（{cases_fmt} 条录制用例",
         ),
         "README_EN.md": (
+            f"[{crate_count} PyO3 hot-path extensions]",
+            f"{crate_count} `rust-anything` PyO3 extensions accelerate {fn_count} hot CPU functions",
             f"({crate_count} PyO3 Hot-Path Crates · {fn_count} Functions)",
             f"{crate_count} `rust-anything`-managed PyO3 crates under `rust/` accelerate {fn_count} hot functions ({cases_fmt} recorded cases",
         ),
@@ -296,3 +300,27 @@ def test_rust_crates_guard_catches_unsafe_and_missing_export(tmp_path):
     assert any("missing_fn" in p for p in problems), problems
     assert any("forbidden unsafe keyword" in p for p in problems), problems
     assert not any("_alias_fn" in p for p in problems), problems
+
+
+def test_rust_crates_guard_accepts_shared_workspace_cargo_lock(tmp_path):
+    guard = _load_rust_crates_guard()
+    unit_file = tmp_path / "sms_tool" / "demo.py"
+    unit_file.parent.mkdir(parents=True)
+    unit_file.write_text("def real_fn(x):\n    return x\n", encoding="utf-8")
+
+    rust_root = tmp_path / "rust"
+    crate = rust_root / "demo-rs"
+    (crate / "src").mkdir(parents=True)
+    (rust_root / "Cargo.toml").write_text('[workspace]\nresolver = "2"\nmembers = ["demo-rs"]\n', encoding="utf-8")
+    (rust_root / "Cargo.lock").write_text("version = 4\n", encoding="utf-8")
+    (crate / "Cargo.toml").write_text('[package]\nname = "demo-rs"\nversion = "0.1.0"\n', encoding="utf-8")
+    (crate / "cases.jsonl").write_text('{"fn":"real_fn","args":[1],"result":1}\n', encoding="utf-8")
+    (crate / "rust-anything.json").write_text(
+        json.dumps({"unit": "sms_tool/demo.py", "functions": ["real_fn"]}),
+        encoding="utf-8",
+    )
+    (crate / "src" / "lib.rs").write_text("pub fn real_fn(x: i64) -> i64 { x }\n", encoding="utf-8")
+
+    crates, problems = guard.validate_crates(rust_dir=rust_root, repo_root=tmp_path)
+    assert len(crates) == 1
+    assert problems == []

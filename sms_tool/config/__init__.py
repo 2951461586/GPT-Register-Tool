@@ -66,5 +66,6 @@ from .schema import _log_config_warnings as _log_config_warnings
 from .schema import _validate_payment_config as _validate_payment_config
 from .schema import _validate_positive_numbers as _validate_positive_numbers
 from .schema import config_warnings as config_warnings
+from .schema import normalize_registration_driver as normalize_registration_driver
 from .schema import validate_config as validate_config
 from .schema import validate_registration_driver_config as validate_registration_driver_config

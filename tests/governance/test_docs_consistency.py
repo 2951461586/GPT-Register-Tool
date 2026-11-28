@@ -332,6 +332,37 @@ def test_a_bare_name_outside_the_declared_roots_is_not_indexed(tmp_path, monkeyp
     assert "WidgetGen.cs" in failures[0]
 
 
+def test_project_interior_csharp_ref_resolves_against_declared_roots(tmp_path, monkeypatch):
+    """Project-relative `Services/Foo.cs` resolves under `SmsWorkbench/` without weakening root-prefixed claims."""
+    assert (
+        _scan_csharp_doc(
+            tmp_path,
+            monkeypatch,
+            "Coordinator: `Services/WidgetCoordinator.cs`.\n",
+            {"SmsWorkbench/Services/WidgetCoordinator.cs": "class WidgetCoordinator {}\n"},
+        )
+        == []
+    )
+    failures = _scan_csharp_doc(
+        tmp_path,
+        monkeypatch,
+        "Coordinator: `Services/MissingCoordinator.cs`.\n",
+        {"SmsWorkbench/Services/WidgetCoordinator.cs": "class WidgetCoordinator {}\n"},
+    )
+    assert len(failures) == 1
+    assert "Services/MissingCoordinator.cs" in failures[0]
+
+
+def test_canonical_docs_tuple_covers_every_current_and_adr_markdown():
+    """Every `docs/current/*.md` and `docs/adr/*.md` file must be policed by `DOCS`."""
+    expected_current = {p.relative_to(scan.ROOT).as_posix() for p in (scan.ROOT / "docs" / "current").glob("*.md")}
+    expected_adr = {p.relative_to(scan.ROOT).as_posix() for p in (scan.ROOT / "docs" / "adr").glob("*.md")}
+    policed = set(scan.DOCS)
+    assert expected_current <= policed
+    assert expected_adr <= policed
+    assert "PROXY_GUIDE.md" in policed
+
+
 def _scan_path_doc(
     tmp_path,
     monkeypatch,

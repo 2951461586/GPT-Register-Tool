@@ -526,10 +526,18 @@ def test_summary_facts_are_pinned():
         # 528 -> 531 edges (+3 strictly inward -> kernel.native_loader edges for
         # pay_link/extract_server.py, paypal/reverse_protocol.py, accounts/wham_usage.py;
         # ordered_pairs=133, mutual_pairs=14, minority_edges=26 unchanged).
-        "total_module_edges": 531,
+        # 2026-11-28 (Driver vocabulary kernel downshift, stage-proxy health extraction,
+        # operator_output migration & Wave-15/16 Rust PyO3 migrations):
+        # 531 -> 538 edges (+4 Wave-16 strictly inward -> kernel.native_loader edges,
+        # +2 strictly inward -> observability.operator_output edges in accounts/account_scan
+        # & commands/payment, +1 registration_drivers/base -> kernel/driver_env and
+        # +1 paypal/proxy -> proxy/stage_health, offset by removing registration/orchestrator
+        # -> registration_drivers/base), ordered_pairs=133, mutual_pairs 14 -> 13 (-1,
+        # eliminating registration <-> registration_drivers), minority_edges 26 -> 25 (-1).
+        "total_module_edges": 538,
         "ordered_pairs": 133,
-        "mutual_pairs": 14,
-        "minority_edges": 26,
+        "mutual_pairs": 13,
+        "minority_edges": 25,
         # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
         # took over the mailbox_pool_writer and desktop_ipc imports as delayed
         # ones. Before that, 190 -> 188 when store/connection.py stopped
@@ -650,7 +658,12 @@ def test_summary_facts_are_pinned():
         # 2026-11-27 (Protocol card payment migration): 319 -> 316 (-3) after
         # consolidating repeated link_manager & desktop.ipc delayed imports in
         # commands/payment.py into shared helpers while adding zero module edges.
-        "delayed_cross_dir_edges": 316,
+        # 2026-11-28: 316 -> 310 (-6) after hoisting config/schema.py's three delayed
+        # registration_drivers imports to module-scope kernel.driver_env, moving
+        # proxy_key's strip_session_id call into same-package proxy/stage_health.py,
+        # and replacing commands/payment.py's function-local safe_print imports with
+        # module-scope observability.operator_output.emit.
+        "delayed_cross_dir_edges": 310,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
         # `pay_link` re-exports type-only (the module is not a package, so the

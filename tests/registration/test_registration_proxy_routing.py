@@ -358,18 +358,25 @@ def test_desktop_registration_proxy_resolver_has_no_payment_fallback():
       now travels through as no ``--proxy`` at all and the backend decides from
       ``proxy.default`` plus ``registration_network_preflight``.
     """
-    source = (ROOT / "SmsWorkbench" / "Views" / "MainWindow.Helpers.cs").read_text(encoding="utf-8")
-    method = source.split("private string GetRegistrationProxy()", 1)[1].split(
+    helper_source = (ROOT / "SmsWorkbench" / "Views" / "MainWindow.Helpers.cs").read_text(encoding="utf-8")
+    helper_method = helper_source.split("private string GetRegistrationProxy()", 1)[1].split(
         "private List<string> GetRegistrationProxyPool()", 1
     )[0]
+    assert "WorkbenchSettingsResolver.GetRegistrationProxy(settingsService)" in helper_method
 
-    registration = method.index('settingsService.GetString("proxy.registration")')
-    legacy = method.index('settingsService.GetString("registration_proxy")')
-    default = method.index('settingsService.GetString("proxy.default")')
+    resolver_source = (ROOT / "SmsWorkbench" / "Services" / "WorkbenchSettingsResolver.cs").read_text(encoding="utf-8")
+    method = resolver_source.split("public static string GetRegistrationProxy(", 1)[1].split(
+        "public static List<string> GetRegistrationProxyPool(", 1
+    )[0]
+
+    registration = method.index('settings.GetString("proxy.registration")')
+    legacy = method.index('settings.GetString("registration_proxy")')
+    default = method.index('settings.GetString("proxy.default")')
     assert registration < legacy < default
-    assert "paypal" not in method.lower()
-    assert "LocalNonPaymentProxy" not in method
-    assert "127.0.0.1" not in method
+    for chunk in (helper_method, method):
+        assert "paypal" not in chunk.lower()
+        assert "LocalNonPaymentProxy" not in chunk
+        assert "127.0.0.1" not in chunk
 
 
 def test_cli_registration_proxy_prefers_healthiest_via_tracker():

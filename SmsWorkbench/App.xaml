@@ -31,6 +31,7 @@
         <ResourceDictionary Source="Themes/Controls.Buttons.xaml"/>
         <ResourceDictionary Source="Themes/Controls.Inputs.xaml"/>
         <ResourceDictionary Source="Themes/Controls.DataGrid.xaml"/>
+        <ResourceDictionary Source="Themes/Controls.Sidebar.xaml"/>
       </ResourceDictionary.MergedDictionaries>
       <loc:PoolSummaryConverter x:Key="PoolSummaryConverter"/>
     </ResourceDictionary>

@@ -22,6 +22,7 @@ import urllib.parse
 import uuid
 from typing import Any
 
+from ..kernel.native_loader import load_native_module
 from ..transport import endpoints
 from ..transport.auth_headers import (
     auth_impersonate,
@@ -32,6 +33,12 @@ from ..transport.auth_headers import (
 from ..transport.http_client import request_with_retry
 
 logger = logging.getLogger(__name__)
+_NATIVE_ACCOUNT_2FA_REAUTH = load_native_module(
+    "account-2fa-reauth-rs", "account_2fa_reauth_rs", "RUST_ANYTHING_UNIT_ACCOUNT_2FA_REAUTH"
+)
+_NATIVE_NEEDS_REAUTH = (
+    getattr(_NATIVE_ACCOUNT_2FA_REAUTH, "_needs_reauth", None) if _NATIVE_ACCOUNT_2FA_REAUTH is not None else None
+)
 
 
 def _impersonate() -> str:
@@ -266,7 +273,9 @@ def _totp_already_enabled(info: dict[str, Any] | None) -> bool:
 
 
 def _needs_reauth(error: BaseException) -> bool:
-    text = str(error).lower()
+    if _NATIVE_NEEDS_REAUTH is not None:
+        return _NATIVE_NEEDS_REAUTH(error if error is None or isinstance(error, str) else str(error))
+    text = str(error or "").lower()
     return any(
         token in text
         for token in (

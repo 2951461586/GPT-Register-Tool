@@ -1,0 +1,43 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/sentinel/client.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "sentinel-client-digest-rs",
+  "exports": [
+    {
+      "name": "_secret_digest",
+      "file": "sms_tool/sentinel/client.py",
+      "line": 765,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "issue_sentinel_flow",
+      "file": "sms_tool/sentinel/client.py",
+      "line": 681,
+      "reason": "stays in Python (HTTP challenge fetch and FFI orchestration)"
+    },
+    {
+      "name": "issue_checkout_sentinel_pair",
+      "file": "sms_tool/sentinel/client.py",
+      "line": 801,
+      "reason": "stays in Python (TTL cache lock and network challenge flow)"
+    }
+  ]
+}

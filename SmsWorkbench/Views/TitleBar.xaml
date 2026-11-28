@@ -5,8 +5,9 @@
              xmlns:loc="clr-namespace:SmsWorkbench.Localization">
   <!-- Minimal frameless chrome title bar (DeepAI Code style): sits directly on
        Surface.Chrome above the floating framed workspace sheet. Left carries a
-       drag surface with an ambient running pill (visible only while a batch is
-       active); right carries three identical 46x38 OS caption buttons. -->
+       drag surface with TitleBarStatusPill (visible only while a batch is
+       active); right carries three identical 46x38 OS caption buttons sharing
+       one parameterized ControlTemplate (Tag holds the Path Geometry). -->
   <UserControl.Resources>
     <Style x:Key="CaptionWindowButtonStyle" TargetType="Button">
       <Setter Property="Width" Value="46"/>
@@ -18,62 +19,8 @@
       <Setter Property="Cursor" Value="Arrow"/>
       <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingStyle}"/>
       <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
-    </Style>
-  </UserControl.Resources>
-
-  <Grid Height="38" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown" Background="Transparent">
-    <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="*"/>
-      <ColumnDefinition Width="Auto"/>
-    </Grid.ColumnDefinitions>
-
-    <!-- Ambient batch status pill: hidden at rest to keep the top chrome calm;
-         appears cleanly while a background batch runs. -->
-    <Border Grid.Column="0"
-            HorizontalAlignment="Left"
-            VerticalAlignment="Center"
-            Margin="4,0,0,0"
-            Padding="10,3"
-            CornerRadius="{StaticResource Corner.Lg}"
-            Background="{DynamicResource Surface.Card}"
-            BorderBrush="{DynamicResource WorkspaceFrameOutline}"
-            BorderThickness="1"
-            IsHitTestVisible="False">
-      <Border.Style>
-        <Style TargetType="Border">
-          <Setter Property="Visibility" Value="Visible"/>
-          <Style.Triggers>
-            <DataTrigger Binding="{Binding ActiveNavKey, RelativeSource={RelativeSource AncestorType=Window}}" Value="">
-              <Setter Property="Visibility" Value="Collapsed"/>
-            </DataTrigger>
-            <DataTrigger Binding="{Binding ActiveNavKey, RelativeSource={RelativeSource AncestorType=Window}}" Value="{x:Null}">
-              <Setter Property="Visibility" Value="Collapsed"/>
-            </DataTrigger>
-          </Style.Triggers>
-        </Style>
-      </Border.Style>
-      <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-        <Ellipse Width="6"
-                 Height="6"
-                 Fill="{DynamicResource AccentIndicator}"
-                 VerticalAlignment="Center"
-                 Margin="0,0,7,0"/>
-        <TextBlock Text="{loc:Tr Key='批次运行中'}"
-                   Style="{StaticResource Text.Caption}"
-                   Foreground="{DynamicResource TextMain}"
-                   VerticalAlignment="Center"/>
-      </StackPanel>
-    </Border>
-
-    <!-- Window control buttons: unified 46x38 hit targets, uniform 10x10 optical
-         glyphs (Icon.Stroke.Chrome = 1.15), identical opacity/scale motion. -->
-    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Stretch">
-      <!-- Minimize button -->
-      <Button x:Name="MinimizeButton"
-              Style="{StaticResource CaptionWindowButtonStyle}"
-              Click="MinimizeButton_Click"
-              ToolTip="{loc:Tr Key='最小化'}">
-        <Button.Template>
+      <Setter Property="Template">
+        <Setter.Value>
           <ControlTemplate TargetType="Button">
             <Grid Background="Transparent">
               <Border x:Name="HoverFill"
@@ -89,124 +36,7 @@
                     Height="10"
                     Stretch="None"
                     SnapsToDevicePixels="True"
-                    Data="{StaticResource Glyph.WindowMinimize}"
-                    Stroke="{DynamicResource IconMuted}"
-                    StrokeThickness="{StaticResource Icon.Stroke.Chrome}"
-                    StrokeStartLineCap="Round"
-                    StrokeEndLineCap="Round"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    RenderTransformOrigin="0.5,0.5">
-                <Path.RenderTransform>
-                  <ScaleTransform ScaleX="1" ScaleY="1"/>
-                </Path.RenderTransform>
-              </Path>
-            </Grid>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="GlyphPath" Property="Stroke" Value="{DynamicResource TextMain}"/>
-                <Trigger.EnterActions>
-                  <BeginStoryboard>
-                    <Storyboard>
-                      <DoubleAnimation Storyboard.TargetName="HoverFill"
-                                       Storyboard.TargetProperty="Opacity"
-                                       To="1"
-                                       Duration="0:0:0.11">
-                        <DoubleAnimation.EasingFunction>
-                          <CubicEase EasingMode="EaseOut"/>
-                        </DoubleAnimation.EasingFunction>
-                      </DoubleAnimation>
-                    </Storyboard>
-                  </BeginStoryboard>
-                </Trigger.EnterActions>
-                <Trigger.ExitActions>
-                  <BeginStoryboard>
-                    <Storyboard>
-                      <DoubleAnimation Storyboard.TargetName="HoverFill"
-                                       Storyboard.TargetProperty="Opacity"
-                                       To="0"
-                                       Duration="0:0:0.15">
-                        <DoubleAnimation.EasingFunction>
-                          <CubicEase EasingMode="EaseOut"/>
-                        </DoubleAnimation.EasingFunction>
-                      </DoubleAnimation>
-                    </Storyboard>
-                  </BeginStoryboard>
-                </Trigger.ExitActions>
-              </Trigger>
-              <Trigger Property="IsPressed" Value="True">
-                <Trigger.EnterActions>
-                  <BeginStoryboard>
-                    <Storyboard>
-                      <DoubleAnimation Storyboard.TargetName="PressedFill"
-                                       Storyboard.TargetProperty="Opacity"
-                                       To="1"
-                                       Duration="0:0:0.06"/>
-                      <DoubleAnimation Storyboard.TargetName="GlyphPath"
-                                       Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
-                                       To="0.9"
-                                       Duration="0:0:0.06"/>
-                      <DoubleAnimation Storyboard.TargetName="GlyphPath"
-                                       Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
-                                       To="0.9"
-                                       Duration="0:0:0.06"/>
-                    </Storyboard>
-                  </BeginStoryboard>
-                </Trigger.EnterActions>
-                <Trigger.ExitActions>
-                  <BeginStoryboard>
-                    <Storyboard>
-                      <DoubleAnimation Storyboard.TargetName="PressedFill"
-                                       Storyboard.TargetProperty="Opacity"
-                                       To="0"
-                                       Duration="0:0:0.12"/>
-                      <DoubleAnimation Storyboard.TargetName="GlyphPath"
-                                       Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
-                                       To="1"
-                                       Duration="0:0:0.10"/>
-                      <DoubleAnimation Storyboard.TargetName="GlyphPath"
-                                       Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
-                                       To="1"
-                                       Duration="0:0:0.10"/>
-                    </Storyboard>
-                  </BeginStoryboard>
-                </Trigger.ExitActions>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Button.Template>
-      </Button>
-
-      <!-- Maximize / Restore button -->
-      <Button x:Name="MaximizeButton"
-              Click="MaximizeButton_Click">
-        <Button.Style>
-          <Style TargetType="Button" BasedOn="{StaticResource CaptionWindowButtonStyle}">
-            <Setter Property="ToolTip" Value="{loc:Tr Key='最大化'}"/>
-            <Style.Triggers>
-              <DataTrigger Binding="{Binding IsWindowMaximized, RelativeSource={RelativeSource AncestorType=local:TitleBar}}" Value="True">
-                <Setter Property="ToolTip" Value="{loc:Tr Key='还原'}"/>
-              </DataTrigger>
-            </Style.Triggers>
-          </Style>
-        </Button.Style>
-        <Button.Template>
-          <ControlTemplate TargetType="Button">
-            <Grid Background="Transparent">
-              <Border x:Name="HoverFill"
-                      Background="{DynamicResource WindowControlHover}"
-                      Opacity="0"
-                      IsHitTestVisible="False"/>
-              <Border x:Name="PressedFill"
-                      Background="{DynamicResource WindowControlPressed}"
-                      Opacity="0"
-                      IsHitTestVisible="False"/>
-              <Path x:Name="GlyphPath"
-                    Width="10"
-                    Height="10"
-                    Stretch="None"
-                    SnapsToDevicePixels="True"
-                    Data="{StaticResource Glyph.WindowMaximize}"
+                    Data="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
                     Stroke="{DynamicResource IconMuted}"
                     StrokeThickness="{StaticResource Icon.Stroke.Chrome}"
                     StrokeStartLineCap="Round"
@@ -221,9 +51,6 @@
               </Path>
             </Grid>
             <ControlTemplate.Triggers>
-              <DataTrigger Binding="{Binding IsWindowMaximized, RelativeSource={RelativeSource AncestorType=local:TitleBar}}" Value="True">
-                <Setter TargetName="GlyphPath" Property="Data" Value="{StaticResource Glyph.WindowRestore}"/>
-              </DataTrigger>
               <Trigger Property="IsMouseOver" Value="True">
                 <Setter TargetName="GlyphPath" Property="Stroke" Value="{DynamicResource TextMain}"/>
                 <Trigger.EnterActions>
@@ -295,15 +122,13 @@
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
-        </Button.Template>
-      </Button>
+        </Setter.Value>
+      </Setter>
+    </Style>
 
-      <!-- Close button -->
-      <Button x:Name="CloseButton"
-              Style="{StaticResource CaptionWindowButtonStyle}"
-              Click="CloseButton_Click"
-              ToolTip="{loc:Tr Key='关闭'}">
-        <Button.Template>
+    <Style x:Key="DangerCaptionWindowButtonStyle" TargetType="Button" BasedOn="{StaticResource CaptionWindowButtonStyle}">
+      <Setter Property="Template">
+        <Setter.Value>
           <ControlTemplate TargetType="Button">
             <Grid Background="Transparent">
               <Border x:Name="HoverFill"
@@ -319,7 +144,7 @@
                     Height="10"
                     Stretch="None"
                     SnapsToDevicePixels="True"
-                    Data="{StaticResource Glyph.WindowClose}"
+                    Data="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
                     Stroke="{DynamicResource IconMuted}"
                     StrokeThickness="{StaticResource Icon.Stroke.Chrome}"
                     StrokeStartLineCap="Round"
@@ -405,8 +230,47 @@
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
-        </Button.Template>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </UserControl.Resources>
+
+  <Grid Height="38" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown" Background="Transparent">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*"/>
+      <ColumnDefinition Width="Auto"/>
+    </Grid.ColumnDefinitions>
+
+    <local:TitleBarStatusPill Grid.Column="0"/>
+
+    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Stretch">
+      <Button x:Name="MinimizeButton"
+              Style="{StaticResource CaptionWindowButtonStyle}"
+              Tag="{StaticResource Glyph.WindowMinimize}"
+              Click="MinimizeButton_Click"
+              ToolTip="{loc:Tr Key='最小化'}"/>
+
+      <Button x:Name="MaximizeButton"
+              Click="MaximizeButton_Click">
+        <Button.Style>
+          <Style TargetType="Button" BasedOn="{StaticResource CaptionWindowButtonStyle}">
+            <Setter Property="Tag" Value="{StaticResource Glyph.WindowMaximize}"/>
+            <Setter Property="ToolTip" Value="{loc:Tr Key='最大化'}"/>
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding IsWindowMaximized, RelativeSource={RelativeSource AncestorType=local:TitleBar}}" Value="True">
+                <Setter Property="Tag" Value="{StaticResource Glyph.WindowRestore}"/>
+                <Setter Property="ToolTip" Value="{loc:Tr Key='还原'}"/>
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Button.Style>
       </Button>
+
+      <Button x:Name="CloseButton"
+              Style="{StaticResource DangerCaptionWindowButtonStyle}"
+              Tag="{StaticResource Glyph.WindowClose}"
+              Click="CloseButton_Click"
+              ToolTip="{loc:Tr Key='关闭'}"/>
     </StackPanel>
   </Grid>
 </UserControl>

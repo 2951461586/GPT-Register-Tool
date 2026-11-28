@@ -16,12 +16,11 @@ from __future__ import annotations
 
 import ast
 import re
-import unittest
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _NORMALIZE = PROJECT_ROOT / "sms_tool" / "store" / "normalize.py"
-_INTERPRETER = PROJECT_ROOT / "SmsWorkbench" / "Views" / "AccountStatusInterpreter.cs"
+_INTERPRETER = PROJECT_ROOT / "SmsWorkbench" / "Services" / "AccountStatusInterpreter.cs"
 
 # Python 会产出、但 C# 不需要显式认得的词 —— 每个都要写清理由。
 _CS_EXEMPT = {
@@ -88,41 +87,41 @@ def csharp_recognised_statuses(cs_text: str) -> set[str]:
     return set(_CS_STATUS_EQUALS.findall(cs_text))
 
 
-class StatusVocabularyCrossLanguage(unittest.TestCase):
-    def setUp(self):
-        self.vocab = python_status_vocabulary()
-        self.known = csharp_recognised_statuses(_INTERPRETER.read_text(encoding="utf-8"))
-
-    def test_python_vocabulary_is_not_empty(self):
-        """防假绿：提取器静默变空会让下面的比较全部退化成空集相等。"""
-        self.assertTrue(self.vocab, "Python 状态词提取为空 —— 提取器坏了")
-        self.assertIn("network_failed", self.vocab)
-
-    def test_csharp_vocabulary_is_not_empty(self):
-        self.assertTrue(self.known, "C# 状态词提取为空 —— 提取器坏了")
-        self.assertIn("account_deactivated", self.known)
-
-    def test_every_python_status_is_recognised_by_csharp(self):
-        missing = sorted(self.vocab - self.known - _CS_EXEMPT)
-        self.assertEqual(
-            [],
-            missing,
-            "Python 会产出但 C# 不认得的账号状态 —— 这些会掉进 "
-            '``if (hasRt && access.Length > 0) return "已注册";`` 被误报成健康账号：\n'
-            + "\n".join(f"  - {m}" for m in missing),
-        )
-
-    def test_exempt_list_has_no_dead_entries(self):
-        """负向测试：白名单里的词必须**真的**还在 Python 侧，否则条目已经腐烂。"""
-        stale = sorted(_CS_EXEMPT - self.vocab)
-        self.assertEqual([], stale, f"_CS_EXEMPT 里的词已不再产出，应删掉: {stale}")
-
-    def test_failure_vocabulary_is_covered(self):
-        """P1-5 引入的失败词汇是这次漂移的主角，单独断言一次。"""
-        for word in ("network_failed", "mailbox_failed", "auth_state_failed", "rate_limited"):
-            self.assertIn(word, self.vocab, f"{word} 不在 Python 产出里了？")
-            self.assertIn(word, self.known, f"C# 不认得 {word} —— 会误报成「已注册」")
+def test_python_vocabulary_is_not_empty() -> None:
+    """防假绿：提取器静默变空会让下面的比较全部退化成空集相等。"""
+    vocab = python_status_vocabulary()
+    assert vocab, "Python 状态词提取为空 —— 提取器坏了"
+    assert "network_failed" in vocab
 
 
-if __name__ == "__main__":  # pragma: no cover
-    unittest.main()
+def test_csharp_vocabulary_is_not_empty() -> None:
+    known = csharp_recognised_statuses(_INTERPRETER.read_text(encoding="utf-8"))
+    assert known, "C# 状态词提取为空 —— 提取器坏了"
+    assert "account_deactivated" in known
+
+
+def test_every_python_status_is_recognised_by_csharp() -> None:
+    vocab = python_status_vocabulary()
+    known = csharp_recognised_statuses(_INTERPRETER.read_text(encoding="utf-8"))
+    missing = sorted(vocab - known - _CS_EXEMPT)
+    assert missing == [], (
+        "Python 会产出但 C# 不认得的账号状态 —— 这些会掉进 "
+        '``if (hasRt && access.Length > 0) return "已注册";`` 被误报成健康账号：\n'
+        + "\n".join(f"  - {m}" for m in missing)
+    )
+
+
+def test_exempt_list_has_no_dead_entries() -> None:
+    """负向测试：白名单里的词必须**真的**还在 Python 侧，否则条目已经腐烂。"""
+    vocab = python_status_vocabulary()
+    stale = sorted(_CS_EXEMPT - vocab)
+    assert stale == [], f"_CS_EXEMPT 里的词已不再产出，应删掉: {stale}"
+
+
+def test_failure_vocabulary_is_covered() -> None:
+    """P1-5 引入的失败词汇是这次漂移的主角，单独断言一次。"""
+    vocab = python_status_vocabulary()
+    known = csharp_recognised_statuses(_INTERPRETER.read_text(encoding="utf-8"))
+    for word in ("network_failed", "mailbox_failed", "auth_state_failed", "rate_limited"):
+        assert word in vocab, f"{word} 不在 Python 产出里了？"
+        assert word in known, f"C# 不认得 {word} —— 会误报成「已注册」"

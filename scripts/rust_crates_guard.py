@@ -12,7 +12,8 @@ introduced ``unsafe`` block, or a corrupted ``cases.jsonl`` could land on
 What this script checks
 -----------------------
 1. Every ``rust/*-rs/`` directory carries ``rust-anything.json``, ``Cargo.toml``,
-   ``Cargo.lock``, ``src/lib.rs``, and non-empty valid ``cases.jsonl`` (strict
+   ``src/lib.rs``, a lockfile (either ``<crate>/Cargo.lock`` or the shared
+   workspace ``rust/Cargo.lock``), and non-empty valid ``cases.jsonl`` (strict
    ``\\n`` splitting so Unicode line separators inside JSON strings stay intact).
 2. Each manifest's ``unit`` resolves to an existing Python file in the repo and
    every declared exported function exists in that file's AST.
@@ -85,11 +86,14 @@ def validate_crates(rust_dir: Path = RUST_DIR, repo_root: Path = ROOT) -> tuple[
         return [], [f"no rust/*-rs crates found under {rust_dir}"]
 
     ast_cache: dict[Path, set[str]] = {}
+    workspace_lock = (rust_dir / "Cargo.toml").is_file() and (rust_dir / "Cargo.lock").is_file()
     for crate in crates:
         name = crate.name
-        for required in ("rust-anything.json", "Cargo.toml", "Cargo.lock", "src/lib.rs", "cases.jsonl"):
+        for required in ("rust-anything.json", "Cargo.toml", "src/lib.rs", "cases.jsonl"):
             if not (crate / required).is_file():
                 problems.append(f"{name}: missing required file {required}")
+        if not workspace_lock and not (crate / "Cargo.lock").is_file():
+            problems.append(f"{name}: missing required file Cargo.lock (and no workspace rust/Cargo.lock)")
 
         manifest_path = crate / "rust-anything.json"
         if manifest_path.is_file():
@@ -161,6 +165,24 @@ def run_cargo_checks(crates: list[Path], *, target_dir: Path | None = None) -> l
     shared_target = target_dir or Path(env.get("CARGO_TARGET_DIR") or (Path(tempfile.gettempdir()) / "gpt_rs_check"))
     shared_target.mkdir(parents=True, exist_ok=True)
     env["CARGO_TARGET_DIR"] = str(shared_target)
+
+    if crates:
+        ws_manifest = crates[0].parent / "Cargo.toml"
+        if ws_manifest.is_file():
+            proc = subprocess.run(
+                ["cargo", "check", "--manifest-path", str(ws_manifest), "--workspace", "--quiet"],
+                env=env,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+            )
+            if proc.returncode == 0:
+                return []
+            detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+            tail = " | ".join(detail[-6:]) if detail else f"exit {proc.returncode}"
+            return [f"workspace cargo check failed: {tail}"]
 
     failures: list[str] = []
     for crate in crates:

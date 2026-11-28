@@ -1,0 +1,56 @@
+<UserControl x:Class="SmsWorkbench.Views.SidebarFooterBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:SmsWorkbench.Localization"
+             xmlns:local="clr-namespace:SmsWorkbench.Views">
+  <!-- Sticky Footer inside Sidebar: Cancel Batch + Settings + responsive 3-up Shell/Theme/Language dock -->
+  <StackPanel Margin="0,4,0,0">
+    <Border Height="1" Background="{DynamicResource Divider}" Margin="6,2,6,6" SnapsToDevicePixels="True"/>
+    <local:IconNavButton Style="{StaticResource IconNavButtonStyle}"
+                         IconGeometry="{StaticResource Glyph.CancelBatch}"
+                         Text="{loc:Tr Key='取消批次'}"
+                         Command="{Binding NavCommand}"
+                         CommandParameter="cancelbatch"/>
+    <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='设置'}"
+                         Style="{StaticResource IconNavButtonStyle}"
+                         IconGeometry="{StaticResource Glyph.Settings}"
+                         Text="{loc:Tr Key='设置'}"
+                         Command="{Binding NavCommand}"
+                         CommandParameter="settings"/>
+
+    <!-- Utility Dock: horizontal 3-up strip when expanded; vertical icon stack when collapsed -->
+    <UniformGrid Margin="0,4,0,0">
+      <UniformGrid.Style>
+        <Style TargetType="UniformGrid">
+          <Setter Property="Rows" Value="1"/>
+          <Setter Property="Columns" Value="3"/>
+          <Style.Triggers>
+            <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:Sidebar}, FallbackValue=False}" Value="True">
+              <Setter Property="Rows" Value="3"/>
+              <Setter Property="Columns" Value="1"/>
+            </DataTrigger>
+          </Style.Triggers>
+        </Style>
+      </UniformGrid.Style>
+      <local:IconNavButton Style="{StaticResource SidebarUtilityDockButtonStyle}"
+                           IconGeometry="{StaticResource Glyph.Key}"
+                           Text="{loc:Tr Key='外壳'}"
+                           ToolTip="{loc:Tr Key='外壳设置'}"
+                           Command="{Binding NavCommand}"
+                           CommandParameter="shell"/>
+      <local:IconNavButton Style="{StaticResource SidebarUtilityDockButtonStyle}"
+                           IconGeometry="{Binding ThemeIconGeometry}"
+                           Text="{loc:Tr Key='主题'}"
+                           ToolTip="{Binding ThemeModeLabel}"
+                           Command="{Binding NavCommand}"
+                           CommandParameter="theme"/>
+      <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='切换语言'}"
+                           Style="{StaticResource SidebarUtilityDockButtonStyle}"
+                           IconGeometry="{StaticResource Glyph.Language}"
+                           Text="{loc:Tr Key='语言'}"
+                           ToolTip="{loc:Tr Key='切换语言'}"
+                           Command="{Binding NavCommand}"
+                           CommandParameter="language"/>
+    </UniformGrid>
+  </StackPanel>
+</UserControl>

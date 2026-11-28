@@ -1,12 +1,10 @@
 {
   "sms_tool/accounts/account_events.py": 1,
-  "sms_tool/accounts/account_scan.py": 19,
   "sms_tool/auth_flow/password_step.py": 4,
   "sms_tool/auth_flow/signup.py": 5,
   "sms_tool/auth_flow/steps.py": 1,
   "sms_tool/codex/export.py": 1,
   "sms_tool/commands/mailbox_ops.py": 4,
-  "sms_tool/commands/payment.py": 5,
   "sms_tool/config/runtime.py": 1,
   "sms_tool/desktop/ipc.py": 3,
   "sms_tool/doctor.py": 5,

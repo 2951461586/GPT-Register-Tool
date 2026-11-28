@@ -17,7 +17,6 @@ non-Latin-1 ``print`` there aborts the step (see MEMORY.md).
 
 import ast
 import re
-import unittest
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -97,101 +96,86 @@ def _python_string_tuples(path):
     return simple, values
 
 
-class MarkerParityTests(unittest.TestCase):
-    def test_sources_are_readable(self):
-        self.assertTrue(CS_MARKERS.is_file(), f"missing {CS_MARKERS}")
-        self.assertTrue(PY_MARKERS.is_file(), f"missing {PY_MARKERS}")
-
-    def test_paired_markers_have_identical_values(self):
-        cs = _csharp_constants(CS_MARKERS)
-        py = _python_constants(PY_MARKERS)
-        for py_name, cs_name in PAIRED_MARKERS.items():
-            with self.subTest(python=py_name, csharp=cs_name):
-                self.assertIn(cs_name, cs, f"C# constant {cs_name} not found")
-                self.assertIn(py_name, py, f"Python constant {py_name} not found")
-                self.assertEqual(
-                    py[py_name],
-                    cs[cs_name],
-                    "marker drift: the host matches Python stdout by substring, so these two must stay byte-identical",
-                )
-
-    def test_markers_are_non_empty_and_defined(self):
-        cs = _csharp_constants(CS_MARKERS)
-        py = _python_constants(PY_MARKERS)
-        for py_name, cs_name in PAIRED_MARKERS.items():
-            with self.subTest(python=py_name):
-                self.assertTrue(py[py_name].strip())
-                self.assertTrue(cs[cs_name].strip())
+def test_sources_are_readable() -> None:
+    assert CS_MARKERS.is_file(), f"missing {CS_MARKERS}"
+    assert PY_MARKERS.is_file(), f"missing {PY_MARKERS}"
 
 
-class AccountStateMarkerParityTests(unittest.TestCase):
-    """Account-state markers live in both languages and must not drift."""
-
-    def test_deactivation_markers_match(self):
-        cs = _csharp_string_arrays(CS_MARKERS)
-        py_tuples, _ = _python_string_tuples(PY_STATE)
-        for py_name, cs_name in PAIRED_LISTS.items():
-            with self.subTest(python=py_name, csharp=cs_name):
-                self.assertIn(cs_name, cs)
-                self.assertIn(py_name, py_tuples)
-                self.assertEqual(py_tuples[py_name], cs[cs_name])
-
-    def test_at_invalid_is_the_union_of_both_csharp_lists(self):
-        cs = _csharp_string_arrays(CS_MARKERS)
-        py_tuples, _ = _python_string_tuples(PY_STATE)
-        for py_name, (first, second) in UNION_LISTS.items():
-            with self.subTest(python=py_name):
-                self.assertEqual(
-                    py_tuples[py_name],
-                    cs[first] + cs[second],
-                    "AT_INVALID_MARKERS must equal AtInvalid + AccountDeactivated",
-                )
-
-    def test_misspelled_marker_is_still_present_on_both_sides(self):
-        """Older releases wrote "account_deatived"; on-disk sessions still have it."""
-        cs = _csharp_string_arrays(CS_MARKERS)
-        py_tuples, _ = _python_string_tuples(PY_STATE)
-        self.assertIn("account_deatived", cs["AccountDeactivated"])
-        self.assertIn("account_deatived", py_tuples["ACCOUNT_DEACTIVATED_MARKERS"])
-
-    def test_csharp_uses_the_shared_lists_not_inline_literals(self):
-        source = (PROJECT_ROOT / "SmsWorkbench" / "Views" / "AccountStatusInterpreter.cs").read_text(
-            encoding="utf-8-sig"
+def test_paired_markers_have_identical_values() -> None:
+    cs = _csharp_constants(CS_MARKERS)
+    py = _python_constants(PY_MARKERS)
+    for py_name, cs_name in PAIRED_MARKERS.items():
+        assert cs_name in cs, f"C# constant {cs_name} not found"
+        assert py_name in py, f"Python constant {py_name} not found"
+        assert py[py_name] == cs[cs_name], (
+            "marker drift: the host matches Python stdout by substring, so these two must stay byte-identical"
         )
-        self.assertIn("BackendTextMarkers.AtInvalid", source)
-        self.assertIn("BackendTextMarkers.AccountDeactivated", source)
-        # the old inline chain must be gone
-        for literal in ('text.Contains("account_deatived")', 'text.Contains("token_invalidated")'):
-            self.assertNotIn(literal, source)
 
 
-class MarkerUsageTests(unittest.TestCase):
-    """A constant that exists but is bypassed is worse than no constant."""
-
-    def test_python_prints_through_the_constant(self):
-        source = PY_MARKERS.read_text(encoding="utf-8-sig")
-        tree = ast.parse(source, filename=str(PY_MARKERS))
-        used = {
-            node.id
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Name) and isinstance(getattr(node, "ctx", None), ast.Load)
-        }
-        for py_name in PAIRED_MARKERS:
-            with self.subTest(python=py_name):
-                self.assertIn(py_name, used, f"{py_name} is defined but never referenced")
-        # and no literal left behind in a print()
-        self.assertNotIn('print(f"[*] Saved session:', source)
-
-    def test_csharp_matches_through_the_constant(self):
-        source = (PROJECT_ROOT / "SmsWorkbench" / "Views" / "MainWindow.Tasks.cs").read_text(encoding="utf-8-sig") + (
-            PROJECT_ROOT / "SmsWorkbench" / "Services" / "BackendBatchCoordinator.cs"
-        ).read_text(encoding="utf-8-sig")
-        for cs_name in PAIRED_MARKERS.values():
-            with self.subTest(csharp=cs_name):
-                self.assertIn(f"BackendTextMarkers.{cs_name}", source)
-        # the old inline literal must be gone
-        self.assertNotIn('Contains("Saved session:"', source)
+def test_markers_are_non_empty_and_defined() -> None:
+    cs = _csharp_constants(CS_MARKERS)
+    py = _python_constants(PY_MARKERS)
+    for py_name, cs_name in PAIRED_MARKERS.items():
+        assert py[py_name].strip()
+        assert cs[cs_name].strip()
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_deactivation_markers_match() -> None:
+    cs = _csharp_string_arrays(CS_MARKERS)
+    py_tuples, _ = _python_string_tuples(PY_STATE)
+    for py_name, cs_name in PAIRED_LISTS.items():
+        assert cs_name in cs
+        assert py_name in py_tuples
+        assert py_tuples[py_name] == cs[cs_name]
+
+
+def test_at_invalid_is_the_union_of_both_csharp_lists() -> None:
+    cs = _csharp_string_arrays(CS_MARKERS)
+    py_tuples, _ = _python_string_tuples(PY_STATE)
+    for py_name, (first, second) in UNION_LISTS.items():
+        assert py_tuples[py_name] == cs[first] + cs[second], (
+            "AT_INVALID_MARKERS must equal AtInvalid + AccountDeactivated"
+        )
+
+
+def test_misspelled_marker_is_still_present_on_both_sides() -> None:
+    """Older releases wrote "account_deatived"; on-disk sessions still have it."""
+    cs = _csharp_string_arrays(CS_MARKERS)
+    py_tuples, _ = _python_string_tuples(PY_STATE)
+    assert "account_deatived" in cs["AccountDeactivated"]
+    assert "account_deatived" in py_tuples["ACCOUNT_DEACTIVATED_MARKERS"]
+
+
+def test_csharp_uses_the_shared_lists_not_inline_literals() -> None:
+    source = (PROJECT_ROOT / "SmsWorkbench" / "Services" / "AccountStatusInterpreter.cs").read_text(
+        encoding="utf-8-sig"
+    )
+    assert "BackendTextMarkers.AtInvalid" in source
+    assert "BackendTextMarkers.AccountDeactivated" in source
+    # the old inline chain must be gone
+    for literal in ('text.Contains("account_deatived")', 'text.Contains("token_invalidated")'):
+        assert literal not in source
+
+
+def test_python_prints_through_the_constant() -> None:
+    source = PY_MARKERS.read_text(encoding="utf-8-sig")
+    tree = ast.parse(source, filename=str(PY_MARKERS))
+    used = {
+        node.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Name) and isinstance(getattr(node, "ctx", None), ast.Load)
+    }
+    for py_name in PAIRED_MARKERS:
+        assert py_name in used, f"{py_name} is defined but never referenced"
+    # and no literal left behind in a print()
+    assert 'print(f"[*] Saved session:' not in source
+
+
+def test_csharp_matches_through_the_constant() -> None:
+    source = (PROJECT_ROOT / "SmsWorkbench" / "Views" / "MainWindow.Tasks.cs").read_text(encoding="utf-8-sig") + (
+        PROJECT_ROOT / "SmsWorkbench" / "Services" / "BackendBatchCoordinator.cs"
+    ).read_text(encoding="utf-8-sig")
+    for cs_name in PAIRED_MARKERS.values():
+        assert f"BackendTextMarkers.{cs_name}" in source
+    # the old inline literal must be gone
+    assert 'Contains("Saved session:"' not in source

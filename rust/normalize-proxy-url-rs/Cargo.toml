@@ -14,8 +14,6 @@ fancy-regex = "0.14"
 pyo3 = { version = "0.30", features = ["extension-module", "abi3-py39"] }
 regex = "1"
 
-[profile.release]
-lto = true
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }

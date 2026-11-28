@@ -1,24 +1,30 @@
 from __future__ import annotations
 
 import contextlib
-import hashlib
-import json
-import os
-import threading
-import time
 from collections.abc import Iterator, Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlsplit
 
 import requests
 
-from ..kernel.cross_process_gate import cross_process_write_lock
+from ..kernel.native_loader import load_native_module
 from ..proxy.entry import (
     normalize_proxy_url as _normalize_proxy_url,
     redact_proxy_url as _canon_redact_proxy_url,
     redact_proxy_text as _canon_redact_proxy_text,
+)
+from ..proxy.stage_health import (
+    _CACHE_LOCK as _CACHE_LOCK,
+    _PAYPAL_PROXY_STATE_CACHE as _PAYPAL_PROXY_STATE_CACHE,
+    _proxy_health_cfg as _proxy_health_cfg,
+    PayPalProxyState as PayPalProxyState,
+    ProxyProbeResult as ProxyProbeResult,
+    StageProxyState as StageProxyState,
+    proxy_key as proxy_key,
+    proxy_state_from_config as _stage_proxy_state_from_config,
+    stage_proxy_state as _stage_proxy_state,
 )
 
 
@@ -43,22 +49,6 @@ _NETWORK_ERROR_MARKERS = (
     "curl: (52)",
     "curl: (56)",
 )
-
-
-@dataclass
-class ProxyProbeResult:
-    ok: bool
-    stage: str
-    expected_country: str = ""
-    ip: str = ""
-    country_code: str = ""
-    country: str = ""
-    region: str = ""
-    error: str = ""
-    scheme: str = ""
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
 
 
 def normalize_proxy_url(proxy: str) -> str:
@@ -106,9 +96,33 @@ def infer_proxy_country(proxy: str) -> str:
     return _infer_proxy_country(proxy)
 
 
+_RETRYABLE_EXC_NAMES = frozenset(
+    {"ReadTimeout", "ConnectTimeout", "ConnectionError", "Timeout", "SSLError", "ProxyError"}
+)
+_NATIVE_PAYPAL_PROXY_PARSE = load_native_module(
+    "paypal-proxy-parse-rs", "paypal_proxy_parse_rs", "RUST_ANYTHING_UNIT_PAYPAL_PROXY_PARSE"
+)
+_NATIVE_IS_RETRYABLE_NETWORK_ERROR = (
+    getattr(_NATIVE_PAYPAL_PROXY_PARSE, "is_retryable_network_error", None)
+    if _NATIVE_PAYPAL_PROXY_PARSE is not None
+    else None
+)
+_NATIVE_PROXY_SCHEME_CANDIDATES = (
+    getattr(_NATIVE_PAYPAL_PROXY_PARSE, "_proxy_scheme_candidates", None)
+    if _NATIVE_PAYPAL_PROXY_PARSE is not None
+    else None
+)
+
+
 def is_retryable_network_error(error: Any) -> bool:
+    if _NATIVE_IS_RETRYABLE_NETWORK_ERROR is not None:
+        if error is None or isinstance(error, str):
+            return _NATIVE_IS_RETRYABLE_NETWORK_ERROR(error)
+        if any(item.__name__ in _RETRYABLE_EXC_NAMES for item in type(error).mro()):
+            return True
+        return _NATIVE_IS_RETRYABLE_NETWORK_ERROR(str(error or ""))
     names = {item.__name__ for item in type(error).mro()}
-    if names.intersection({"ReadTimeout", "ConnectTimeout", "ConnectionError", "Timeout", "SSLError", "ProxyError"}):
+    if names.intersection(_RETRYABLE_EXC_NAMES):
         return True
     text = str(error or "").lower()
     return any(marker in text for marker in _NETWORK_ERROR_MARKERS)
@@ -174,6 +188,8 @@ def _publish_probe_geo(value: str, result: "ProxyProbeResult") -> None:
 
 def _proxy_scheme_candidates(proxy: str) -> list[str]:
     """Try the declared scheme first, then compatible HTTP/SOCKS5 variants."""
+    if _NATIVE_PROXY_SCHEME_CANDIDATES is not None and (proxy is None or isinstance(proxy, str)):
+        return _NATIVE_PROXY_SCHEME_CANDIDATES(proxy)
     value = normalize_proxy_url(proxy)
     if not value:
         return []
@@ -359,275 +375,12 @@ def select_proxy_from_pool(
     return "", attempts
 
 
-def proxy_key(proxy: str) -> str:
-    from ..proxy.entry import strip_session_id
-
-    value = strip_session_id(proxy)
-    if not value:
-        return "direct"
-    return hashlib.sha256(value.encode("utf-8", errors="ignore")).hexdigest()[:24]
-
-
-class PayPalProxyState:
-    def __init__(
-        self,
-        path: str | Path,
-        *,
-        enabled: bool = True,
-        fail_skip_after: int = 2,
-        fail_cooldown_seconds: int = 180,
-        zero_cache_ttl_seconds: int = 1800,
-        probe_cache_ttl_seconds: int = 600,
-    ):
-        self.path = Path(path)
-        self.enabled = bool(enabled)
-        self.fail_skip_after = max(1, int(fail_skip_after or 1))
-        self.fail_cooldown_seconds = max(0, int(fail_cooldown_seconds or 0))
-        self.zero_cache_ttl_seconds = max(0, int(zero_cache_ttl_seconds or 0))
-        # Geo-probe results are cached per stable proxy key so a batch of many
-        # accounts probes each pool proxy once instead of hammering the free IP
-        # geolocation services (ip-api/ipwho/ipapi) into rate limits per cell.
-        self.probe_cache_ttl_seconds = max(0, int(probe_cache_ttl_seconds or 0))
-        self._lock = threading.RLock()
-        self._data: dict[str, Any] | None = None
-
-    def _load(self) -> dict[str, Any]:
-        with self._lock:
-            if self._data is not None:
-                return self._data
-            data: dict[str, Any] = {}
-            if self.path.is_file():
-                try:
-                    loaded = json.loads(self.path.read_text(encoding="utf-8"))
-                    if isinstance(loaded, dict):
-                        data = loaded
-                except Exception:
-                    data = {}
-            data.setdefault("stages", {})
-            data.setdefault("pairs", {})
-            data.setdefault("probes", {})
-            self._data = data
-            return data
-
-    def _save(self) -> None:
-        if not self.enabled:
-            return
-        with self._lock:
-            data = self._load()
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            temp = self.path.with_name(f".{self.path.name}.{os.getpid()}.tmp")
-            temp.write_text(json.dumps(data, ensure_ascii=True, indent=2, sort_keys=True), encoding="utf-8")
-            # Serialise the replace across backend processes (CLI + workbench,
-            # or two CLIs) so concurrent health/geo updates don't interleave and
-            # lose each other's writes on the shared state file.
-            with cross_process_write_lock(self.path.with_name(f"{self.path.name}.lock")):
-                os.replace(temp, self.path)
-
-    def _record(self, stage: str, proxy: str) -> dict[str, Any]:
-        stages = self._load().setdefault("stages", {})
-        group = stages.setdefault(str(stage or "unknown"), {})
-        return group.setdefault(proxy_key(proxy), {"success": 0, "fail": 0})
-
-    def record_result(self, stage: str, proxy: str, success: bool, reason: str = "", country: str = "") -> None:
-        if not self.enabled or not proxy:
-            return
-        with self._lock:
-            record = self._record(stage, proxy)
-            now = int(time.time())
-            record["country"] = str(country or "").upper()
-            record["label"] = redact_proxy_url(proxy)
-            if success:
-                record["success"] = int(record.get("success") or 0) + 1
-                record["fail"] = 0
-                record["last_success"] = now
-                record["last_reason"] = "success"
-            else:
-                record["fail"] = int(record.get("fail") or 0) + 1
-                record["last_fail"] = now
-                record["last_reason"] = str(reason or "failed")[:200]
-            self._save()
-
-    def record_zero_result(self, proxy: str, country: str, amount: int | None) -> None:
-        if not self.enabled or not proxy or amount is None:
-            return
-        with self._lock:
-            record = self._record("checkout", proxy)
-            record["zero_ok"] = int(amount) == 0
-            record["zero_amount"] = int(amount)
-            record["zero_country"] = str(country or "").upper()
-            record["zero_checked_at"] = int(time.time())
-            self._save()
-
-    def zero_status(self, proxy: str, country: str) -> tuple[str, int | None]:
-        if not self.enabled or not proxy:
-            return "", None
-        record = self._load().get("stages", {}).get("checkout", {}).get(proxy_key(proxy), {})
-        checked_at = int(record.get("zero_checked_at") or 0)
-        if not checked_at:
-            return "", None
-        if self.zero_cache_ttl_seconds and int(time.time()) - checked_at > self.zero_cache_ttl_seconds:
-            return "", None
-        if str(record.get("zero_country") or "").upper() != str(country or "").upper():
-            return "", None
-        return ("ok" if record.get("zero_ok") is True else "bad"), record.get("zero_amount")
-
-    def record_probe(self, proxy: str, result: "ProxyProbeResult") -> None:
-        """Persist a geo-probe outcome so later selections can skip the network."""
-        if not self.enabled or not proxy or not isinstance(result, ProxyProbeResult):
-            return
-        with self._lock:
-            probes = self._load().setdefault("probes", {})
-            probes[proxy_key(proxy)] = {
-                "ok": bool(result.ok),
-                "ip": str(result.ip or ""),
-                "country_code": str(result.country_code or "").upper(),
-                "country": str(result.country or ""),
-                "region": str(result.region or ""),
-                "expected_country": str(result.expected_country or "").upper(),
-                "error": str(result.error or "")[:200],
-                "checked_at": int(time.time()),
-            }
-            self._save()
-
-    def cached_probe(self, proxy: str, expected_country: str = "", stage: str = "proxy") -> "ProxyProbeResult | None":
-        """Return a still-fresh cached geo probe for ``proxy``, or ``None``.
-
-        A cached *mismatch* is honoured too: within the TTL a wrong-country proxy
-        stays skipped instead of being re-probed for every account in a batch.
-        A cached verdict is only reused when it still answers the country being
-        asked about, because the same proxy template is probed for different
-        countries across methods and stages.
-        """
-        if not self.enabled or not proxy or self.probe_cache_ttl_seconds <= 0:
-            return None
-        record = self._load().get("probes", {}).get(proxy_key(proxy))
-        if not isinstance(record, dict):
-            return None
-        checked_at = int(record.get("checked_at") or 0)
-        if not checked_at or int(time.time()) - checked_at > self.probe_cache_ttl_seconds:
-            return None
-        expected = str(expected_country or "").strip().upper()
-        cached_country = str(record.get("country_code") or "").upper()
-        # Only trust an OK cache entry whose exit country still matches the ask.
-        if record.get("ok") and expected and cached_country and cached_country != expected:
-            return None
-        # A recorded country mismatch was judged against a *different* expected
-        # country. Once the ask matches the exit the proxy actually reached, the
-        # old verdict no longer applies and replaying it would fail a working
-        # proxy, so re-probe instead. Transport failures keep no country and are
-        # still honoured, which is what keeps a dead proxy skipped.
-        if not record.get("ok") and expected and cached_country and cached_country == expected:
-            return None
-        return ProxyProbeResult(
-            ok=bool(record.get("ok")),
-            stage=stage,
-            expected_country=expected or str(record.get("expected_country") or ""),
-            ip=str(record.get("ip") or ""),
-            country_code=cached_country,
-            country=str(record.get("country") or ""),
-            region=str(record.get("region") or ""),
-            error=str(record.get("error") or ("cached" if record.get("ok") else "cached_probe_failed")),
-        )
-
-    def record_pair_result(
-        self,
-        checkout_proxy: str,
-        provider_proxy: str,
-        approve_proxy: str,
-        success: bool,
-        reason: str = "",
-    ) -> None:
-        if not self.enabled or not checkout_proxy or not provider_proxy:
-            return
-        key = f"{proxy_key(checkout_proxy)}:{proxy_key(provider_proxy)}"
-        with self._lock:
-            record = (
-                self._load()
-                .setdefault("pairs", {})
-                .setdefault(
-                    key,
-                    {
-                        "checkout": proxy_key(checkout_proxy),
-                        "provider": proxy_key(provider_proxy),
-                    },
-                )
-            )
-            now = int(time.time())
-            if success:
-                record["success"] = int(record.get("success") or 0) + 1
-                record["fail"] = 0
-                record["last_success"] = now
-                record["approve"] = proxy_key(approve_proxy)
-                record["last_reason"] = "success"
-            else:
-                record["fail"] = int(record.get("fail") or 0) + 1
-                record["last_fail"] = now
-                record["last_reason"] = str(reason or "failed")[:200]
-            self._save()
-
-    def pair_score(self, checkout_proxy: str, provider_proxy: str) -> tuple[int, int, int]:
-        key = f"{proxy_key(checkout_proxy)}:{proxy_key(provider_proxy)}"
-        record = self._load().get("pairs", {}).get(key, {})
-        return (
-            int(record.get("success") or 0),
-            int(record.get("last_success") or 0),
-            -int(record.get("fail") or 0),
-        )
-
-    def rank(self, stage: str, proxies: Iterable[str], *, country: str = "", checkout_proxy: str = "") -> list[str]:
-        unique = list(dict.fromkeys(normalize_proxy_url(item) for item in proxies if str(item or "").strip()))
-        if not self.enabled or not unique:
-            return unique
-        records = self._load().get("stages", {}).get(stage, {})
-        now = int(time.time())
-        kept: list[str] = []
-        for proxy in unique:
-            record = records.get(proxy_key(proxy), {})
-            fail = int(record.get("fail") or 0)
-            last_fail = int(record.get("last_fail") or 0)
-            in_cooldown = self.fail_cooldown_seconds <= 0 or now - last_fail <= self.fail_cooldown_seconds
-            if fail >= self.fail_skip_after and last_fail and in_cooldown:
-                continue
-            if stage == "checkout":
-                zero_status, _ = self.zero_status(proxy, country)
-                if zero_status == "bad":
-                    continue
-            kept.append(proxy)
-
-        def score(proxy: str) -> tuple[int, ...]:
-            record = records.get(proxy_key(proxy), {})
-            zero_status, _ = self.zero_status(proxy, country) if stage == "checkout" else ("", None)
-            pair = self.pair_score(checkout_proxy, proxy) if stage == "provider" and checkout_proxy else (0, 0, 0)
-            return (
-                pair[0],
-                pair[1],
-                1 if zero_status == "ok" else 0,
-                int(record.get("success") or 0),
-                int(record.get("last_success") or 0),
-                -int(record.get("fail") or 0),
-            )
-
-        return sorted(kept, key=score, reverse=True)
-
-
-# ─── 阶段代理配置解析 (从 gen_pp_link.py 纯搬迁, 零行为变化) ────────────────────
+# ─── 阶段代理配置解析 (健康与缓存状态定义已下沉至 proxy/stage_health.py) ────────
 #
-# 本块负责把 ``paypal.stage_proxies`` / ``paypal.stage_proxy_pools`` /
-# ``paypal.proxy_health`` 解析成各阶段的实际代理值。``_PAYPAL_PROXY_STATE_CACHE``
-# 是进程级单例缓存, ``gen_pp_link`` 通过 re-export 共享同一对象 (测试会 clear 它)。
-
 # 本模块位于 ``sms_tool/paypal/``，项目根要**再上两层**（``sms_tool`` 的父目录）。
-# 迁移前它在 ``sms_tool/paypal_proxy.py``，``parent.parent`` 恰好是项目根；搬进子包
-# 后少一层会把默认的 ``runtime/paypal_proxy_state.json`` 解析到 ``sms_tool/runtime/``，
-# 在源码树里写出一份影子状态（既不被 .gitignore 挡住，也不再是 ``runtime/`` 那份活状态）。
+# ``_PAYPAL_PROXY_STATE_CACHE`` 与 ``PayPalProxyState`` 从 ``proxy/stage_health.py``
+# 共享导入，确保 ``payment/routing.py`` 与 PayPal 适配器共享同一进程级状态字典。
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-
-_PAYPAL_PROXY_STATE_CACHE: dict[tuple[Any, ...], PayPalProxyState] = {}
-
-# Guards the module-level cache dict below. ThreadPoolExecutor fans out proxy
-# selection across worker threads, so the read-modify-write on the cache must
-# be serialised or two threads can insert/overwrite the same key.
-_CACHE_LOCK = threading.Lock()
 
 
 def _stage_proxy_value(stage_proxies: dict, key: str, fallback: str = "") -> str:
@@ -716,55 +469,13 @@ class StageProxies(Mapping[str, str]):
         return StageProxies(**merged)
 
 
-def _proxy_health_cfg(paypal_cfg: dict) -> dict:
-    _raw_value: object = paypal_cfg.get("proxy_health")
-    value: dict = _raw_value if isinstance(_raw_value, dict) else {}
-    return value or {}
-
-
 def _paypal_proxy_state(paypal_cfg: dict) -> PayPalProxyState:
-    health = _proxy_health_cfg(paypal_cfg)
-    state_file = str(health.get("state_file") or "runtime/paypal_proxy_state.json").strip()
-    state_path = Path(state_file).expanduser()
-    if not state_path.is_absolute():
-        state_path = Path(PROJECT_ROOT) / state_path
-    key = (
-        str(state_path),
-        bool(health.get("enabled", True)),
-        int(health.get("fail_skip_after", 2) or 2),
-        int(health.get("fail_cooldown_seconds", 180) or 0),
-        int(health.get("zero_cache_ttl_seconds", 1800) or 0),
-        int(health.get("probe_cache_ttl_seconds", 600) or 0),
-    )
-    with _CACHE_LOCK:
-        state = _PAYPAL_PROXY_STATE_CACHE.get(key)
-        if state is None:
-            state = PayPalProxyState(
-                state_path,
-                enabled=key[1],
-                fail_skip_after=key[2],
-                fail_cooldown_seconds=key[3],
-                zero_cache_ttl_seconds=key[4],
-                probe_cache_ttl_seconds=key[5],
-            )
-            _PAYPAL_PROXY_STATE_CACHE[key] = state
-    return state
+    return _stage_proxy_state(paypal_cfg, project_root=PROJECT_ROOT)
 
 
 def proxy_state_from_config(cfg: Any) -> PayPalProxyState:
-    """Return the process-shared proxy-health state for a full config mapping.
-
-    Reads ``paypal.proxy_health`` (health thresholds + state file) so that the
-    two-pool manager path, the batch runner, and the single-proxy stage path all
-    share one health/geo-probe cache instead of re-probing independently.
-    """
-    paypal_cfg = cfg.get("paypal") if isinstance(cfg, dict) else None
-    if not isinstance(paypal_cfg, dict):
-        try:
-            paypal_cfg = dict(cfg.get("paypal") or {}) if hasattr(cfg, "get") else {}
-        except Exception:
-            paypal_cfg = {}
-    return _paypal_proxy_state(paypal_cfg if isinstance(paypal_cfg, dict) else {})
+    """Return the process-shared proxy-health state for a full config mapping."""
+    return _stage_proxy_state_from_config(cfg, project_root=PROJECT_ROOT)
 
 
 def _proxy_pool_values(paypal_cfg: dict, key: str) -> list[str]:

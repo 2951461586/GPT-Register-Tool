@@ -87,9 +87,11 @@ def test_ratchet_holds_for_the_current_tree():
 def test_reason_is_derived_for_documented_cycles():
     classify = delayed_import_ratchet.classify
     assert classify("sms_tool/payment/catalog.py", "sms_tool.payment.checkout_contract") == "cycle"
-    assert classify("sms_tool/sentinel/client.py", "sms_tool.registration.sentinel_tokens") == "cycle"
-    # The five-module cycle's lazy edge.
-    assert classify("sms_tool/proxy/routing.py", "sms_tool.accounts.account_identity") == "cycle"
+    assert classify("sms_tool/payment/catalog.py", "sms_tool.payment.flow") == "cycle"
+    assert classify("sms_tool/transport/auth_headers.py", "sms_tool.transport.http_backend") == "cycle"
+    # Former cycles whose reverse edges were retired now classify by their live rule.
+    assert classify("sms_tool/proxy/routing.py", "sms_tool.accounts.account_identity") == "deferred"
+    assert classify("sms_tool/registration/sentinel_tokens.py", "sms_tool.sentinel.client") == "provider"
 
 
 def test_reason_is_startup_for_the_cli_seam():

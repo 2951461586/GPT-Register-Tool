@@ -1,0 +1,49 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/sentinel/runner.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "sentinel-runner-parse-rs",
+  "exports": [
+    {
+      "name": "_impersonate_version",
+      "file": "sms_tool/sentinel/runner.py",
+      "line": 36,
+      "params": [
+        {
+          "name": "impersonate",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_impersonate_family",
+      "file": "sms_tool/sentinel/runner.py",
+      "line": 22,
+      "reason": "0.99x tie on rust-anything bench due to PyO3 string crossing overhead; kept in Python"
+    },
+    {
+      "name": "check_sentinel_runner_readiness",
+      "file": "sms_tool/sentinel/runner.py",
+      "line": 83,
+      "reason": "stays in Python (native FFI bundle readiness check)"
+    },
+    {
+      "name": "run_sentinel_sdk",
+      "file": "sms_tool/sentinel/runner.py",
+      "line": 141,
+      "reason": "stays in Python (in-process sentinel_vm FFI adapter)"
+    }
+  ]
+}

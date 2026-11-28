@@ -15,8 +15,6 @@ serde = "1"
 sha2 = "0.10"
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip", "unbounded_depth"] }
 
-[profile.release]
-lto = true
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }

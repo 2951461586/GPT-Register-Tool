@@ -90,21 +90,8 @@ DOCUMENTED_CYCLES: frozenset[tuple[str, str]] = frozenset(
         ("catalog", "checkout_contract"),
         ("catalog", "flow"),
         ("flow", "catalog"),
-        # ``payment.routing`` and ``proxy.routing`` share the last segment, so
-        # these two keys are ambiguous by construction. It is benign today
-        # because ``proxy.routing`` imports nothing PayPal-named; if that ever
-        # changes, key this table on full dotted paths instead of segments.
-        ("routing", "proxy"),
-        ("proxy", "routing"),
-        ("sentinel_tokens", "client"),
-        ("client", "sentinel_tokens"),
-        ("routing", "account_identity"),
-        # The five-module cycle: account_identity -> fingerprint_pool ->
-        # paypal.proxy -> payment.routing -> proxy.routing -> account_identity.
-        # ``proxy_routing`` became ``proxy.routing`` in the paypal move, so its
-        # old key was dead too; the ``(routing, account_identity)`` pair above
-        # already covers it.
-        ("fingerprint_pool", "proxy"),
+        ("auth_headers", "http_backend"),
+        ("http_backend", "auth_headers"),
     }
 )
 

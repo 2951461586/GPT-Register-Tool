@@ -1,0 +1,436 @@
+{"fn": "text_has_account_deactivated", "args": ["﻿bom{name} has {count} items"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a.b.c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["src/a/b.ts"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["HELLO"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ans:key.path"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["日本語のテキスト"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["abc"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": [".leading"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["﻿bom"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a.b.cHello World"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ünïcödé"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["key_name-1"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["emoji 👍🏽 mix"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["hello"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["line1\nline2"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["abc日本語のテキスト"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["Hello World"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ns:key.path"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["é"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a😀b😀c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["straße"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["{name} has {count} itemshello world"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["./x/**/*.json"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["straßekey_name-1"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a..b"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["{name} has {count} items"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["tab\tseparated"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a..bΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["İstanbul"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["日本語のテキストline1\nline2"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["hello world"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["emoji 👍🏽 mixabc"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["trailing."], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["HELLOİstanbul"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a:b:c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["Hello Worlda"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["😀"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a😀b😀c日本語のテキスト"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["tab\tseparateda:b:c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["  padded  "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ab"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": [".leadingab"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["{name} has {count} items😀"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["abhello"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": [":"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": [""], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a..b{name} has {count} items"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a😀b😀cΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a./x/**/*.json"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["abcİstanbul"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["aHello World"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["İstanbul.leading"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["hello worldsrc/a/b.ts"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a😀b😀cHELLO"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["./x/**/*.jsona😀b😀c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["line1\nline2tab\tseparated"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a.b.ca"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["line1\nline2ns:key.path"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": [":key_name-1"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["﻿bomemoji 👍🏽 mix"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["Hello Worldünïcödé"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["trailing.  padded  "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a:b:ca😀b😀c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a:b:chello world"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["éabc"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["trailing.😀"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["Hello WorldHello World"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["helloİstanbul"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["{name} has {count} items.leading"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["emoji 👍🏽 mixa:b:c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["key_name-1ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["  padded  ünïcödé"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["hello worldabc"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["  padded  :"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["😀ab"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["emoji 👍🏽 mixHello World"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["./x/**/*.jsonİstanbul"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["İstanbulhello"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["Hello Worldab"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["{name} has {count} items  padded  "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": [".leadinga"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["straßehello world"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["helloline1\nline2"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["trailing.Hello World"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["éa.b.c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a😀b😀chello world"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["trailing.a"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["😀ns:key.path"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["hello worldstraße"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ΣΊΣΥΦΟΣΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["﻿bomünïcödé"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["hello world😀"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["abline1\nline2"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["./x/**/*.jsonsrc/a/b.ts"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["straße./x/**/*.json"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["src/a/b.tsé"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["key_name-1é"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["key_name-1straße"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["İstanbulstraße"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["aa:b:c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["./x/**/*.json😀"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["﻿bomstraße"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a:b:cHELLO"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["HELLOtrailing."], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["{name} has {count} itemsemoji 👍🏽 mix"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ns:key.path{name} has {count} items"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["hello worlda..b"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ΣΊΣΥΦΟΣns:key.path"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["aHELLO"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["./x/**/*.jsonHELLO"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["😀日本語のテキスト"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["key_name-1a:b:c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a.b.ca😀b😀c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["😀abc"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a:b:cHello World"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["Hello World  padded  "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ns:key.pathHELLO"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["  padded  a..b"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["abca😀b😀c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a😀b😀cstraße"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["😀a"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["  padded  ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["tab\tseparatedabc"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["emoji 👍🏽 mixkey_name-1"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["İstanbulΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["İstanbulünïcödé"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["﻿bomline1\nline2"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["aba😀b😀c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["line1\nline2a:b:c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a😀b😀ctab\tseparated"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["hello worlda😀b😀c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["key_name-1tab\tseparated"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ΣΊΣΥΦΟΣab"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["aab"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["Hello World./x/**/*.json"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["akey_name-1"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a:b:c😀"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["src/a/b.ts😀"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["aba.b.c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["key_name-1line1\nline2"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["  padded  a:b:c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["{name} has {count} itemsΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["emoji 👍🏽 mixa..b"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["hello world﻿bom"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ab{name} has {count} items"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a.b.c  padded  "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["./x/**/*.jsonline1\nline2"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["./x/**/*.jsonemoji 👍🏽 mix"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["tab\tseparatedhello world"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["emoji 👍🏽 mixünïcödé"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ΣΊΣΥΦΟΣa.b.c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["trailing.emoji 👍🏽 mix"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": [":ünïcödé"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a.b.c:"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["hello world:"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": [".leadingns:key.path"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["İstanbulhello world"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["HELLO{name} has {count} items"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ünïcödéa..b"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["HELLO😀"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["trailing.a😀b😀c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["aemoji 👍🏽 mix"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a.b.ca..b"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["tab\tseparated  padded  "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["./x/**/*.jsontab\tseparated"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["abca:b:c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ΣΊΣΥΦΟΣ  padded  "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a😀b😀c.leading"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": [".leadinga.b.c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["trailing.ünïcödé"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["hello worldab"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["hello worldhello world"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a.b.cünïcödé"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["abé"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["﻿bomé"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["﻿bomΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["abab"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["日本語のテキスト  padded  "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["straßea"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["{name} has {count} itemsİstanbul"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": [":a:b:c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["éline1\nline2"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["src/a/b.ts日本語のテキスト"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ünïcödétrailing."], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["straßea:b:c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["﻿bomhello world"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["trailing.key_name-1"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ahello world"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["﻿bomkey_name-1"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["./x/**/*.jsona.b.c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["key_name-1a.b.c"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["tab\tseparatedstraße"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["abcns:key.path"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": [".leading日本語のテキスト"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["tab\tseparatedΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["trailing.ab"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a😀b😀cemoji 👍🏽 mix"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a..btrailing."], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["héllo wörld"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["👍🏽 thumbs"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["日本語"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ılık ırmak"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["👨‍👩‍👧 family"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a b"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a😀b"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a²b x½ y①"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["aⅠb Ⅻ"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["a𐐀b 𝐀bc"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["कि ٣٤"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": [""], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["{\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["{\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["{\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-13] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-14] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-15] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-16] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-17] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-18] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-19] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-20] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-21] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-22] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-23] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-25] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-26] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-27] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-28] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-29] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-30] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-31] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-32] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-33] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-34] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-35] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-37] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-38] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-39] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-40] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-41] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-42] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-43] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-44] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-45] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-46] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-47] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-49] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-50] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-51] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-52] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-53] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-54] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-55] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-56] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-57] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-58] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-59] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-61] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-62] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-63] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-64] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-65] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-66] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-67] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-68] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-69] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-70] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-71] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-73] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-74] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-75] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-76] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-77] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-78] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-79] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-80] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-81] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-82] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-83] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-85] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-86] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-87] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-88] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-89] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-90] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-91] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-92] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-93] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-94] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-95] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-97] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-98] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-99] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-100] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-101] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-102] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-103] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-104] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-105] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-106] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-107] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-109] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-110] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-111] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-112] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-113] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-114] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-115] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-116] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-117] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-118] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-119] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-121] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-122] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-123] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-124] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-125] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-126] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-127] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-128] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-129] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-130] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-131] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-133] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-134] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-135] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-136] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-137] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-138] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-139] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-140] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-141] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-142] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-143] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-145] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-146] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-147] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-148] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-149] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-150] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-151] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-152] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-153] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-154] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-155] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-157] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-158] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-159] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-160] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-161] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-162] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-163] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-164] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-165] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-166] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-167] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-169] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-170] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-171] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-172] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-173] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-174] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-175] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-176] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-177] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-178] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-179] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-181] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-182] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-183] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-184] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-185] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-186] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-187] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-188] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-189] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-190] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-191] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-193] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-194] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-195] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-196] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-197] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-198] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-199] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-200] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-201] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-202] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-203] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-205] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-206] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-207] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-208] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-209] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-210] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-211] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-212] Fatal: The account has been deactivated due to policy violation."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-213] HTTP 429 Too Many Requests: rate_limit_exceeded on /backend-api/accounts/check/v4 padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-214] 中文错误提示：连接超时，请更换住宅代理后重试 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-215] İ_non_ascii_ACCOUNT_DEACTIVATED_marker"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": [null], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-217] "], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-218] ok"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-219] {\"status\":\"registered\",\"email\":\"u@example.com\",\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"], "ok": false}
+{"fn": "text_has_account_deactivated", "args": ["[run-220] {\"error\":{\"code\":\"account_deactivated\",\"message\":\"Your OpenAI account has been deactivated.\"}}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-221] {\"error\":\"account_deatived\",\"detail\":\"historic upstream spelling\"}"], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-222] HTTP 403 Forbidden: This user has been deleted or deactivated by administrator."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-223] Auth error: Your account has been deleted from this workspace."], "ok": true}
+{"fn": "text_has_account_deactivated", "args": ["[run-224] Fatal: The account has been deactivated due to policy violation."], "ok": true}

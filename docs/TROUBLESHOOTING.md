@@ -153,7 +153,7 @@
 
 按顺序检查：
 
-1. 驱动注册表是单一真源：`sms_tool/registration_drivers/base.py:53` 的 `DRIVERS`。
+1. 驱动注册表是单一真源：`sms_tool/kernel/driver_env.py:68` 的 `DRIVERS`（`sms_tool/registration_drivers/base.py` 原样重导出）。
    CLI 的 `--registration-driver` choices 与配置校验都从它派生。
 2. 会话工厂表必须与注册表一致 —— 不一致会在 **import 时**直接断言失败
    （`sms_tool/registration_drivers/external_sessions/__init__.py:22`）。

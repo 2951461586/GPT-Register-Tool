@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import sys
 from collections.abc import Callable, Mapping
@@ -17,12 +18,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ..observability.operator_output import emit
 from ..payment.routing import (
     PaymentRoutePlanner,
     method_payment_config as canonical_method_payment_config,
     parse_proxy_pool as canonical_parse_proxy_pool,
     payment_proxy_pools as canonical_payment_proxy_pools,
 )
+
+_LOGGER = logging.getLogger(__name__)
+
+
+def _emit(text: str) -> None:
+    emit(_LOGGER, "%s", text)
 
 
 @dataclass(frozen=True)
@@ -510,7 +518,7 @@ def list_payment_methods() -> None:
             key = str(method.get("key") or "").strip().lower()
             if key in dependency_map:
                 method["dependencies"] = _probe_dependencies(dependency_map[key])
-    print(json.dumps({"ok": True, "methods": methods}, ensure_ascii=False, indent=2))
+    _emit(json.dumps({"ok": True, "methods": methods}, ensure_ascii=False, indent=2))
 
 
 def test_payment_proxies(args: Any, context: PaymentCommandContext) -> None:
@@ -611,7 +619,7 @@ def test_payment_proxies(args: Any, context: PaymentCommandContext) -> None:
     payload = {"ok": ok, "payment_method": method, "stages": stages}
     desktop_ipc = bool(getattr(args, "desktop_ipc", False))
     _emit_desktop_ipc(payload, args)
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    _emit(json.dumps(payload, ensure_ascii=False, indent=2))
     # A failed probe is a valid desktop result (rendered per stage); only the
     # plain CLI path signals it through a non-zero exit for scripting.
     if not ok and not desktop_ipc:
@@ -626,7 +634,6 @@ def check_payment_qualification(args: Any, context: PaymentCommandContext) -> No
     freezes which modules may import it. Success means "the probe answered"
     (including a conclusive 无可用); ``eligible`` is counted separately.
     """
-    from ..observability.diagnostics import safe_print
     from ..payment.qualification_batch import refresh_payment_qualification
     from ..storage import list_paypal_accounts
 
@@ -651,7 +658,7 @@ def check_payment_qualification(args: Any, context: PaymentCommandContext) -> No
     if desktop_ipc:
         _emit_desktop_ipc(result, args)
     else:
-        safe_print(json.dumps(result, ensure_ascii=False, indent=2))
+        _emit(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)
 
@@ -662,13 +669,11 @@ def _print_payment_qualification_summary(result: Mapping[str, Any]) -> None:
     A failed account shows the badge *and* the raw reason, because 检测失败 alone
     cannot tell an operator whether to rotate the exit or refresh the token.
     """
-    from ..observability.diagnostics import safe_print
-
     _raw_results: object = result.get("results")
     rows = [item for item in (_raw_results if isinstance(_raw_results, list) else []) if isinstance(item, dict)]
     answered = sum(1 for item in rows if item.get("ok"))
     if result.get("abort_reason"):
-        safe_print(f"[!] 批次已中止：{result.get('abort_reason')}")
+        _emit(f"[!] 批次已中止：{result.get('abort_reason')}")
     _raw_warnings: object = result.get("warnings")
     for warning in _raw_warnings if isinstance(_raw_warnings, list) else []:
         if not isinstance(warning, dict):
@@ -677,8 +682,8 @@ def _print_payment_qualification_summary(result: Mapping[str, Any]) -> None:
         # belong in the operator's terminal, not only in the JSON payload.
         detail = str(warning.get("detail") or warning.get("code") or "").strip()
         if detail:
-            safe_print(f"[!] {detail}")
-    safe_print(
+            _emit(f"[!] {detail}")
+    _emit(
         f"[*] 支付资格检测完成：共 {len(rows)} 个账号，已判定 {answered}，"
         f"可用 {_safe_int(result.get('eligible'))}，无可用 {_safe_int(result.get('ineligible'))}，"
         f"AT失效 {_safe_int(result.get('auth_invalid'))}，"
@@ -693,7 +698,7 @@ def _print_payment_qualification_summary(result: Mapping[str, Any]) -> None:
         badge = str(item.get("payment_qualification") or "检测失败")
         reason = str(probe.get("error") or probe.get("error_code") or item.get("error") or "")
         detail = f" ({reason[:120]})" if reason else ""
-        safe_print(f"[!] {item.get('email') or ''}: {badge}{detail}")
+        _emit(f"[!] {item.get('email') or ''}: {badge}{detail}")
 
 
 def _apply_team_trial_options(args: Any, method: str, target: dict[str, Any]) -> None:
@@ -830,7 +835,7 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
             if auth.get("error") == "missing_access_token" and legacy_at:
                 at, auth_context = legacy_at, legacy_context
             else:
-                print(json.dumps(public_payment_auth_result(auth), ensure_ascii=False, indent=2))
+                _emit(json.dumps(public_payment_auth_result(auth), ensure_ascii=False, indent=2))
                 raise SystemExit(3)
         else:
             at = str(auth.get("access_token") or "")
@@ -838,7 +843,7 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
     else:
         at, auth_context = context.resolve_access_token(args)
     if not at:
-        print(
+        _emit(
             json.dumps(
                 {
                     "ok": False,
@@ -909,7 +914,7 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
             # instead of silently omitting the fields the batch view reads.
             result["authorization_queued"] = False
             result["authorization_error"] = str(exc)
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    _emit(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)
 

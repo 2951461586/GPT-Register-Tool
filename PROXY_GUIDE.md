@@ -12,18 +12,19 @@ provider names, credentials and local client profile paths out of Git.
 | --- | --- | --- |
 | `proxy.default` | `proxy.json` | Default egress for registration/checkout requests |
 | `proxy.pool` | `proxy.json` | Health-checked proxy pool consumed by registration, remail and the SOCKS5 pool server |
-| `proxy.pool_server` | — | (flags only) `start_proxy_pool.py` listen/timeout settings are CLI flags |
+| `proxy.pool_server` | — | (flags only) `scripts/start_proxy_pool.py` listen/timeout settings are CLI flags |
 | `paypal.proxies` / `paypal.stage_proxies` | `payment.json` | PayPal/Stripe per-stage exits (`direct` = no proxy) |
 
-`proxy_entry.py` is the single parsing authority (boundary rule 13 in
+`sms_tool/proxy/entry.py` is the single parsing authority (boundary rule 13 in
 `docs/architecture.md`): `parse_proxy` / `retarget_region` / `rotate_session`
 / `infer_region`. Provider region templates (rola-style `-VN` credential
 suffixes etc.) are recognized there — never hand-build provider URLs elsewhere.
 
 ## Pool Server
 
-`start_proxy_pool.py` serves a local **SOCKS5** endpoint that rotates over a
-pool of upstreams with health checks. Clients always speak SOCKS5 to the
+`scripts/start_proxy_pool.py` (with root `start_proxy_pool.py` kept as a
+compatibility forwarding shell) serves a local **SOCKS5** endpoint that rotates
+over a pool of upstreams with health checks. Clients always speak SOCKS5 to the
 listener; how each upstream is dialed depends on that entry's own scheme:
 
 | Upstream scheme | Dialed with |
@@ -171,22 +172,23 @@ real checkout:
 python -m sms_tool.cli --test-payment-proxies
 ```
 
-Verify configured proxies (merged shards) from the operator tool — proxy
-credentials are redacted in its output:
+Verify configured proxies (merged shards) from `scripts/verify_proxy.py` (root
+`verify_proxy.py` remains a compatibility forwarding shell) — proxy credentials
+are redacted in its output:
 
 ```powershell
-python verify_proxy.py
+python scripts/verify_proxy.py
 ```
 
 Can this exit actually serve ChatGPT?  A proxy can be reachable (ipinfo OK) yet
 be answered with a Cloudflare 403 at the ChatGPT edge.  The tunnel-only health
-check in `start_proxy_pool.py` cannot see that, so probe the pool **before** a
+check in `scripts/start_proxy_pool.py` cannot see that, so probe the pool **before** a
 run.  Both probes are read-only — one anonymous GET per proxy, no account, no
 mailbox, no checkout — and redact credentials in all stdout:
 
 ```powershell
 # the configured proxies, ipinfo + edge verdict (clean/blocked/degraded/dead)
-python verify_proxy.py --chatgpt
+python scripts/verify_proxy.py --chatgpt
 
 # the whole registration pool; write the clean subset as a pool file
 python scripts/proxy_pool_probe.py --workers 8

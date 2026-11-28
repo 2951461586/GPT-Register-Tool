@@ -20,6 +20,17 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..kernel.native_loader import load_native_module
+
+_NATIVE_ACCOUNT_TERMINAL = load_native_module(
+    "account-terminal-rs", "account_terminal_rs", "RUST_ANYTHING_UNIT_ACCOUNT_TERMINAL"
+)
+_NATIVE_TEXT_HAS_ACCOUNT_DEACTIVATED = (
+    getattr(_NATIVE_ACCOUNT_TERMINAL, "text_has_account_deactivated", None)
+    if _NATIVE_ACCOUNT_TERMINAL is not None
+    else None
+)
+
 # ``token_revoked`` is the explicit 掉号 verdict written by
 # ``account_recovery._persist_token_revoked_drop`` after the recovery chain
 # confirmed there is no relogin material. ``account_scan`` additionally infers
@@ -51,6 +62,8 @@ def is_terminal_account_status(status: Any) -> bool:
 
 def text_has_account_deactivated(text: Any) -> bool:
     """True when free text carries a deactivation marker."""
+    if _NATIVE_TEXT_HAS_ACCOUNT_DEACTIVATED is not None and (text is None or isinstance(text, str)):
+        return _NATIVE_TEXT_HAS_ACCOUNT_DEACTIVATED(text)
     lowered = str(text or "").lower()
     return any(marker in lowered for marker in ACCOUNT_DEACTIVATED_MARKERS)
 

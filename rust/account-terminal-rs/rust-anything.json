@@ -1,0 +1,37 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/accounts/account_terminal.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "account-terminal-rs",
+  "exports": [
+    {
+      "name": "text_has_account_deactivated",
+      "file": "sms_tool/accounts/account_terminal.py",
+      "line": 63,
+      "params": [
+        {
+          "name": "text",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "is_terminal_account_status",
+      "file": "sms_tool/accounts/account_terminal.py",
+      "line": 58,
+      "reason": "stays in Python (0.81x across FFI on 4-item frozenset lookup)"
+    }
+  ]
+}

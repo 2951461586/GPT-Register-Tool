@@ -1,0 +1,672 @@
+{"fn": "is_retryable_network_error", "args": ["a..b./x/**/*.json"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["é﻿bom"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["key_name-1"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["src/a/b.ts"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["key_name-1ünïcödé"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["Hello World"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["{name} has {count} itemsns:key.path"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ns:key.path"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["  padded  "], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["straße"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["emoji 👍🏽 mix"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["./x/**/*.json"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["tab\tseparated  padded  "], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a.b.c"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["emoji 👍🏽 mix  padded  "], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["é"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["﻿bomİstanbul"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["日本語のテキスト"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a😀b😀c"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["tab\tseparated"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["abc"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["hello world"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a..b"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["HELLO"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["line1\nline2"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a:b:cline1\nline2"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["key_name-1hello world"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["HELLOabc"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [""], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a.b.cHello World"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["HELLOa:b:c"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ünïcödé"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["trailing."], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["{name} has {count} items"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a..bns:key.path"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a.b.c:"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["Hello Worlda😀b😀c"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["﻿bom"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["hello worlda😀b😀c"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["hello worldİstanbul"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ab"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["İstanbul"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ns:key.pathns:key.path"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ΣΊΣΥΦΟΣhello"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a:b:c"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["hello"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [".leading"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ns:key.pathstraße"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["hello world  padded  "], "ok": false}
+{"fn": "is_retryable_network_error", "args": [":"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["emoji 👍🏽 mixstraße"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["😀tab\tseparated"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["hello worlda..b"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["😀"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["trailing.ünïcödé"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["helloHELLO"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["Hello Worldkey_name-1"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["HELLOé"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [":trailing."], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["hello worldline1\nline2"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["src/a/b.ts{name} has {count} items"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["hello worldhello world"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["./x/**/*.jsontrailing."], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["😀trailing."], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ababc"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["😀HELLO"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["abcabc"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["aa"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["日本語のテキストabc"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["trailing../x/**/*.json"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["emoji 👍🏽 mix.leading"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["日本語のテキスト日本語のテキスト"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["日本語のテキストünïcödé"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [".leadingΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ns:key.pathünïcödé"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["😀hello world"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a:b:chello"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["Hello Worldé"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a.b.cİstanbul"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [".leadingHELLO"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["trailing.key_name-1"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["helloa😀b😀c"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["src/a/b.ts./x/**/*.json"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a..b.leading"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["trailing.hello world"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ns:key.path﻿bom"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["tab\tseparatedHELLO"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["😀src/a/b.ts"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ab.leading"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["emoji 👍🏽 mixa..b"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["Hello Worldsrc/a/b.ts"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["日本語のテキストline1\nline2"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["  padded  ünïcödé"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a..bHELLO"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["tab\tseparatedtab\tseparated"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["astraße"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["tab\tseparatedline1\nline2"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["straßesrc/a/b.ts"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ünïcödéHello World"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["akey_name-1"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [".leadinga:b:c"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["İstanbula"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["./x/**/*.jsonHello World"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["é😀"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["hello worldkey_name-1"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["Hello Worldhello world"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["😀straße"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [":src/a/b.ts"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a😀b😀ca:b:c"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [".leadinghello"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["{name} has {count} items{name} has {count} items"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["line1\nline2a"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["HELLO{name} has {count} items"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["  padded  ﻿bom"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["abca..b"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["straßeabc"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ünïcödétrailing."], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["tab\tseparatedstraße"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["src/a/b.tsa..b"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a..b﻿bom"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a:b:ca:b:c"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["{name} has {count} itemsline1\nline2"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["  padded  line1\nline2"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a:b:cemoji 👍🏽 mix"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["﻿bomns:key.path"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ns:key.pathtrailing."], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["straße./x/**/*.json"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["日本語のテキストHELLO"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["line1\nline2a:b:c"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["straßeünïcödé"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ünïcödéΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a:b:ckey_name-1"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ΣΊΣΥΦΟΣünïcödé"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ans:key.path"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ns:key.pathtab\tseparated"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a..b😀"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["hello worldstraße"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ünïcödéa😀b😀c"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ΣΊΣΥΦΟΣa:b:c"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["😀é"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["  padded  é"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["key_name-1HELLO"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a.b.chello world"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["İstanbulé"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["İstanbul😀"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["İstanbulstraße"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["emoji 👍🏽 mixabc"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["  padded  日本語のテキスト"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["éΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["日本語のテキストemoji 👍🏽 mix"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["😀ns:key.path"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ünïcödéHELLO"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a.b.cünïcödé"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["﻿bomkey_name-1"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["src/a/b.tskey_name-1"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["./x/**/*.jsona"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["emoji 👍🏽 mixtab\tseparated"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ünïcödéab"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["emoji 👍🏽 mix😀"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["./x/**/*.jsonhello world"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["hello world{name} has {count} items"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a:b:cİstanbul"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a.leading"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["éemoji 👍🏽 mix"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["abcΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["tab\tseparatedé"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["./x/**/*.jsonkey_name-1"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["İstanbula..b"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["key_name-1日本語のテキスト"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["hello.leading"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["﻿bomHELLO"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["😀😀"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["İstanbulns:key.path"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["helloemoji 👍🏽 mix"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["tab\tseparateda"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["{name} has {count} itemshello"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["abckey_name-1"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["abc😀"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["line1\nline2.leading"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["./x/**/*.jsonline1\nline2"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["étab\tseparated"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ΣΊΣΥΦΟΣstraße"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a.b.ca:b:c"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["{name} has {count} itemsa:b:c"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["😀abc"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a.b.cns:key.path"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ünïcödéline1\nline2"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["﻿bomab"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["straßetrailing."], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["hello world.leading"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["éns:key.path"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["emoji 👍🏽 mixünïcödé"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["é  padded  "], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["  padded  ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["日本語のテキストtrailing."], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ΣΊΣΥΦΟΣé"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [":{name} has {count} items"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["trailing..leading"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["héllo wörld"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["👍🏽 thumbs"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["日本語"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["ılık ırmak"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["👨‍👩‍👧 family"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a b"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a😀b"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a²b x½ y①"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["aⅠb Ⅻ"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["a𐐀b 𝐀bc"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["कि ٣٤"], "ok": false}
+{"fn": "_proxy_scheme_candidates", "args": ["HELLO"], "ok": ["http://HELLO", "socks5h://HELLO", "socks5://HELLO"]}
+{"fn": "_proxy_scheme_candidates", "args": ["Hello World"], "ok": ["http://Hello World", "socks5h://Hello World", "socks5://Hello World"]}
+{"fn": "_proxy_scheme_candidates", "args": ["İstanbul"], "ok": ["http://İstanbul", "socks5h://İstanbul", "socks5://İstanbul"]}
+{"fn": "_proxy_scheme_candidates", "args": ["./x/**/*.json"], "ok": ["http://./x/**/*.json", "socks5h://./x/**/*.json", "socks5://./x/**/*.json"]}
+{"fn": "_proxy_scheme_candidates", "args": ["﻿bomabc"], "ok": ["http://﻿bomabc", "socks5h://﻿bomabc", "socks5://﻿bomabc"]}
+{"fn": "_proxy_scheme_candidates", "args": ["{name} has {count} items"], "ok": ["http://{name} has {count} items", "socks5h://{name} has {count} items", "socks5://{name} has {count} items"]}
+{"fn": "_proxy_scheme_candidates", "args": ["key_name-1"], "ok": ["http://key_name-1", "socks5h://key_name-1", "socks5://key_name-1"]}
+{"fn": "_proxy_scheme_candidates", "args": ["line1\nline2"], "ok": ["http://line1\nline2", "socks5h://line1\nline2", "socks5://line1\nline2"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ΣΊΣΥΦΟΣ"], "ok": ["http://ΣΊΣΥΦΟΣ", "socks5h://ΣΊΣΥΦΟΣ", "socks5://ΣΊΣΥΦΟΣ"]}
+{"fn": "_proxy_scheme_candidates", "args": ["é"], "ok": ["http://é", "socks5h://é", "socks5://é"]}
+{"fn": "_proxy_scheme_candidates", "args": ["src/a/b.ts"], "ok": ["http://src/a/b.ts", "socks5h://src/a/b.ts", "socks5://src/a/b.ts"]}
+{"fn": "_proxy_scheme_candidates", "args": ["straße"], "ok": ["http://straße", "socks5h://straße", "socks5://straße"]}
+{"fn": "_proxy_scheme_candidates", "args": [".leading"], "ok": ["http://.leading", "socks5h://.leading", "socks5://.leading"]}
+{"fn": "_proxy_scheme_candidates", "args": ["abc"], "ok": ["http://abc", "socks5h://abc", "socks5://abc"]}
+{"fn": "_proxy_scheme_candidates", "args": ["{name} has {count} itemsİstanbul"], "ok": ["http://{name} has {count} itemsİstanbul", "socks5h://{name} has {count} itemsİstanbul", "socks5://{name} has {count} itemsİstanbul"]}
+{"fn": "_proxy_scheme_candidates", "args": ["abΣΊΣΥΦΟΣ"], "ok": ["http://abΣΊΣΥΦΟΣ", "socks5h://abΣΊΣΥΦΟΣ", "socks5://abΣΊΣΥΦΟΣ"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a.b.c"], "ok": ["http://a.b.c", "socks5h://a.b.c", "socks5://a.b.c"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a😀b😀c"], "ok": ["http://a😀b😀c", "socks5h://a😀b😀c", "socks5://a😀b😀c"]}
+{"fn": "_proxy_scheme_candidates", "args": ["tab\tseparatedabc"], "ok": ["http://tab\tseparatedabc", "socks5h://tab\tseparatedabc", "socks5://tab\tseparatedabc"]}
+{"fn": "_proxy_scheme_candidates", "args": ["hello worlda..b"], "ok": ["http://hello worlda..b", "socks5h://hello worlda..b", "socks5://hello worlda..b"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ns:key.path"], "ok": ["http://ns:key.path", "socks5h://ns:key.path", "socks5://ns:key.path"]}
+{"fn": "_proxy_scheme_candidates", "args": [".leading﻿bom"], "ok": ["http://.leading﻿bom", "socks5h://.leading﻿bom", "socks5://.leading﻿bom"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ab"], "ok": ["http://ab", "socks5h://ab", "socks5://ab"]}
+{"fn": "_proxy_scheme_candidates", "args": ["line1\nline2Hello World"], "ok": ["http://line1\nline2Hello World", "socks5h://line1\nline2Hello World", "socks5://line1\nline2Hello World"]}
+{"fn": "_proxy_scheme_candidates", "args": ["tab\tseparated"], "ok": ["http://tab\tseparated", "socks5h://tab\tseparated", "socks5://tab\tseparated"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a:b:cünïcödé"], "ok": ["http://a:b:cünïcödé", "socks5h://a:b:cünïcödé", "socks5://a:b:cünïcödé"]}
+{"fn": "_proxy_scheme_candidates", "args": ["İstanbulsrc/a/b.ts"], "ok": ["http://İstanbulsrc/a/b.ts", "socks5h://İstanbulsrc/a/b.ts", "socks5://İstanbulsrc/a/b.ts"]}
+{"fn": "_proxy_scheme_candidates", "args": ["emoji 👍🏽 mix"], "ok": ["http://emoji 👍🏽 mix", "socks5h://emoji 👍🏽 mix", "socks5://emoji 👍🏽 mix"]}
+{"fn": "_proxy_scheme_candidates", "args": [":"], "ok": ["http://:", "socks5h://:", "socks5://:"]}
+{"fn": "_proxy_scheme_candidates", "args": ["trailing."], "ok": ["http://trailing.", "socks5h://trailing.", "socks5://trailing."]}
+{"fn": "_proxy_scheme_candidates", "args": ["a"], "ok": ["http://a", "socks5h://a", "socks5://a"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a.b.chello world"], "ok": ["http://a.b.chello world", "socks5h://a.b.chello world", "socks5://a.b.chello world"]}
+{"fn": "_proxy_scheme_candidates", "args": ["hello world"], "ok": ["http://hello world", "socks5h://hello world", "socks5://hello world"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a:b:c"], "ok": ["http://a:b:c", "socks5h://a:b:c", "socks5://a:b:c"]}
+{"fn": "_proxy_scheme_candidates", "args": ["emoji 👍🏽 mixa"], "ok": ["http://emoji 👍🏽 mixa", "socks5h://emoji 👍🏽 mixa", "socks5://emoji 👍🏽 mixa"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ns:key.pathé"], "ok": ["http://ns:key.pathé", "socks5h://ns:key.pathé", "socks5://ns:key.pathé"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a:b:ckey_name-1"], "ok": ["http://a:b:ckey_name-1", "socks5h://a:b:ckey_name-1", "socks5://a:b:ckey_name-1"]}
+{"fn": "_proxy_scheme_candidates", "args": ["Hello World﻿bom"], "ok": ["http://Hello World﻿bom", "socks5h://Hello World﻿bom", "socks5://Hello World﻿bom"]}
+{"fn": "_proxy_scheme_candidates", "args": ["😀"], "ok": ["http://😀", "socks5h://😀", "socks5://😀"]}
+{"fn": "_proxy_scheme_candidates", "args": [""], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["Hello Worldline1\nline2"], "ok": ["http://Hello Worldline1\nline2", "socks5h://Hello Worldline1\nline2", "socks5://Hello Worldline1\nline2"]}
+{"fn": "_proxy_scheme_candidates", "args": ["日本語のテキスト"], "ok": ["http://日本語のテキスト", "socks5h://日本語のテキスト", "socks5://日本語のテキスト"]}
+{"fn": "_proxy_scheme_candidates", "args": ["﻿bomemoji 👍🏽 mix"], "ok": ["http://﻿bomemoji 👍🏽 mix", "socks5h://﻿bomemoji 👍🏽 mix", "socks5://﻿bomemoji 👍🏽 mix"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ünïcödé"], "ok": ["http://ünïcödé", "socks5h://ünïcödé", "socks5://ünïcödé"]}
+{"fn": "_proxy_scheme_candidates", "args": ["key_name-1  padded  "], "ok": ["http://key_name-1  padded", "socks5h://key_name-1  padded", "socks5://key_name-1  padded"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ns:key.pathhello"], "ok": ["http://ns:key.pathhello", "socks5h://ns:key.pathhello", "socks5://ns:key.pathhello"]}
+{"fn": "_proxy_scheme_candidates", "args": ["emoji 👍🏽 mixab"], "ok": ["http://emoji 👍🏽 mixab", "socks5h://emoji 👍🏽 mixab", "socks5://emoji 👍🏽 mixab"]}
+{"fn": "_proxy_scheme_candidates", "args": ["key_name-1trailing."], "ok": ["http://key_name-1trailing.", "socks5h://key_name-1trailing.", "socks5://key_name-1trailing."]}
+{"fn": "_proxy_scheme_candidates", "args": ["emoji 👍🏽 mixhello world"], "ok": ["http://emoji 👍🏽 mixhello world", "socks5h://emoji 👍🏽 mixhello world", "socks5://emoji 👍🏽 mixhello world"]}
+{"fn": "_proxy_scheme_candidates", "args": ["emoji 👍🏽 mixstraße"], "ok": ["http://emoji 👍🏽 mixstraße", "socks5h://emoji 👍🏽 mixstraße", "socks5://emoji 👍🏽 mixstraße"]}
+{"fn": "_proxy_scheme_candidates", "args": ["  padded  "], "ok": ["http://padded", "socks5h://padded", "socks5://padded"]}
+{"fn": "_proxy_scheme_candidates", "args": ["./x/**/*.json﻿bom"], "ok": ["http://./x/**/*.json﻿bom", "socks5h://./x/**/*.json﻿bom", "socks5://./x/**/*.json﻿bom"]}
+{"fn": "_proxy_scheme_candidates", "args": ["key_name-1HELLO"], "ok": ["http://key_name-1HELLO", "socks5h://key_name-1HELLO", "socks5://key_name-1HELLO"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ünïcödé  padded  "], "ok": ["http://ünïcödé  padded", "socks5h://ünïcödé  padded", "socks5://ünïcödé  padded"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a..b"], "ok": ["http://a..b", "socks5h://a..b", "socks5://a..b"]}
+{"fn": "_proxy_scheme_candidates", "args": [":./x/**/*.json"], "ok": ["http://:./x/**/*.json", "socks5h://:./x/**/*.json", "socks5://:./x/**/*.json"]}
+{"fn": "_proxy_scheme_candidates", "args": ["İstanbulns:key.path"], "ok": ["http://İstanbulns:key.path", "socks5h://İstanbulns:key.path", "socks5://İstanbulns:key.path"]}
+{"fn": "_proxy_scheme_candidates", "args": ["Hello WorldHELLO"], "ok": ["http://Hello WorldHELLO", "socks5h://Hello WorldHELLO", "socks5://Hello WorldHELLO"]}
+{"fn": "_proxy_scheme_candidates", "args": ["{name} has {count} items./x/**/*.json"], "ok": ["http://{name} has {count} items./x/**/*.json", "socks5h://{name} has {count} items./x/**/*.json", "socks5://{name} has {count} items./x/**/*.json"]}
+{"fn": "_proxy_scheme_candidates", "args": ["key_name-1日本語のテキスト"], "ok": ["http://key_name-1日本語のテキスト", "socks5h://key_name-1日本語のテキスト", "socks5://key_name-1日本語のテキスト"]}
+{"fn": "_proxy_scheme_candidates", "args": ["﻿bom"], "ok": ["http://﻿bom", "socks5h://﻿bom", "socks5://﻿bom"]}
+{"fn": "_proxy_scheme_candidates", "args": ["emoji 👍🏽 mixtrailing."], "ok": ["http://emoji 👍🏽 mixtrailing.", "socks5h://emoji 👍🏽 mixtrailing.", "socks5://emoji 👍🏽 mixtrailing."]}
+{"fn": "_proxy_scheme_candidates", "args": ["{name} has {count} itemsab"], "ok": ["http://{name} has {count} itemsab", "socks5h://{name} has {count} itemsab", "socks5://{name} has {count} itemsab"]}
+{"fn": "_proxy_scheme_candidates", "args": ["helloé"], "ok": ["http://helloé", "socks5h://helloé", "socks5://helloé"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ünïcödéab"], "ok": ["http://ünïcödéab", "socks5h://ünïcödéab", "socks5://ünïcödéab"]}
+{"fn": "_proxy_scheme_candidates", "args": ["{name} has {count} items{name} has {count} items"], "ok": ["http://{name} has {count} items{name} has {count} items", "socks5h://{name} has {count} items{name} has {count} items", "socks5://{name} has {count} items{name} has {count} items"]}
+{"fn": "_proxy_scheme_candidates", "args": ["key_name-1tab\tseparated"], "ok": ["http://key_name-1tab\tseparated", "socks5h://key_name-1tab\tseparated", "socks5://key_name-1tab\tseparated"]}
+{"fn": "_proxy_scheme_candidates", "args": ["hello"], "ok": ["http://hello", "socks5h://hello", "socks5://hello"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ΣΊΣΥΦΟΣ{name} has {count} items"], "ok": ["http://ΣΊΣΥΦΟΣ{name} has {count} items", "socks5h://ΣΊΣΥΦΟΣ{name} has {count} items", "socks5://ΣΊΣΥΦΟΣ{name} has {count} items"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a:b:ca.b.c"], "ok": ["http://a:b:ca.b.c", "socks5h://a:b:ca.b.c", "socks5://a:b:ca.b.c"]}
+{"fn": "_proxy_scheme_candidates", "args": ["src/a/b.ts😀"], "ok": ["http://src/a/b.ts😀", "socks5h://src/a/b.ts😀", "socks5://src/a/b.ts😀"]}
+{"fn": "_proxy_scheme_candidates", "args": ["abkey_name-1"], "ok": ["http://abkey_name-1", "socks5h://abkey_name-1", "socks5://abkey_name-1"]}
+{"fn": "_proxy_scheme_candidates", "args": ["﻿bom./x/**/*.json"], "ok": ["http://﻿bom./x/**/*.json", "socks5h://﻿bom./x/**/*.json", "socks5://﻿bom./x/**/*.json"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ΣΊΣΥΦΟΣé"], "ok": ["http://ΣΊΣΥΦΟΣé", "socks5h://ΣΊΣΥΦΟΣé", "socks5://ΣΊΣΥΦΟΣé"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ünïcödésrc/a/b.ts"], "ok": ["http://ünïcödésrc/a/b.ts", "socks5h://ünïcödésrc/a/b.ts", "socks5://ünïcödésrc/a/b.ts"]}
+{"fn": "_proxy_scheme_candidates", "args": ["hello worldé"], "ok": ["http://hello worldé", "socks5h://hello worldé", "socks5://hello worldé"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ab:"], "ok": ["http://ab:", "socks5h://ab:", "socks5://ab:"]}
+{"fn": "_proxy_scheme_candidates", "args": ["straßesrc/a/b.ts"], "ok": ["http://straßesrc/a/b.ts", "socks5h://straßesrc/a/b.ts", "socks5://straßesrc/a/b.ts"]}
+{"fn": "_proxy_scheme_candidates", "args": ["aa.b.c"], "ok": ["http://aa.b.c", "socks5h://aa.b.c", "socks5://aa.b.c"]}
+{"fn": "_proxy_scheme_candidates", "args": ["﻿bom日本語のテキスト"], "ok": ["http://﻿bom日本語のテキスト", "socks5h://﻿bom日本語のテキスト", "socks5://﻿bom日本語のテキスト"]}
+{"fn": "_proxy_scheme_candidates", "args": ["﻿bomab"], "ok": ["http://﻿bomab", "socks5h://﻿bomab", "socks5://﻿bomab"]}
+{"fn": "_proxy_scheme_candidates", "args": ["trailing../x/**/*.json"], "ok": ["http://trailing../x/**/*.json", "socks5h://trailing../x/**/*.json", "socks5://trailing../x/**/*.json"]}
+{"fn": "_proxy_scheme_candidates", "args": ["{name} has {count} itemsa"], "ok": ["http://{name} has {count} itemsa", "socks5h://{name} has {count} itemsa", "socks5://{name} has {count} itemsa"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a..b日本語のテキスト"], "ok": ["http://a..b日本語のテキスト", "socks5h://a..b日本語のテキスト", "socks5://a..b日本語のテキスト"]}
+{"fn": "_proxy_scheme_candidates", "args": ["İstanbulline1\nline2"], "ok": ["http://İstanbulline1\nline2", "socks5h://İstanbulline1\nline2", "socks5://İstanbulline1\nline2"]}
+{"fn": "_proxy_scheme_candidates", "args": ["İstanbul{name} has {count} items"], "ok": ["http://İstanbul{name} has {count} items", "socks5h://İstanbul{name} has {count} items", "socks5://İstanbul{name} has {count} items"]}
+{"fn": "_proxy_scheme_candidates", "args": ["abctab\tseparated"], "ok": ["http://abctab\tseparated", "socks5h://abctab\tseparated", "socks5://abctab\tseparated"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ab😀"], "ok": ["http://ab😀", "socks5h://ab😀", "socks5://ab😀"]}
+{"fn": "_proxy_scheme_candidates", "args": ["😀hello"], "ok": ["http://😀hello", "socks5h://😀hello", "socks5://😀hello"]}
+{"fn": "_proxy_scheme_candidates", "args": ["line1\nline2src/a/b.ts"], "ok": ["http://line1\nline2src/a/b.ts", "socks5h://line1\nline2src/a/b.ts", "socks5://line1\nline2src/a/b.ts"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ünïcödékey_name-1"], "ok": ["http://ünïcödékey_name-1", "socks5h://ünïcödékey_name-1", "socks5://ünïcödékey_name-1"]}
+{"fn": "_proxy_scheme_candidates", "args": ["aemoji 👍🏽 mix"], "ok": ["http://aemoji 👍🏽 mix", "socks5h://aemoji 👍🏽 mix", "socks5://aemoji 👍🏽 mix"]}
+{"fn": "_proxy_scheme_candidates", "args": ["日本語のテキストa..b"], "ok": ["http://日本語のテキストa..b", "socks5h://日本語のテキストa..b", "socks5://日本語のテキストa..b"]}
+{"fn": "_proxy_scheme_candidates", "args": ["éa😀b😀c"], "ok": ["http://éa😀b😀c", "socks5h://éa😀b😀c", "socks5://éa😀b😀c"]}
+{"fn": "_proxy_scheme_candidates", "args": ["😀  padded  "], "ok": ["http://😀  padded", "socks5h://😀  padded", "socks5://😀  padded"]}
+{"fn": "_proxy_scheme_candidates", "args": ["tab\tseparatedkey_name-1"], "ok": ["http://tab\tseparatedkey_name-1", "socks5h://tab\tseparatedkey_name-1", "socks5://tab\tseparatedkey_name-1"]}
+{"fn": "_proxy_scheme_candidates", "args": ["hellokey_name-1"], "ok": ["http://hellokey_name-1", "socks5h://hellokey_name-1", "socks5://hellokey_name-1"]}
+{"fn": "_proxy_scheme_candidates", "args": ["./x/**/*.json:"], "ok": ["http://./x/**/*.json:", "socks5h://./x/**/*.json:", "socks5://./x/**/*.json:"]}
+{"fn": "_proxy_scheme_candidates", "args": ["HELLO  padded  "], "ok": ["http://HELLO  padded", "socks5h://HELLO  padded", "socks5://HELLO  padded"]}
+{"fn": "_proxy_scheme_candidates", "args": ["emoji 👍🏽 mixHELLO"], "ok": ["http://emoji 👍🏽 mixHELLO", "socks5h://emoji 👍🏽 mixHELLO", "socks5://emoji 👍🏽 mixHELLO"]}
+{"fn": "_proxy_scheme_candidates", "args": ["{name} has {count} itemsabc"], "ok": ["http://{name} has {count} itemsabc", "socks5h://{name} has {count} itemsabc", "socks5://{name} has {count} itemsabc"]}
+{"fn": "_proxy_scheme_candidates", "args": ["hello./x/**/*.json"], "ok": ["http://hello./x/**/*.json", "socks5h://hello./x/**/*.json", "socks5://hello./x/**/*.json"]}
+{"fn": "_proxy_scheme_candidates", "args": [".leadingİstanbul"], "ok": ["http://.leadingİstanbul", "socks5h://.leadingİstanbul", "socks5://.leadingİstanbul"]}
+{"fn": "_proxy_scheme_candidates", "args": ["src/a/b.tsline1\nline2"], "ok": ["http://src/a/b.tsline1\nline2", "socks5h://src/a/b.tsline1\nline2", "socks5://src/a/b.tsline1\nline2"]}
+{"fn": "_proxy_scheme_candidates", "args": ["İstanbulΣΊΣΥΦΟΣ"], "ok": ["http://İstanbulΣΊΣΥΦΟΣ", "socks5h://İstanbulΣΊΣΥΦΟΣ", "socks5://İstanbulΣΊΣΥΦΟΣ"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a:b:cemoji 👍🏽 mix"], "ok": ["http://a:b:cemoji 👍🏽 mix", "socks5h://a:b:cemoji 👍🏽 mix", "socks5://a:b:cemoji 👍🏽 mix"]}
+{"fn": "_proxy_scheme_candidates", "args": [":a"], "ok": ["http://:a", "socks5h://:a", "socks5://:a"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a..bé"], "ok": ["http://a..bé", "socks5h://a..bé", "socks5://a..bé"]}
+{"fn": "_proxy_scheme_candidates", "args": ["emoji 👍🏽 mixünïcödé"], "ok": ["http://emoji 👍🏽 mixünïcödé", "socks5h://emoji 👍🏽 mixünïcödé", "socks5://emoji 👍🏽 mixünïcödé"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ünïcödé./x/**/*.json"], "ok": ["http://ünïcödé./x/**/*.json", "socks5h://ünïcödé./x/**/*.json", "socks5://ünïcödé./x/**/*.json"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ünïcödétab\tseparated"], "ok": ["http://ünïcödétab\tseparated", "socks5h://ünïcödétab\tseparated", "socks5://ünïcödétab\tseparated"]}
+{"fn": "_proxy_scheme_candidates", "args": ["İstanbula😀b😀c"], "ok": ["http://İstanbula😀b😀c", "socks5h://İstanbula😀b😀c", "socks5://İstanbula😀b😀c"]}
+{"fn": "_proxy_scheme_candidates", "args": ["  padded  ./x/**/*.json"], "ok": ["http://padded  ./x/**/*.json", "socks5h://padded  ./x/**/*.json", "socks5://padded  ./x/**/*.json"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a..bstraße"], "ok": ["http://a..bstraße", "socks5h://a..bstraße", "socks5://a..bstraße"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a😀b😀ca:b:c"], "ok": ["http://a😀b😀ca:b:c", "socks5h://a😀b😀ca:b:c", "socks5://a😀b😀ca:b:c"]}
+{"fn": "_proxy_scheme_candidates", "args": [":ns:key.path"], "ok": ["http://:ns:key.path", "socks5h://:ns:key.path", "socks5://:ns:key.path"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a..ba"], "ok": ["http://a..ba", "socks5h://a..ba", "socks5://a..ba"]}
+{"fn": "_proxy_scheme_candidates", "args": ["src/a/b.tsİstanbul"], "ok": ["http://src/a/b.tsİstanbul", "socks5h://src/a/b.tsİstanbul", "socks5://src/a/b.tsİstanbul"]}
+{"fn": "_proxy_scheme_candidates", "args": ["trailing.abc"], "ok": ["http://trailing.abc", "socks5h://trailing.abc", "socks5://trailing.abc"]}
+{"fn": "_proxy_scheme_candidates", "args": ["::"], "ok": ["http://::", "socks5h://::", "socks5://::"]}
+{"fn": "_proxy_scheme_candidates", "args": ["日本語のテキストhello"], "ok": ["http://日本語のテキストhello", "socks5h://日本語のテキストhello", "socks5://日本語のテキストhello"]}
+{"fn": "_proxy_scheme_candidates", "args": ["abc.leading"], "ok": ["http://abc.leading", "socks5h://abc.leading", "socks5://abc.leading"]}
+{"fn": "_proxy_scheme_candidates", "args": ["trailing.key_name-1"], "ok": ["http://trailing.key_name-1", "socks5h://trailing.key_name-1", "socks5://trailing.key_name-1"]}
+{"fn": "_proxy_scheme_candidates", "args": ["😀./x/**/*.json"], "ok": ["http://😀./x/**/*.json", "socks5h://😀./x/**/*.json", "socks5://😀./x/**/*.json"]}
+{"fn": "_proxy_scheme_candidates", "args": ["  padded  line1\nline2"], "ok": ["http://padded  line1\nline2", "socks5h://padded  line1\nline2", "socks5://padded  line1\nline2"]}
+{"fn": "_proxy_scheme_candidates", "args": ["hello worldΣΊΣΥΦΟΣ"], "ok": ["http://hello worldΣΊΣΥΦΟΣ", "socks5h://hello worldΣΊΣΥΦΟΣ", "socks5://hello worldΣΊΣΥΦΟΣ"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ΣΊΣΥΦΟΣ  padded  "], "ok": ["http://ΣΊΣΥΦΟΣ  padded", "socks5h://ΣΊΣΥΦΟΣ  padded", "socks5://ΣΊΣΥΦΟΣ  padded"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ΣΊΣΥΦΟΣtrailing."], "ok": ["http://ΣΊΣΥΦΟΣtrailing.", "socks5h://ΣΊΣΥΦΟΣtrailing.", "socks5://ΣΊΣΥΦΟΣtrailing."]}
+{"fn": "_proxy_scheme_candidates", "args": ["a:b:ca"], "ok": ["http://a:b:ca", "socks5h://a:b:ca", "socks5://a:b:ca"]}
+{"fn": "_proxy_scheme_candidates", "args": ["İstanbul./x/**/*.json"], "ok": ["http://İstanbul./x/**/*.json", "socks5h://İstanbul./x/**/*.json", "socks5://İstanbul./x/**/*.json"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a.b.c日本語のテキスト"], "ok": ["http://a.b.c日本語のテキスト", "socks5h://a.b.c日本語のテキスト", "socks5://a.b.c日本語のテキスト"]}
+{"fn": "_proxy_scheme_candidates", "args": ["tab\tseparatedtrailing."], "ok": ["http://tab\tseparatedtrailing.", "socks5h://tab\tseparatedtrailing.", "socks5://tab\tseparatedtrailing."]}
+{"fn": "_proxy_scheme_candidates", "args": ["a:b:ca..b"], "ok": ["http://a:b:ca..b", "socks5h://a:b:ca..b", "socks5://a:b:ca..b"]}
+{"fn": "_proxy_scheme_candidates", "args": [":  padded  "], "ok": ["http://:  padded", "socks5h://:  padded", "socks5://:  padded"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a😀b😀cline1\nline2"], "ok": ["http://a😀b😀cline1\nline2", "socks5h://a😀b😀cline1\nline2", "socks5://a😀b😀cline1\nline2"]}
+{"fn": "_proxy_scheme_candidates", "args": ["é  padded  "], "ok": ["http://é  padded", "socks5h://é  padded", "socks5://é  padded"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ΣΊΣΥΦΟΣemoji 👍🏽 mix"], "ok": ["http://ΣΊΣΥΦΟΣemoji 👍🏽 mix", "socks5h://ΣΊΣΥΦΟΣemoji 👍🏽 mix", "socks5://ΣΊΣΥΦΟΣemoji 👍🏽 mix"]}
+{"fn": "_proxy_scheme_candidates", "args": ["line1\nline2a:b:c"], "ok": ["http://line1\nline2a:b:c", "socks5h://line1\nline2a:b:c", "socks5://line1\nline2a:b:c"]}
+{"fn": "_proxy_scheme_candidates", "args": ["src/a/b.ts{name} has {count} items"], "ok": ["http://src/a/b.ts{name} has {count} items", "socks5h://src/a/b.ts{name} has {count} items", "socks5://src/a/b.ts{name} has {count} items"]}
+{"fn": "_proxy_scheme_candidates", "args": ["hello😀"], "ok": ["http://hello😀", "socks5h://hello😀", "socks5://hello😀"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a.b.ckey_name-1"], "ok": ["http://a.b.ckey_name-1", "socks5h://a.b.ckey_name-1", "socks5://a.b.ckey_name-1"]}
+{"fn": "_proxy_scheme_candidates", "args": ["İstanbulstraße"], "ok": ["http://İstanbulstraße", "socks5h://İstanbulstraße", "socks5://İstanbulstraße"]}
+{"fn": "_proxy_scheme_candidates", "args": ["src/a/b.ts﻿bom"], "ok": ["http://src/a/b.ts﻿bom", "socks5h://src/a/b.ts﻿bom", "socks5://src/a/b.ts﻿bom"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a:b:c.leading"], "ok": ["http://a:b:c.leading", "socks5h://a:b:c.leading", "socks5://a:b:c.leading"]}
+{"fn": "_proxy_scheme_candidates", "args": ["emoji 👍🏽 mix日本語のテキスト"], "ok": ["http://emoji 👍🏽 mix日本語のテキスト", "socks5h://emoji 👍🏽 mix日本語のテキスト", "socks5://emoji 👍🏽 mix日本語のテキスト"]}
+{"fn": "_proxy_scheme_candidates", "args": ["{name} has {count} itemsline1\nline2"], "ok": ["http://{name} has {count} itemsline1\nline2", "socks5h://{name} has {count} itemsline1\nline2", "socks5://{name} has {count} itemsline1\nline2"]}
+{"fn": "_proxy_scheme_candidates", "args": ["tab\tseparatedİstanbul"], "ok": ["http://tab\tseparatedİstanbul", "socks5h://tab\tseparatedİstanbul", "socks5://tab\tseparatedİstanbul"]}
+{"fn": "_proxy_scheme_candidates", "args": ["straßeΣΊΣΥΦΟΣ"], "ok": ["http://straßeΣΊΣΥΦΟΣ", "socks5h://straßeΣΊΣΥΦΟΣ", "socks5://straßeΣΊΣΥΦΟΣ"]}
+{"fn": "_proxy_scheme_candidates", "args": ["key_name-1a"], "ok": ["http://key_name-1a", "socks5h://key_name-1a", "socks5://key_name-1a"]}
+{"fn": "_proxy_scheme_candidates", "args": ["İstanbultrailing."], "ok": ["http://İstanbultrailing.", "socks5h://İstanbultrailing.", "socks5://İstanbultrailing."]}
+{"fn": "_proxy_scheme_candidates", "args": ["hello worldtab\tseparated"], "ok": ["http://hello worldtab\tseparated", "socks5h://hello worldtab\tseparated", "socks5://hello worldtab\tseparated"]}
+{"fn": "_proxy_scheme_candidates", "args": ["HELLOHello World"], "ok": ["http://HELLOHello World", "socks5h://HELLOHello World", "socks5://HELLOHello World"]}
+{"fn": "_proxy_scheme_candidates", "args": ["hello worlda.b.c"], "ok": ["http://hello worlda.b.c", "socks5h://hello worlda.b.c", "socks5://hello worlda.b.c"]}
+{"fn": "_proxy_scheme_candidates", "args": ["src/a/b.ts  padded  "], "ok": ["http://src/a/b.ts  padded", "socks5h://src/a/b.ts  padded", "socks5://src/a/b.ts  padded"]}
+{"fn": "_proxy_scheme_candidates", "args": ["tab\tseparated{name} has {count} items"], "ok": ["http://tab\tseparated{name} has {count} items", "socks5h://tab\tseparated{name} has {count} items", "socks5://tab\tseparated{name} has {count} items"]}
+{"fn": "_proxy_scheme_candidates", "args": ["  padded  hello"], "ok": ["http://padded  hello", "socks5h://padded  hello", "socks5://padded  hello"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a.b.c﻿bom"], "ok": ["http://a.b.c﻿bom", "socks5h://a.b.c﻿bom", "socks5://a.b.c﻿bom"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ns:key.pathhello world"], "ok": ["http://ns:key.pathhello world", "socks5h://ns:key.pathhello world", "socks5://ns:key.pathhello world"]}
+{"fn": "_proxy_scheme_candidates", "args": ["İstanbulHello World"], "ok": ["http://İstanbulHello World", "socks5h://İstanbulHello World", "socks5://İstanbulHello World"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a./x/**/*.json"], "ok": ["http://a./x/**/*.json", "socks5h://a./x/**/*.json", "socks5://a./x/**/*.json"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a﻿bom"], "ok": ["http://a﻿bom", "socks5h://a﻿bom", "socks5://a﻿bom"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ésrc/a/b.ts"], "ok": ["http://ésrc/a/b.ts", "socks5h://ésrc/a/b.ts", "socks5://ésrc/a/b.ts"]}
+{"fn": "_proxy_scheme_candidates", "args": ["./x/**/*.jsonemoji 👍🏽 mix"], "ok": ["http://./x/**/*.jsonemoji 👍🏽 mix", "socks5h://./x/**/*.jsonemoji 👍🏽 mix", "socks5://./x/**/*.jsonemoji 👍🏽 mix"]}
+{"fn": "_proxy_scheme_candidates", "args": ["İstanbulünïcödé"], "ok": ["http://İstanbulünïcödé", "socks5h://İstanbulünïcödé", "socks5://İstanbulünïcödé"]}
+{"fn": "_proxy_scheme_candidates", "args": ["İstanbulab"], "ok": ["http://İstanbulab", "socks5h://İstanbulab", "socks5://İstanbulab"]}
+{"fn": "_proxy_scheme_candidates", "args": ["İstanbulemoji 👍🏽 mix"], "ok": ["http://İstanbulemoji 👍🏽 mix", "socks5h://İstanbulemoji 👍🏽 mix", "socks5://İstanbulemoji 👍🏽 mix"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a.b.c  padded  "], "ok": ["http://a.b.c  padded", "socks5h://a.b.c  padded", "socks5://a.b.c  padded"]}
+{"fn": "_proxy_scheme_candidates", "args": [":{name} has {count} items"], "ok": ["http://:{name} has {count} items", "socks5h://:{name} has {count} items", "socks5://:{name} has {count} items"]}
+{"fn": "_proxy_scheme_candidates", "args": ["key_name-1.leading"], "ok": ["http://key_name-1.leading", "socks5h://key_name-1.leading", "socks5://key_name-1.leading"]}
+{"fn": "_proxy_scheme_candidates", "args": ["é😀"], "ok": ["http://é😀", "socks5h://é😀", "socks5://é😀"]}
+{"fn": "_proxy_scheme_candidates", "args": ["tab\tseparatedab"], "ok": ["http://tab\tseparatedab", "socks5h://tab\tseparatedab", "socks5://tab\tseparatedab"]}
+{"fn": "_proxy_scheme_candidates", "args": ["tab\tseparated./x/**/*.json"], "ok": ["http://tab\tseparated./x/**/*.json", "socks5h://tab\tseparated./x/**/*.json", "socks5://tab\tseparated./x/**/*.json"]}
+{"fn": "_proxy_scheme_candidates", "args": ["﻿bomHELLO"], "ok": ["http://﻿bomHELLO", "socks5h://﻿bomHELLO", "socks5://﻿bomHELLO"]}
+{"fn": "_proxy_scheme_candidates", "args": ["line1\nline2İstanbul"], "ok": ["http://line1\nline2İstanbul", "socks5h://line1\nline2İstanbul", "socks5://line1\nline2İstanbul"]}
+{"fn": "_proxy_scheme_candidates", "args": ["hello{name} has {count} items"], "ok": ["http://hello{name} has {count} items", "socks5h://hello{name} has {count} items", "socks5://hello{name} has {count} items"]}
+{"fn": "_proxy_scheme_candidates", "args": ["key_name-1a..b"], "ok": ["http://key_name-1a..b", "socks5h://key_name-1a..b", "socks5://key_name-1a..b"]}
+{"fn": "_proxy_scheme_candidates", "args": ["./x/**/*.jsona.b.c"], "ok": ["http://./x/**/*.jsona.b.c", "socks5h://./x/**/*.jsona.b.c", "socks5://./x/**/*.jsona.b.c"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ns:key.pathünïcödé"], "ok": ["http://ns:key.pathünïcödé", "socks5h://ns:key.pathünïcödé", "socks5://ns:key.pathünïcödé"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ab./x/**/*.json"], "ok": ["http://ab./x/**/*.json", "socks5h://ab./x/**/*.json", "socks5://ab./x/**/*.json"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a😀b😀c.leading"], "ok": ["http://a😀b😀c.leading", "socks5h://a😀b😀c.leading", "socks5://a😀b😀c.leading"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ns:key.pathline1\nline2"], "ok": ["http://ns:key.pathline1\nline2", "socks5h://ns:key.pathline1\nline2", "socks5://ns:key.pathline1\nline2"]}
+{"fn": "_proxy_scheme_candidates", "args": ["😀ab"], "ok": ["http://😀ab", "socks5h://😀ab", "socks5://😀ab"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a..b{name} has {count} items"], "ok": ["http://a..b{name} has {count} items", "socks5h://a..b{name} has {count} items", "socks5://a..b{name} has {count} items"]}
+{"fn": "_proxy_scheme_candidates", "args": ["helloHELLO"], "ok": ["http://helloHELLO", "socks5h://helloHELLO", "socks5://helloHELLO"]}
+{"fn": "_proxy_scheme_candidates", "args": ["hello worldHELLO"], "ok": ["http://hello worldHELLO", "socks5h://hello worldHELLO", "socks5://hello worldHELLO"]}
+{"fn": "_proxy_scheme_candidates", "args": ["{name} has {count} items:"], "ok": ["http://{name} has {count} items:", "socks5h://{name} has {count} items:", "socks5://{name} has {count} items:"]}
+{"fn": "_proxy_scheme_candidates", "args": ["﻿boma"], "ok": ["http://﻿boma", "socks5h://﻿boma", "socks5://﻿boma"]}
+{"fn": "_proxy_scheme_candidates", "args": ["./x/**/*.json  padded  "], "ok": ["http://./x/**/*.json  padded", "socks5h://./x/**/*.json  padded", "socks5://./x/**/*.json  padded"]}
+{"fn": "_proxy_scheme_candidates", "args": ["hello worldİstanbul"], "ok": ["http://hello worldİstanbul", "socks5h://hello worldİstanbul", "socks5://hello worldİstanbul"]}
+{"fn": "_proxy_scheme_candidates", "args": ["{name} has {count} itemsa:b:c"], "ok": ["http://{name} has {count} itemsa:b:c", "socks5h://{name} has {count} itemsa:b:c", "socks5://{name} has {count} itemsa:b:c"]}
+{"fn": "_proxy_scheme_candidates", "args": ["hello:"], "ok": ["http://hello:", "socks5h://hello:", "socks5://hello:"]}
+{"fn": "_proxy_scheme_candidates", "args": ["straßeHello World"], "ok": ["http://straßeHello World", "socks5h://straßeHello World", "socks5://straßeHello World"]}
+{"fn": "_proxy_scheme_candidates", "args": ["HELLOa..b"], "ok": ["http://HELLOa..b", "socks5h://HELLOa..b", "socks5://HELLOa..b"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ΣΊΣΥΦΟΣ.leading"], "ok": ["http://ΣΊΣΥΦΟΣ.leading", "socks5h://ΣΊΣΥΦΟΣ.leading", "socks5://ΣΊΣΥΦΟΣ.leading"]}
+{"fn": "_proxy_scheme_candidates", "args": ["hello worldline1\nline2"], "ok": ["http://hello worldline1\nline2", "socks5h://hello worldline1\nline2", "socks5://hello worldline1\nline2"]}
+{"fn": "_proxy_scheme_candidates", "args": ["  padded  ünïcödé"], "ok": ["http://padded  ünïcödé", "socks5h://padded  ünïcödé", "socks5://padded  ünïcödé"]}
+{"fn": "_proxy_scheme_candidates", "args": ["trailing.straße"], "ok": ["http://trailing.straße", "socks5h://trailing.straße", "socks5://trailing.straße"]}
+{"fn": "_proxy_scheme_candidates", "args": ["é日本語のテキスト"], "ok": ["http://é日本語のテキスト", "socks5h://é日本語のテキスト", "socks5://é日本語のテキスト"]}
+{"fn": "_proxy_scheme_candidates", "args": ["aHello World"], "ok": ["http://aHello World", "socks5h://aHello World", "socks5://aHello World"]}
+{"fn": "_proxy_scheme_candidates", "args": ["tab\tseparated😀"], "ok": ["http://tab\tseparated😀", "socks5h://tab\tseparated😀", "socks5://tab\tseparated😀"]}
+{"fn": "_proxy_scheme_candidates", "args": ["héllo wörld"], "ok": ["http://héllo wörld", "socks5h://héllo wörld", "socks5://héllo wörld"]}
+{"fn": "_proxy_scheme_candidates", "args": ["👍🏽 thumbs"], "ok": ["http://👍🏽 thumbs", "socks5h://👍🏽 thumbs", "socks5://👍🏽 thumbs"]}
+{"fn": "_proxy_scheme_candidates", "args": ["日本語"], "ok": ["http://日本語", "socks5h://日本語", "socks5://日本語"]}
+{"fn": "_proxy_scheme_candidates", "args": ["ılık ırmak"], "ok": ["http://ılık ırmak", "socks5h://ılık ırmak", "socks5://ılık ırmak"]}
+{"fn": "_proxy_scheme_candidates", "args": ["👨‍👩‍👧 family"], "ok": ["http://👨‍👩‍👧 family", "socks5h://👨‍👩‍👧 family", "socks5://👨‍👩‍👧 family"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a b"], "ok": ["http://a b", "socks5h://a b", "socks5://a b"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a😀b"], "ok": ["http://a😀b", "socks5h://a😀b", "socks5://a😀b"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a²b x½ y①"], "ok": ["http://a²b x½ y①", "socks5h://a²b x½ y①", "socks5://a²b x½ y①"]}
+{"fn": "_proxy_scheme_candidates", "args": ["aⅠb Ⅻ"], "ok": ["http://aⅠb Ⅻ", "socks5h://aⅠb Ⅻ", "socks5://aⅠb Ⅻ"]}
+{"fn": "_proxy_scheme_candidates", "args": ["a𐐀b 𝐀bc"], "ok": ["http://a𐐀b 𝐀bc", "socks5h://a𐐀b 𝐀bc", "socks5://a𐐀b 𝐀bc"]}
+{"fn": "_proxy_scheme_candidates", "args": ["कि ٣٤"], "ok": ["http://कि ٣٤", "socks5h://कि ٣٤", "socks5://कि ٣٤"]}
+{"fn": "is_retryable_network_error", "args": [null], "ok": false}
+{"fn": "is_retryable_network_error", "args": [""], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["HTTP 403 Forbidden: target host denied"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["HTTPSConnectionPool(host='www.paypal.com', port=443): Max retries exceeded with url: /signin (Caused by ProxyError('Cannot connect to proxy.', OSError('Tunnel connection failed: 502 Bad Gateway')))"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["curl: (35) BoringSSL SSL_connect: SSL_ERROR_SYSCALL in connection to chatgpt.com:443"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["curl: (28) Operation timed out after 12005 milliseconds with 0 bytes received"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["RemoteDisconnected('Remote end closed connection without response')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:2406)')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["ValueError: country_mismatch:expected=US,observed=DE"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["HTTP 401 Unauthorized: token_invalidated pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [null], "ok": false}
+{"fn": "is_retryable_network_error", "args": [""], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-12] HTTP 403 Forbidden: target host denied"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-13] HTTPSConnectionPool(host='www.paypal.com', port=443): Max retries exceeded with url: /signin (Caused by ProxyError('Cannot connect to proxy.', OSError('Tunnel connection failed: 502 Bad Gateway')))"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-14] curl: (35) BoringSSL SSL_connect: SSL_ERROR_SYSCALL in connection to chatgpt.com:443"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-15] curl: (28) Operation timed out after 12005 milliseconds with 0 bytes received"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-16] RemoteDisconnected('Remote end closed connection without response')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-17] SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:2406)')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-18] ValueError: country_mismatch:expected=US,observed=DE"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-19] HTTP 401 Unauthorized: token_invalidated pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [null], "ok": false}
+{"fn": "is_retryable_network_error", "args": [""], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-22] HTTP 403 Forbidden: target host denied"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-23] HTTPSConnectionPool(host='www.paypal.com', port=443): Max retries exceeded with url: /signin (Caused by ProxyError('Cannot connect to proxy.', OSError('Tunnel connection failed: 502 Bad Gateway')))"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-24] curl: (35) BoringSSL SSL_connect: SSL_ERROR_SYSCALL in connection to chatgpt.com:443"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-25] curl: (28) Operation timed out after 12005 milliseconds with 0 bytes received"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-26] RemoteDisconnected('Remote end closed connection without response')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-27] SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:2406)')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-28] ValueError: country_mismatch:expected=US,observed=DE"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-29] HTTP 401 Unauthorized: token_invalidated pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [null], "ok": false}
+{"fn": "is_retryable_network_error", "args": [""], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-32] HTTP 403 Forbidden: target host denied"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-33] HTTPSConnectionPool(host='www.paypal.com', port=443): Max retries exceeded with url: /signin (Caused by ProxyError('Cannot connect to proxy.', OSError('Tunnel connection failed: 502 Bad Gateway')))"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-34] curl: (35) BoringSSL SSL_connect: SSL_ERROR_SYSCALL in connection to chatgpt.com:443"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-35] curl: (28) Operation timed out after 12005 milliseconds with 0 bytes received"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-36] RemoteDisconnected('Remote end closed connection without response')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-37] SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:2406)')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-38] ValueError: country_mismatch:expected=US,observed=DE"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-39] HTTP 401 Unauthorized: token_invalidated pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [null], "ok": false}
+{"fn": "is_retryable_network_error", "args": [""], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-42] HTTP 403 Forbidden: target host denied"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-43] HTTPSConnectionPool(host='www.paypal.com', port=443): Max retries exceeded with url: /signin (Caused by ProxyError('Cannot connect to proxy.', OSError('Tunnel connection failed: 502 Bad Gateway')))"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-44] curl: (35) BoringSSL SSL_connect: SSL_ERROR_SYSCALL in connection to chatgpt.com:443"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-45] curl: (28) Operation timed out after 12005 milliseconds with 0 bytes received"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-46] RemoteDisconnected('Remote end closed connection without response')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-47] SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:2406)')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-48] ValueError: country_mismatch:expected=US,observed=DE"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-49] HTTP 401 Unauthorized: token_invalidated pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [null], "ok": false}
+{"fn": "is_retryable_network_error", "args": [""], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-52] HTTP 403 Forbidden: target host denied"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-53] HTTPSConnectionPool(host='www.paypal.com', port=443): Max retries exceeded with url: /signin (Caused by ProxyError('Cannot connect to proxy.', OSError('Tunnel connection failed: 502 Bad Gateway')))"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-54] curl: (35) BoringSSL SSL_connect: SSL_ERROR_SYSCALL in connection to chatgpt.com:443"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-55] curl: (28) Operation timed out after 12005 milliseconds with 0 bytes received"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-56] RemoteDisconnected('Remote end closed connection without response')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-57] SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:2406)')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-58] ValueError: country_mismatch:expected=US,observed=DE"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-59] HTTP 401 Unauthorized: token_invalidated pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [null], "ok": false}
+{"fn": "is_retryable_network_error", "args": [""], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-62] HTTP 403 Forbidden: target host denied"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-63] HTTPSConnectionPool(host='www.paypal.com', port=443): Max retries exceeded with url: /signin (Caused by ProxyError('Cannot connect to proxy.', OSError('Tunnel connection failed: 502 Bad Gateway')))"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-64] curl: (35) BoringSSL SSL_connect: SSL_ERROR_SYSCALL in connection to chatgpt.com:443"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-65] curl: (28) Operation timed out after 12005 milliseconds with 0 bytes received"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-66] RemoteDisconnected('Remote end closed connection without response')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-67] SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:2406)')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-68] ValueError: country_mismatch:expected=US,observed=DE"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-69] HTTP 401 Unauthorized: token_invalidated pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [null], "ok": false}
+{"fn": "is_retryable_network_error", "args": [""], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-72] HTTP 403 Forbidden: target host denied"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-73] HTTPSConnectionPool(host='www.paypal.com', port=443): Max retries exceeded with url: /signin (Caused by ProxyError('Cannot connect to proxy.', OSError('Tunnel connection failed: 502 Bad Gateway')))"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-74] curl: (35) BoringSSL SSL_connect: SSL_ERROR_SYSCALL in connection to chatgpt.com:443"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-75] curl: (28) Operation timed out after 12005 milliseconds with 0 bytes received"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-76] RemoteDisconnected('Remote end closed connection without response')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-77] SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:2406)')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-78] ValueError: country_mismatch:expected=US,observed=DE"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-79] HTTP 401 Unauthorized: token_invalidated pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [null], "ok": false}
+{"fn": "is_retryable_network_error", "args": [""], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-82] HTTP 403 Forbidden: target host denied"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-83] HTTPSConnectionPool(host='www.paypal.com', port=443): Max retries exceeded with url: /signin (Caused by ProxyError('Cannot connect to proxy.', OSError('Tunnel connection failed: 502 Bad Gateway')))"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-84] curl: (35) BoringSSL SSL_connect: SSL_ERROR_SYSCALL in connection to chatgpt.com:443"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-85] curl: (28) Operation timed out after 12005 milliseconds with 0 bytes received"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-86] RemoteDisconnected('Remote end closed connection without response')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-87] SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:2406)')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-88] ValueError: country_mismatch:expected=US,observed=DE"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-89] HTTP 401 Unauthorized: token_invalidated pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [null], "ok": false}
+{"fn": "is_retryable_network_error", "args": [""], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-92] HTTP 403 Forbidden: target host denied"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-93] HTTPSConnectionPool(host='www.paypal.com', port=443): Max retries exceeded with url: /signin (Caused by ProxyError('Cannot connect to proxy.', OSError('Tunnel connection failed: 502 Bad Gateway')))"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-94] curl: (35) BoringSSL SSL_connect: SSL_ERROR_SYSCALL in connection to chatgpt.com:443"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-95] curl: (28) Operation timed out after 12005 milliseconds with 0 bytes received"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-96] RemoteDisconnected('Remote end closed connection without response')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-97] SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:2406)')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-98] ValueError: country_mismatch:expected=US,observed=DE"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-99] HTTP 401 Unauthorized: token_invalidated pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [null], "ok": false}
+{"fn": "is_retryable_network_error", "args": [""], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-102] HTTP 403 Forbidden: target host denied"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-103] HTTPSConnectionPool(host='www.paypal.com', port=443): Max retries exceeded with url: /signin (Caused by ProxyError('Cannot connect to proxy.', OSError('Tunnel connection failed: 502 Bad Gateway')))"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-104] curl: (35) BoringSSL SSL_connect: SSL_ERROR_SYSCALL in connection to chatgpt.com:443"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-105] curl: (28) Operation timed out after 12005 milliseconds with 0 bytes received"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-106] RemoteDisconnected('Remote end closed connection without response')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-107] SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:2406)')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-108] ValueError: country_mismatch:expected=US,observed=DE"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-109] HTTP 401 Unauthorized: token_invalidated pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [null], "ok": false}
+{"fn": "is_retryable_network_error", "args": [""], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-112] HTTP 403 Forbidden: target host denied"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-113] HTTPSConnectionPool(host='www.paypal.com', port=443): Max retries exceeded with url: /signin (Caused by ProxyError('Cannot connect to proxy.', OSError('Tunnel connection failed: 502 Bad Gateway')))"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-114] curl: (35) BoringSSL SSL_connect: SSL_ERROR_SYSCALL in connection to chatgpt.com:443"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-115] curl: (28) Operation timed out after 12005 milliseconds with 0 bytes received"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-116] RemoteDisconnected('Remote end closed connection without response')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-117] SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:2406)')"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-118] ValueError: country_mismatch:expected=US,observed=DE"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-119] HTTP 401 Unauthorized: token_invalidated pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad"], "ok": false}
+{"fn": "is_retryable_network_error", "args": [null], "ok": false}
+{"fn": "is_retryable_network_error", "args": [""], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-122] HTTP 403 Forbidden: target host denied"], "ok": false}
+{"fn": "is_retryable_network_error", "args": ["[probe-123] HTTPSConnectionPool(host='www.paypal.com', port=443): Max retries exceeded with url: /signin (Caused by ProxyError('Cannot connect to proxy.', OSError('Tunnel connection failed: 502 Bad Gateway')))"], "ok": true}
+{"fn": "is_retryable_network_error", "args": ["[probe-124] curl: (35) BoringSSL SSL_connect: SSL_ERROR_SYSCALL in connection to chatgpt.com:443"], "ok": true}
+{"fn": "_proxy_scheme_candidates", "args": [null], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": [""], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["   "], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["127.0.0.1:7897"], "ok": ["http://127.0.0.1:7897", "socks5h://127.0.0.1:7897", "socks5://127.0.0.1:7897"]}
+{"fn": "_proxy_scheme_candidates", "args": ["http://user-region-us:pass@gate.provider.io:8080"], "ok": ["http://user-region-us:pass@gate.provider.io:8080", "socks5h://user-region-us:pass@gate.provider.io:8080", "socks5://user-region-us:pass@gate.provider.io:8080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["https://user:pass@secure-proxy.example.com:8443"], "ok": ["https://user:pass@secure-proxy.example.com:8443", "http://user:pass@secure-proxy.example.com:8443", "socks5h://user:pass@secure-proxy.example.com:8443", "socks5://user:pass@secure-proxy.example.com:8443"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5://acct:pw@1.2.3.4:1080"], "ok": ["socks5://acct:pw@1.2.3.4:1080", "socks5h://acct:pw@1.2.3.4:1080", "http://acct:pw@1.2.3.4:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5h://[::1]:1080"], "ok": ["socks5h://[::1]:1080", "socks5://[::1]:1080", "http://[::1]:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks4://127.0.0.1:1080"], "ok": ["socks4://127.0.0.1:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["gate.example.com:9000:customer-country-jp:pass123"], "ok": ["http://customer-country-jp:pass123@gate.example.com:9000", "socks5h://customer-country-jp:pass123@gate.example.com:9000", "socks5://customer-country-jp:pass123@gate.example.com:9000"]}
+{"fn": "_proxy_scheme_candidates", "args": [null], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": [""], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["   "], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["127.0.0.1:7897"], "ok": ["http://127.0.0.1:7897", "socks5h://127.0.0.1:7897", "socks5://127.0.0.1:7897"]}
+{"fn": "_proxy_scheme_candidates", "args": ["http://user-region-us:pass@gate.provider.io:8014"], "ok": ["http://user-region-us:pass@gate.provider.io:8014", "socks5h://user-region-us:pass@gate.provider.io:8014", "socks5://user-region-us:pass@gate.provider.io:8014"]}
+{"fn": "_proxy_scheme_candidates", "args": ["https://user:pass@secure-proxy.example.com:8443"], "ok": ["https://user:pass@secure-proxy.example.com:8443", "http://user:pass@secure-proxy.example.com:8443", "socks5h://user:pass@secure-proxy.example.com:8443", "socks5://user:pass@secure-proxy.example.com:8443"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5://acct:pw@1.2.3.4:1080"], "ok": ["socks5://acct:pw@1.2.3.4:1080", "socks5h://acct:pw@1.2.3.4:1080", "http://acct:pw@1.2.3.4:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5h://[::1]:1080"], "ok": ["socks5h://[::1]:1080", "socks5://[::1]:1080", "http://[::1]:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks4://127.0.0.1:1080"], "ok": ["socks4://127.0.0.1:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["gate.example.com:9000:customer-country-jp:pass123"], "ok": ["http://customer-country-jp:pass123@gate.example.com:9000", "socks5h://customer-country-jp:pass123@gate.example.com:9000", "socks5://customer-country-jp:pass123@gate.example.com:9000"]}
+{"fn": "_proxy_scheme_candidates", "args": [null], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": [""], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["   "], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["127.0.0.1:7897"], "ok": ["http://127.0.0.1:7897", "socks5h://127.0.0.1:7897", "socks5://127.0.0.1:7897"]}
+{"fn": "_proxy_scheme_candidates", "args": ["http://user-region-us:pass@gate.provider.io:8024"], "ok": ["http://user-region-us:pass@gate.provider.io:8024", "socks5h://user-region-us:pass@gate.provider.io:8024", "socks5://user-region-us:pass@gate.provider.io:8024"]}
+{"fn": "_proxy_scheme_candidates", "args": ["https://user:pass@secure-proxy.example.com:8443"], "ok": ["https://user:pass@secure-proxy.example.com:8443", "http://user:pass@secure-proxy.example.com:8443", "socks5h://user:pass@secure-proxy.example.com:8443", "socks5://user:pass@secure-proxy.example.com:8443"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5://acct:pw@1.2.3.4:1080"], "ok": ["socks5://acct:pw@1.2.3.4:1080", "socks5h://acct:pw@1.2.3.4:1080", "http://acct:pw@1.2.3.4:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5h://[::1]:1080"], "ok": ["socks5h://[::1]:1080", "socks5://[::1]:1080", "http://[::1]:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks4://127.0.0.1:1080"], "ok": ["socks4://127.0.0.1:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["gate.example.com:9000:customer-country-jp:pass123"], "ok": ["http://customer-country-jp:pass123@gate.example.com:9000", "socks5h://customer-country-jp:pass123@gate.example.com:9000", "socks5://customer-country-jp:pass123@gate.example.com:9000"]}
+{"fn": "_proxy_scheme_candidates", "args": [null], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": [""], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["   "], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["127.0.0.1:7897"], "ok": ["http://127.0.0.1:7897", "socks5h://127.0.0.1:7897", "socks5://127.0.0.1:7897"]}
+{"fn": "_proxy_scheme_candidates", "args": ["http://user-region-us:pass@gate.provider.io:8034"], "ok": ["http://user-region-us:pass@gate.provider.io:8034", "socks5h://user-region-us:pass@gate.provider.io:8034", "socks5://user-region-us:pass@gate.provider.io:8034"]}
+{"fn": "_proxy_scheme_candidates", "args": ["https://user:pass@secure-proxy.example.com:8443"], "ok": ["https://user:pass@secure-proxy.example.com:8443", "http://user:pass@secure-proxy.example.com:8443", "socks5h://user:pass@secure-proxy.example.com:8443", "socks5://user:pass@secure-proxy.example.com:8443"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5://acct:pw@1.2.3.4:1080"], "ok": ["socks5://acct:pw@1.2.3.4:1080", "socks5h://acct:pw@1.2.3.4:1080", "http://acct:pw@1.2.3.4:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5h://[::1]:1080"], "ok": ["socks5h://[::1]:1080", "socks5://[::1]:1080", "http://[::1]:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks4://127.0.0.1:1080"], "ok": ["socks4://127.0.0.1:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["gate.example.com:9000:customer-country-jp:pass123"], "ok": ["http://customer-country-jp:pass123@gate.example.com:9000", "socks5h://customer-country-jp:pass123@gate.example.com:9000", "socks5://customer-country-jp:pass123@gate.example.com:9000"]}
+{"fn": "_proxy_scheme_candidates", "args": [null], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": [""], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["   "], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["127.0.0.1:7897"], "ok": ["http://127.0.0.1:7897", "socks5h://127.0.0.1:7897", "socks5://127.0.0.1:7897"]}
+{"fn": "_proxy_scheme_candidates", "args": ["http://user-region-us:pass@gate.provider.io:8044"], "ok": ["http://user-region-us:pass@gate.provider.io:8044", "socks5h://user-region-us:pass@gate.provider.io:8044", "socks5://user-region-us:pass@gate.provider.io:8044"]}
+{"fn": "_proxy_scheme_candidates", "args": ["https://user:pass@secure-proxy.example.com:8443"], "ok": ["https://user:pass@secure-proxy.example.com:8443", "http://user:pass@secure-proxy.example.com:8443", "socks5h://user:pass@secure-proxy.example.com:8443", "socks5://user:pass@secure-proxy.example.com:8443"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5://acct:pw@1.2.3.4:1080"], "ok": ["socks5://acct:pw@1.2.3.4:1080", "socks5h://acct:pw@1.2.3.4:1080", "http://acct:pw@1.2.3.4:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5h://[::1]:1080"], "ok": ["socks5h://[::1]:1080", "socks5://[::1]:1080", "http://[::1]:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks4://127.0.0.1:1080"], "ok": ["socks4://127.0.0.1:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["gate.example.com:9000:customer-country-jp:pass123"], "ok": ["http://customer-country-jp:pass123@gate.example.com:9000", "socks5h://customer-country-jp:pass123@gate.example.com:9000", "socks5://customer-country-jp:pass123@gate.example.com:9000"]}
+{"fn": "_proxy_scheme_candidates", "args": [null], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": [""], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["   "], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["127.0.0.1:7897"], "ok": ["http://127.0.0.1:7897", "socks5h://127.0.0.1:7897", "socks5://127.0.0.1:7897"]}
+{"fn": "_proxy_scheme_candidates", "args": ["http://user-region-us:pass@gate.provider.io:8054"], "ok": ["http://user-region-us:pass@gate.provider.io:8054", "socks5h://user-region-us:pass@gate.provider.io:8054", "socks5://user-region-us:pass@gate.provider.io:8054"]}
+{"fn": "_proxy_scheme_candidates", "args": ["https://user:pass@secure-proxy.example.com:8443"], "ok": ["https://user:pass@secure-proxy.example.com:8443", "http://user:pass@secure-proxy.example.com:8443", "socks5h://user:pass@secure-proxy.example.com:8443", "socks5://user:pass@secure-proxy.example.com:8443"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5://acct:pw@1.2.3.4:1080"], "ok": ["socks5://acct:pw@1.2.3.4:1080", "socks5h://acct:pw@1.2.3.4:1080", "http://acct:pw@1.2.3.4:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5h://[::1]:1080"], "ok": ["socks5h://[::1]:1080", "socks5://[::1]:1080", "http://[::1]:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks4://127.0.0.1:1080"], "ok": ["socks4://127.0.0.1:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["gate.example.com:9000:customer-country-jp:pass123"], "ok": ["http://customer-country-jp:pass123@gate.example.com:9000", "socks5h://customer-country-jp:pass123@gate.example.com:9000", "socks5://customer-country-jp:pass123@gate.example.com:9000"]}
+{"fn": "_proxy_scheme_candidates", "args": [null], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": [""], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["   "], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["127.0.0.1:7897"], "ok": ["http://127.0.0.1:7897", "socks5h://127.0.0.1:7897", "socks5://127.0.0.1:7897"]}
+{"fn": "_proxy_scheme_candidates", "args": ["http://user-region-us:pass@gate.provider.io:8064"], "ok": ["http://user-region-us:pass@gate.provider.io:8064", "socks5h://user-region-us:pass@gate.provider.io:8064", "socks5://user-region-us:pass@gate.provider.io:8064"]}
+{"fn": "_proxy_scheme_candidates", "args": ["https://user:pass@secure-proxy.example.com:8443"], "ok": ["https://user:pass@secure-proxy.example.com:8443", "http://user:pass@secure-proxy.example.com:8443", "socks5h://user:pass@secure-proxy.example.com:8443", "socks5://user:pass@secure-proxy.example.com:8443"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5://acct:pw@1.2.3.4:1080"], "ok": ["socks5://acct:pw@1.2.3.4:1080", "socks5h://acct:pw@1.2.3.4:1080", "http://acct:pw@1.2.3.4:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5h://[::1]:1080"], "ok": ["socks5h://[::1]:1080", "socks5://[::1]:1080", "http://[::1]:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks4://127.0.0.1:1080"], "ok": ["socks4://127.0.0.1:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["gate.example.com:9000:customer-country-jp:pass123"], "ok": ["http://customer-country-jp:pass123@gate.example.com:9000", "socks5h://customer-country-jp:pass123@gate.example.com:9000", "socks5://customer-country-jp:pass123@gate.example.com:9000"]}
+{"fn": "_proxy_scheme_candidates", "args": [null], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": [""], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["   "], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["127.0.0.1:7897"], "ok": ["http://127.0.0.1:7897", "socks5h://127.0.0.1:7897", "socks5://127.0.0.1:7897"]}
+{"fn": "_proxy_scheme_candidates", "args": ["http://user-region-us:pass@gate.provider.io:8074"], "ok": ["http://user-region-us:pass@gate.provider.io:8074", "socks5h://user-region-us:pass@gate.provider.io:8074", "socks5://user-region-us:pass@gate.provider.io:8074"]}
+{"fn": "_proxy_scheme_candidates", "args": ["https://user:pass@secure-proxy.example.com:8443"], "ok": ["https://user:pass@secure-proxy.example.com:8443", "http://user:pass@secure-proxy.example.com:8443", "socks5h://user:pass@secure-proxy.example.com:8443", "socks5://user:pass@secure-proxy.example.com:8443"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5://acct:pw@1.2.3.4:1080"], "ok": ["socks5://acct:pw@1.2.3.4:1080", "socks5h://acct:pw@1.2.3.4:1080", "http://acct:pw@1.2.3.4:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5h://[::1]:1080"], "ok": ["socks5h://[::1]:1080", "socks5://[::1]:1080", "http://[::1]:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks4://127.0.0.1:1080"], "ok": ["socks4://127.0.0.1:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["gate.example.com:9000:customer-country-jp:pass123"], "ok": ["http://customer-country-jp:pass123@gate.example.com:9000", "socks5h://customer-country-jp:pass123@gate.example.com:9000", "socks5://customer-country-jp:pass123@gate.example.com:9000"]}
+{"fn": "_proxy_scheme_candidates", "args": [null], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": [""], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["   "], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["127.0.0.1:7897"], "ok": ["http://127.0.0.1:7897", "socks5h://127.0.0.1:7897", "socks5://127.0.0.1:7897"]}
+{"fn": "_proxy_scheme_candidates", "args": ["http://user-region-us:pass@gate.provider.io:8084"], "ok": ["http://user-region-us:pass@gate.provider.io:8084", "socks5h://user-region-us:pass@gate.provider.io:8084", "socks5://user-region-us:pass@gate.provider.io:8084"]}
+{"fn": "_proxy_scheme_candidates", "args": ["https://user:pass@secure-proxy.example.com:8443"], "ok": ["https://user:pass@secure-proxy.example.com:8443", "http://user:pass@secure-proxy.example.com:8443", "socks5h://user:pass@secure-proxy.example.com:8443", "socks5://user:pass@secure-proxy.example.com:8443"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5://acct:pw@1.2.3.4:1080"], "ok": ["socks5://acct:pw@1.2.3.4:1080", "socks5h://acct:pw@1.2.3.4:1080", "http://acct:pw@1.2.3.4:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5h://[::1]:1080"], "ok": ["socks5h://[::1]:1080", "socks5://[::1]:1080", "http://[::1]:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks4://127.0.0.1:1080"], "ok": ["socks4://127.0.0.1:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["gate.example.com:9000:customer-country-jp:pass123"], "ok": ["http://customer-country-jp:pass123@gate.example.com:9000", "socks5h://customer-country-jp:pass123@gate.example.com:9000", "socks5://customer-country-jp:pass123@gate.example.com:9000"]}
+{"fn": "_proxy_scheme_candidates", "args": [null], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": [""], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["   "], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["127.0.0.1:7897"], "ok": ["http://127.0.0.1:7897", "socks5h://127.0.0.1:7897", "socks5://127.0.0.1:7897"]}
+{"fn": "_proxy_scheme_candidates", "args": ["http://user-region-us:pass@gate.provider.io:8094"], "ok": ["http://user-region-us:pass@gate.provider.io:8094", "socks5h://user-region-us:pass@gate.provider.io:8094", "socks5://user-region-us:pass@gate.provider.io:8094"]}
+{"fn": "_proxy_scheme_candidates", "args": ["https://user:pass@secure-proxy.example.com:8443"], "ok": ["https://user:pass@secure-proxy.example.com:8443", "http://user:pass@secure-proxy.example.com:8443", "socks5h://user:pass@secure-proxy.example.com:8443", "socks5://user:pass@secure-proxy.example.com:8443"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5://acct:pw@1.2.3.4:1080"], "ok": ["socks5://acct:pw@1.2.3.4:1080", "socks5h://acct:pw@1.2.3.4:1080", "http://acct:pw@1.2.3.4:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5h://[::1]:1080"], "ok": ["socks5h://[::1]:1080", "socks5://[::1]:1080", "http://[::1]:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks4://127.0.0.1:1080"], "ok": ["socks4://127.0.0.1:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["gate.example.com:9000:customer-country-jp:pass123"], "ok": ["http://customer-country-jp:pass123@gate.example.com:9000", "socks5h://customer-country-jp:pass123@gate.example.com:9000", "socks5://customer-country-jp:pass123@gate.example.com:9000"]}
+{"fn": "_proxy_scheme_candidates", "args": [null], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": [""], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["   "], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["127.0.0.1:7897"], "ok": ["http://127.0.0.1:7897", "socks5h://127.0.0.1:7897", "socks5://127.0.0.1:7897"]}
+{"fn": "_proxy_scheme_candidates", "args": ["http://user-region-us:pass@gate.provider.io:8104"], "ok": ["http://user-region-us:pass@gate.provider.io:8104", "socks5h://user-region-us:pass@gate.provider.io:8104", "socks5://user-region-us:pass@gate.provider.io:8104"]}
+{"fn": "_proxy_scheme_candidates", "args": ["https://user:pass@secure-proxy.example.com:8443"], "ok": ["https://user:pass@secure-proxy.example.com:8443", "http://user:pass@secure-proxy.example.com:8443", "socks5h://user:pass@secure-proxy.example.com:8443", "socks5://user:pass@secure-proxy.example.com:8443"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5://acct:pw@1.2.3.4:1080"], "ok": ["socks5://acct:pw@1.2.3.4:1080", "socks5h://acct:pw@1.2.3.4:1080", "http://acct:pw@1.2.3.4:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5h://[::1]:1080"], "ok": ["socks5h://[::1]:1080", "socks5://[::1]:1080", "http://[::1]:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks4://127.0.0.1:1080"], "ok": ["socks4://127.0.0.1:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["gate.example.com:9000:customer-country-jp:pass123"], "ok": ["http://customer-country-jp:pass123@gate.example.com:9000", "socks5h://customer-country-jp:pass123@gate.example.com:9000", "socks5://customer-country-jp:pass123@gate.example.com:9000"]}
+{"fn": "_proxy_scheme_candidates", "args": [null], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": [""], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["   "], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["127.0.0.1:7897"], "ok": ["http://127.0.0.1:7897", "socks5h://127.0.0.1:7897", "socks5://127.0.0.1:7897"]}
+{"fn": "_proxy_scheme_candidates", "args": ["http://user-region-us:pass@gate.provider.io:8114"], "ok": ["http://user-region-us:pass@gate.provider.io:8114", "socks5h://user-region-us:pass@gate.provider.io:8114", "socks5://user-region-us:pass@gate.provider.io:8114"]}
+{"fn": "_proxy_scheme_candidates", "args": ["https://user:pass@secure-proxy.example.com:8443"], "ok": ["https://user:pass@secure-proxy.example.com:8443", "http://user:pass@secure-proxy.example.com:8443", "socks5h://user:pass@secure-proxy.example.com:8443", "socks5://user:pass@secure-proxy.example.com:8443"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5://acct:pw@1.2.3.4:1080"], "ok": ["socks5://acct:pw@1.2.3.4:1080", "socks5h://acct:pw@1.2.3.4:1080", "http://acct:pw@1.2.3.4:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks5h://[::1]:1080"], "ok": ["socks5h://[::1]:1080", "socks5://[::1]:1080", "http://[::1]:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["socks4://127.0.0.1:1080"], "ok": ["socks4://127.0.0.1:1080"]}
+{"fn": "_proxy_scheme_candidates", "args": ["gate.example.com:9000:customer-country-jp:pass123"], "ok": ["http://customer-country-jp:pass123@gate.example.com:9000", "socks5h://customer-country-jp:pass123@gate.example.com:9000", "socks5://customer-country-jp:pass123@gate.example.com:9000"]}
+{"fn": "_proxy_scheme_candidates", "args": [null], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": [""], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["   "], "ok": []}
+{"fn": "_proxy_scheme_candidates", "args": ["127.0.0.1:7897"], "ok": ["http://127.0.0.1:7897", "socks5h://127.0.0.1:7897", "socks5://127.0.0.1:7897"]}
+{"fn": "_proxy_scheme_candidates", "args": ["http://user-region-us:pass@gate.provider.io:8124"], "ok": ["http://user-region-us:pass@gate.provider.io:8124", "socks5h://user-region-us:pass@gate.provider.io:8124", "socks5://user-region-us:pass@gate.provider.io:8124"]}

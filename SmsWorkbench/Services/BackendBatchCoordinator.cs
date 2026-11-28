@@ -66,6 +66,30 @@ namespace SmsWorkbench.Services
             return SensitiveDataSanitizer.RedactArguments(args);
         }
 
+        public static string JoinDoctorFailures(IReadOnlyList<string> fails)
+        {
+            return string.Join("\n  - ", fails ?? Array.Empty<string>());
+        }
+
+        public static bool ShouldRefreshPoolOnRegistrationStage(BackendProgressEvent progressEvent)
+        {
+            return progressEvent != null
+                && progressEvent.Domain == "registration"
+                && (progressEvent.Stage == "registration_status_changed"
+                    || progressEvent.Stage == "mailboxes_skipped");
+        }
+
+        public static string FormatTaskProgressInfo(BackendProgressEvent progressEvent)
+        {
+            if (progressEvent == null)
+            {
+                return string.Empty;
+            }
+            return progressEvent.Detail.Length > 0
+                ? $"{progressEvent.Stage}: {progressEvent.Detail}"
+                : progressEvent.Stage;
+        }
+
         public static bool LineHasSavedSessionMarker(string? line)
         {
             return !string.IsNullOrWhiteSpace(line)

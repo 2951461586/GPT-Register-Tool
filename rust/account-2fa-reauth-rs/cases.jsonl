@@ -1,0 +1,436 @@
+{"fn": "_needs_reauth", "args": ["hello world"], "ok": false}
+{"fn": "_needs_reauth", "args": ["HELLO"], "ok": false}
+{"fn": "_needs_reauth", "args": ["src/a/b.ts"], "ok": false}
+{"fn": "_needs_reauth", "args": [":"], "ok": false}
+{"fn": "_needs_reauth", "args": ["Hello World"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a..b"], "ok": false}
+{"fn": "_needs_reauth", "args": ["İstanbul"], "ok": false}
+{"fn": "_needs_reauth", "args": ["./x/**/*.json"], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": [".leading"], "ok": false}
+{"fn": "_needs_reauth", "args": ["日本語のテキスト"], "ok": false}
+{"fn": "_needs_reauth", "args": ["line1\nline2"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ns:key.path"], "ok": false}
+{"fn": "_needs_reauth", "args": ["  padded  hello"], "ok": false}
+{"fn": "_needs_reauth", "args": [".leadingkey_name-1"], "ok": false}
+{"fn": "_needs_reauth", "args": ["key_name-1"], "ok": false}
+{"fn": "_needs_reauth", "args": ["abc"], "ok": false}
+{"fn": "_needs_reauth", "args": ["hello"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a.b.c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["tab\tseparated"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a:b:c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["  padded  "], "ok": false}
+{"fn": "_needs_reauth", "args": ["ünïcödé"], "ok": false}
+{"fn": "_needs_reauth", "args": ["hellotab\tseparated"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a😀b😀c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["{name} has {count} items"], "ok": false}
+{"fn": "_needs_reauth", "args": ["日本語のテキスト.leading"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ΣΊΣΥΦΟΣΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_needs_reauth", "args": ["straße"], "ok": false}
+{"fn": "_needs_reauth", "args": ["emoji 👍🏽 mix"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ΣΊΣΥΦΟΣa.b.c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["straßea:b:c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["é"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a..b  padded  "], "ok": false}
+{"fn": "_needs_reauth", "args": ["straße日本語のテキスト"], "ok": false}
+{"fn": "_needs_reauth", "args": [":ab"], "ok": false}
+{"fn": "_needs_reauth", "args": ["日本語のテキストabc"], "ok": false}
+{"fn": "_needs_reauth", "args": ["trailing.abc"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ab"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a"], "ok": false}
+{"fn": "_needs_reauth", "args": ["😀"], "ok": false}
+{"fn": "_needs_reauth", "args": ["{name} has {count} items日本語のテキスト"], "ok": false}
+{"fn": "_needs_reauth", "args": ["trailing.straße"], "ok": false}
+{"fn": "_needs_reauth", "args": [".leadingHello World"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ΣΊΣΥΦΟΣ.leading"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ünïcödéa😀b😀c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a..bİstanbul"], "ok": false}
+{"fn": "_needs_reauth", "args": ["src/a/b.ts﻿bom"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a😀b😀chello"], "ok": false}
+{"fn": "_needs_reauth", "args": ["﻿bom"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a.b.cé"], "ok": false}
+{"fn": "_needs_reauth", "args": ["abc﻿bom"], "ok": false}
+{"fn": "_needs_reauth", "args": ["HELLOé"], "ok": false}
+{"fn": "_needs_reauth", "args": ["İstanbula.b.c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a:b:cline1\nline2"], "ok": false}
+{"fn": "_needs_reauth", "args": ["abns:key.path"], "ok": false}
+{"fn": "_needs_reauth", "args": ["trailing.İstanbul"], "ok": false}
+{"fn": "_needs_reauth", "args": ["abHELLO"], "ok": false}
+{"fn": "_needs_reauth", "args": ["line1\nline2Hello World"], "ok": false}
+{"fn": "_needs_reauth", "args": ["trailing."], "ok": false}
+{"fn": "_needs_reauth", "args": ["ΣΊΣΥΦΟΣé"], "ok": false}
+{"fn": "_needs_reauth", "args": ["tab\tseparatedline1\nline2"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a..bline1\nline2"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ünïcödéabc"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a:"], "ok": false}
+{"fn": "_needs_reauth", "args": ["é  padded  "], "ok": false}
+{"fn": "_needs_reauth", "args": ["ab﻿bom"], "ok": false}
+{"fn": "_needs_reauth", "args": ["  padded  :"], "ok": false}
+{"fn": "_needs_reauth", "args": ["hellokey_name-1"], "ok": false}
+{"fn": "_needs_reauth", "args": ["./x/**/*.jsonHello World"], "ok": false}
+{"fn": "_needs_reauth", "args": ["helloİstanbul"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ns:key.pathns:key.path"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ns:key.pathabc"], "ok": false}
+{"fn": "_needs_reauth", "args": ["key_name-1Hello World"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ünïcödé日本語のテキスト"], "ok": false}
+{"fn": "_needs_reauth", "args": ["key_name-1line1\nline2"], "ok": false}
+{"fn": "_needs_reauth", "args": ["HELLOa"], "ok": false}
+{"fn": "_needs_reauth", "args": ["😀a:b:c"], "ok": false}
+{"fn": "_needs_reauth", "args": [".leadinga.b.c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["HELLOabc"], "ok": false}
+{"fn": "_needs_reauth", "args": ["{name} has {count} itemstab\tseparated"], "ok": false}
+{"fn": "_needs_reauth", "args": ["tab\tseparatedHello World"], "ok": false}
+{"fn": "_needs_reauth", "args": ["line1\nline2é"], "ok": false}
+{"fn": "_needs_reauth", "args": ["İstanbula:b:c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["./x/**/*.json{name} has {count} items"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a..ba😀b😀c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ns:key.pathkey_name-1"], "ok": false}
+{"fn": "_needs_reauth", "args": ["Hello Worlda.b.c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["src/a/b.tsa"], "ok": false}
+{"fn": "_needs_reauth", "args": ["trailing.tab\tseparated"], "ok": false}
+{"fn": "_needs_reauth", "args": ["  padded  HELLO"], "ok": false}
+{"fn": "_needs_reauth", "args": ["abtab\tseparated"], "ok": false}
+{"fn": "_needs_reauth", "args": ["hellosrc/a/b.ts"], "ok": false}
+{"fn": "_needs_reauth", "args": ["日本語のテキストa.b.c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["  padded  a😀b😀c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["abc  padded  "], "ok": false}
+{"fn": "_needs_reauth", "args": ["tab\tseparated:"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a:b:c日本語のテキスト"], "ok": false}
+{"fn": "_needs_reauth", "args": [":emoji 👍🏽 mix"], "ok": false}
+{"fn": "_needs_reauth", "args": ["src/a/b.tstrailing."], "ok": false}
+{"fn": "_needs_reauth", "args": ["abline1\nline2"], "ok": false}
+{"fn": "_needs_reauth", "args": ["😀ns:key.path"], "ok": false}
+{"fn": "_needs_reauth", "args": ["😀a.b.c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["trailing.line1\nline2"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ab  padded  "], "ok": false}
+{"fn": "_needs_reauth", "args": ["ns:key.pathtrailing."], "ok": false}
+{"fn": "_needs_reauth", "args": ["aline1\nline2"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ns:key.pathline1\nline2"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ünïcödéa.b.c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["hello worldab"], "ok": false}
+{"fn": "_needs_reauth", "args": ["﻿bom  padded  "], "ok": false}
+{"fn": "_needs_reauth", "args": ["﻿bomtrailing."], "ok": false}
+{"fn": "_needs_reauth", "args": ["aünïcödé"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ünïcödéemoji 👍🏽 mix"], "ok": false}
+{"fn": "_needs_reauth", "args": [":line1\nline2"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ΣΊΣΥΦΟΣsrc/a/b.ts"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a..bkey_name-1"], "ok": false}
+{"fn": "_needs_reauth", "args": ["Hello Worlda"], "ok": false}
+{"fn": "_needs_reauth", "args": ["﻿boma.b.c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["abca"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a日本語のテキスト"], "ok": false}
+{"fn": "_needs_reauth", "args": ["tab\tseparatedé"], "ok": false}
+{"fn": "_needs_reauth", "args": [":😀"], "ok": false}
+{"fn": "_needs_reauth", "args": ["hellons:key.path"], "ok": false}
+{"fn": "_needs_reauth", "args": [".leadingtab\tseparated"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a:b:cns:key.path"], "ok": false}
+{"fn": "_needs_reauth", "args": ["﻿bomΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a:b:cİstanbul"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a😀b😀cé"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ünïcödé😀"], "ok": false}
+{"fn": "_needs_reauth", "args": ["  padded  ns:key.path"], "ok": false}
+{"fn": "_needs_reauth", "args": ["İstanbulünïcödé"], "ok": false}
+{"fn": "_needs_reauth", "args": ["tab\tseparateda.b.c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a..bHELLO"], "ok": false}
+{"fn": "_needs_reauth", "args": ["Hello Worldhello"], "ok": false}
+{"fn": "_needs_reauth", "args": ["hello worldtrailing."], "ok": false}
+{"fn": "_needs_reauth", "args": ["./x/**/*.jsonhello"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a:b:c{name} has {count} items"], "ok": false}
+{"fn": "_needs_reauth", "args": ["{name} has {count} items😀"], "ok": false}
+{"fn": "_needs_reauth", "args": ["emoji 👍🏽 mixstraße"], "ok": false}
+{"fn": "_needs_reauth", "args": ["abca😀b😀c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ΣΊΣΥΦΟΣtrailing."], "ok": false}
+{"fn": "_needs_reauth", "args": ["hello worldünïcödé"], "ok": false}
+{"fn": "_needs_reauth", "args": ["src/a/b.tshello world"], "ok": false}
+{"fn": "_needs_reauth", "args": ["line1\nline2  padded  "], "ok": false}
+{"fn": "_needs_reauth", "args": ["abhello world"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a😀b😀ctrailing."], "ok": false}
+{"fn": "_needs_reauth", "args": ["  padded  tab\tseparated"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ΣΊΣΥΦΟΣemoji 👍🏽 mix"], "ok": false}
+{"fn": "_needs_reauth", "args": ["./x/**/*.json﻿bom"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ΣΊΣΥΦΟΣ./x/**/*.json"], "ok": false}
+{"fn": "_needs_reauth", "args": ["tab\tseparatedhello"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a..bΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a.b.ca.b.c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["﻿bomsrc/a/b.ts"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a..ba.b.c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["trailing.a..b"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ns:key.pathHELLO"], "ok": false}
+{"fn": "_needs_reauth", "args": ["日本語のテキストé"], "ok": false}
+{"fn": "_needs_reauth", "args": ["src/a/b.tsHELLO"], "ok": false}
+{"fn": "_needs_reauth", "args": [".leadingstraße"], "ok": false}
+{"fn": "_needs_reauth", "args": ["key_name-1hello"], "ok": false}
+{"fn": "_needs_reauth", "args": ["  padded  😀"], "ok": false}
+{"fn": "_needs_reauth", "args": ["😀a"], "ok": false}
+{"fn": "_needs_reauth", "args": ["😀﻿bom"], "ok": false}
+{"fn": "_needs_reauth", "args": ["line1\nline2a"], "ok": false}
+{"fn": "_needs_reauth", "args": ["./x/**/*.json😀"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ns:key.pathHello World"], "ok": false}
+{"fn": "_needs_reauth", "args": [":./x/**/*.json"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a..b.leading"], "ok": false}
+{"fn": "_needs_reauth", "args": [":a:b:c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["İstanbulabc"], "ok": false}
+{"fn": "_needs_reauth", "args": ["  padded  日本語のテキスト"], "ok": false}
+{"fn": "_needs_reauth", "args": ["line1\nline2./x/**/*.json"], "ok": false}
+{"fn": "_needs_reauth", "args": ["  padded  {name} has {count} items"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a.b.c./x/**/*.json"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a😀b😀cHello World"], "ok": false}
+{"fn": "_needs_reauth", "args": [":  padded  "], "ok": false}
+{"fn": "_needs_reauth", "args": ["line1\nline2src/a/b.ts"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a..bünïcödé"], "ok": false}
+{"fn": "_needs_reauth", "args": ["abcab"], "ok": false}
+{"fn": "_needs_reauth", "args": ["hello日本語のテキスト"], "ok": false}
+{"fn": "_needs_reauth", "args": ["src/a/b.tsa..b"], "ok": false}
+{"fn": "_needs_reauth", "args": ["﻿bomline1\nline2"], "ok": false}
+{"fn": "_needs_reauth", "args": ["😀a😀b😀c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["😀😀"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a:b:cabc"], "ok": false}
+{"fn": "_needs_reauth", "args": ["HELLO日本語のテキスト"], "ok": false}
+{"fn": "_needs_reauth", "args": ["éΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_needs_reauth", "args": ["{name} has {count} items﻿bom"], "ok": false}
+{"fn": "_needs_reauth", "args": ["aa.b.c"], "ok": false}
+{"fn": "_needs_reauth", "args": ["abcünïcödé"], "ok": false}
+{"fn": "_needs_reauth", "args": ["﻿bomHello World"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a:b:ca"], "ok": false}
+{"fn": "_needs_reauth", "args": ["src/a/b.tsline1\nline2"], "ok": false}
+{"fn": "_needs_reauth", "args": ["aİstanbul"], "ok": false}
+{"fn": "_needs_reauth", "args": ["Hello Worldemoji 👍🏽 mix"], "ok": false}
+{"fn": "_needs_reauth", "args": [".leadingΣΊΣΥΦΟΣ"], "ok": false}
+{"fn": "_needs_reauth", "args": ["trailing.ünïcödé"], "ok": false}
+{"fn": "_needs_reauth", "args": ["héllo wörld"], "ok": false}
+{"fn": "_needs_reauth", "args": ["👍🏽 thumbs"], "ok": false}
+{"fn": "_needs_reauth", "args": ["日本語"], "ok": false}
+{"fn": "_needs_reauth", "args": ["ılık ırmak"], "ok": false}
+{"fn": "_needs_reauth", "args": ["👨‍👩‍👧 family"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a b"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a😀b"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a²b x½ y①"], "ok": false}
+{"fn": "_needs_reauth", "args": ["aⅠb Ⅻ"], "ok": false}
+{"fn": "_needs_reauth", "args": ["a𐐀b 𝐀bc"], "ok": false}
+{"fn": "_needs_reauth", "args": ["कि ٣٤"], "ok": false}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["{\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-13] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-14] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-15] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-16] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-17] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-18] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-19] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-20] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-21] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-24] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-25] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-26] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-27] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-28] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-29] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-30] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-31] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-32] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-35] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-36] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-37] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-38] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-39] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-40] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-41] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-42] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-43] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-46] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-47] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-48] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-49] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-50] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-51] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-52] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-53] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-54] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-57] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-58] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-59] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-60] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-61] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-62] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-63] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-64] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-65] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-68] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-69] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-70] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-71] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-72] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-73] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-74] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-75] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-76] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-79] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-80] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-81] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-82] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-83] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-84] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-85] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-86] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-87] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-90] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-91] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-92] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-93] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-94] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-95] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-96] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-97] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-98] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-101] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-102] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-103] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-104] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-105] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-106] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-107] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-108] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-109] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-112] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-113] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-114] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-115] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-116] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-117] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-118] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-119] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-120] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-123] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-124] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-125] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-126] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-127] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-128] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-129] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-130] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-131] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-134] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-135] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-136] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-137] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-138] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-139] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-140] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-141] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-142] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-145] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-146] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-147] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-148] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-149] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-150] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-151] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-152] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-153] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-156] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-157] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-158] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-159] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-160] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-161] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-162] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-163] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-164] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-167] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-168] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-169] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-170] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-171] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-172] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-173] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-174] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-175] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-178] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-179] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-180] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-181] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-182] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-183] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-184] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-185] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-186] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-189] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-190] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-191] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-192] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-193] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-194] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-195] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-196] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-197] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-200] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-201] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-202] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-203] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-204] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-205] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-206] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-207] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-208] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-211] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-212] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-213] MFA enroll HTTP 401: recent_auth_required"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-214] MFA enroll HTTP 403: forbidden"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-215] {\"error\":{\"code\":\"recent_auth_required\",\"message\":\"Please re-authenticate before enrolling MFA\"}}"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-216] Auth redirect required: step=login_challenge&prompt=login"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-217] Session expired: reauth needed before /backend-api/accounts/mfa/enroll"], "ok": true}
+{"fn": "_needs_reauth", "args": ["[attempt-218] HTTP 429 rate_limit_exceeded on /backend-api/accounts/mfa/info retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry retry"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-219] İ_non_ascii_REAUTH_signal"], "ok": true}
+{"fn": "_needs_reauth", "args": [null], "ok": false}
+{"fn": "_needs_reauth", "args": [""], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-222] ok"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-223] MFA enroll HTTP 500: internal server error detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail"], "ok": false}
+{"fn": "_needs_reauth", "args": ["[attempt-224] MFA enroll HTTP 401: recent_auth_required"], "ok": true}

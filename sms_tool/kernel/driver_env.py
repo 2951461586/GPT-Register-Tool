@@ -1,33 +1,156 @@
-"""Environment overlay for registration driver configuration.
+"""Registration driver vocabulary and environment overlay.
 
 Why this module exists
 ----------------------
-``config.validate_registration_driver_config`` needs the *same*
-environment-overlay logic that the runtime session factory uses, otherwise
-preflight rejects a driver whose credentials only exist as deployment
-environment variables. It used to import that function from
-``registration_drivers/external_sessions``, which made ``sms_tool.config`` -
-imported by 64 modules, the dependency-inversion hub of the whole package -
-depend on a browser driver module. That edge is a cycle: the driver package
-imports config indirectly for proxy and runtime settings.
+``sms_tool.config`` (imported by ~70 modules, the dependency-inversion hub of
+the package) needs both the canonical registration-driver vocabulary
+(:class:`RegistrationDriver`, :data:`DRIVERS`, :data:`KNOWN_DRIVER_ALIASES`,
+:func:`normalize_registration_driver`) and the deployment environment-overlay
+logic (:func:`driver_config`). Previously ``driver_config`` lived here while
+the driver registry lived in ``registration_drivers/base.py``, forcing
+``config/schema.py`` to keep three delayed upward imports into
+``registration_drivers`` and ``registration/orchestrator.py`` to import
+``registration_drivers/base.py`` at module scope just for driver-name
+normalization.
 
-The logic is self-contained (it reads ``os.environ`` and one config mapping), so
-it lives here, below both of its consumers. Neither side reaches sideways any
-more.
+Both datasets are pure stdlib tables with zero browser or transport dependencies,
+so they live together in the kernel below ``config/``, ``registration/``, and
+``registration_drivers/``. ``registration_drivers/base.py`` re-exports every
+symbol for call-site compatibility.
 
 Adding a driver
 ---------------
-Add its table to :data:`DRIVER_ENV_OVERRIDES`. Nothing else needs to change -
-that table is the only place the env-var names are declared.
+1. Add its :class:`RegistrationDriver` member and :data:`DRIVERS` entry below.
+2. Add its environment-variable map to :data:`DRIVER_ENV_OVERRIDES` if needed.
 """
 
 from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Mapping
 
 from .env_loader import ensure_loaded
+
+
+class RegistrationDriver(str, Enum):
+    PROTOCOL = "protocol"
+    PLAYWRIGHT = "playwright"
+    ROXY = "roxy"
+    CLOAK = "cloak"
+    CAMOUFOX = "camoufox"
+
+
+@dataclass(frozen=True)
+class BrowserDriverSpec:
+    """Metadata for one registration driver, the single source of truth."""
+
+    key: str
+    # Every spelling (including the canonical ``key``) that resolves to this
+    # driver. Consumed by ``normalize_registration_driver`` and the config
+    # validators via :data:`KNOWN_DRIVER_ALIASES`.
+    aliases: frozenset[str] = field(default_factory=frozenset)
+    # ``protocol`` is the HTTP/API path and is not a browser driver; the rest
+    # map 1:1 to a browser session class.
+    is_browser: bool = True
+    supports_headless: bool = True
+    supports_context_reuse: bool = False
+    supports_proxy_rotation: bool = True
+    supports_browser_fetch: bool = True
+    supports_profile_persistence: bool = True
+    supports_crash_recovery: bool = True
+
+
+# Canonical driver registry. This is the only place the driver vocabulary and
+# its aliases are declared.
+DRIVERS: dict[str, BrowserDriverSpec] = {
+    RegistrationDriver.PROTOCOL.value: BrowserDriverSpec(
+        "protocol",
+        frozenset({"protocol", "api", "http"}),
+        is_browser=False,
+        supports_headless=False,
+        supports_proxy_rotation=True,
+        supports_browser_fetch=False,
+        supports_profile_persistence=False,
+        supports_crash_recovery=False,
+    ),
+    RegistrationDriver.PLAYWRIGHT.value: BrowserDriverSpec(
+        "playwright",
+        frozenset({"playwright", "pw"}),
+        supports_context_reuse=True,
+    ),
+    RegistrationDriver.ROXY.value: BrowserDriverSpec(
+        "roxy",
+        frozenset(
+            {
+                "roxy",
+                "roxybrowser",
+                "roxy_browser",
+                "browser",
+                "browser_registration",
+                "fingerprint",
+                "fingerprint_browser",
+            }
+        ),
+    ),
+    RegistrationDriver.CLOAK.value: BrowserDriverSpec(
+        "cloak",
+        frozenset({"cloak", "cloakbrowser", "cloak_browser"}),
+    ),
+    RegistrationDriver.CAMOUFOX.value: BrowserDriverSpec(
+        "camoufox",
+        frozenset({"camoufox", "camou", "fox", "cf"}),
+    ),
+}
+
+
+# Derived lists -- none of these are hand-maintained anymore.
+BROWSER_REGISTRATION_DRIVERS = frozenset(k for k, s in DRIVERS.items() if s.is_browser)
+
+_ALIAS_TO_KEY: dict[str, str] = {a: spec.key for spec in DRIVERS.values() for a in spec.aliases}
+
+# Every accepted driver spelling, for config validators that only need a
+# membership test (e.g. ``registration.driver``).
+KNOWN_DRIVER_ALIASES = frozenset(_ALIAS_TO_KEY)
+
+
+def normalize_registration_driver(value: Any = None, config: Mapping[str, Any] | None = None) -> str:
+    """Resolve a supported registration driver and reject unknown names."""
+    raw_value = value.value if isinstance(value, RegistrationDriver) else value
+    raw = str(raw_value or "").strip().lower().replace("-", "_")
+    if not raw and isinstance(config, Mapping):
+        section = config.get("registration")
+        if isinstance(section, Mapping):
+            raw = str(section.get("driver") or "").strip().lower().replace("-", "_")
+    canon = _ALIAS_TO_KEY.get(raw)
+    if canon is not None:
+        return canon
+    if not raw:
+        return RegistrationDriver.PROTOCOL.value
+    raise ValueError(f"unsupported registration driver: {raw}")
+
+
+def driver_choices() -> list[str]:
+    """Argparse choices for ``--registration-driver`` (and any CLI mirror)."""
+    return sorted(DRIVERS)
+
+
+def driver_capabilities(value: Any = None, config: Mapping[str, Any] | None = None) -> dict[str, bool]:
+    """Return stable capability metadata for orchestration and diagnostics."""
+    key = normalize_registration_driver(value, config)
+    spec = DRIVERS[key]
+    return {
+        "is_browser": bool(spec.is_browser),
+        "supports_headless": bool(spec.supports_headless),
+        "supports_context_reuse": bool(spec.supports_context_reuse),
+        "supports_proxy_rotation": bool(spec.supports_proxy_rotation),
+        "supports_browser_fetch": bool(spec.supports_browser_fetch),
+        "supports_profile_persistence": bool(spec.supports_profile_persistence),
+        "supports_crash_recovery": bool(spec.supports_crash_recovery),
+    }
+
 
 # driver name -> {config key: (environment variable, value type)}
 # value type is one of: str, bool, int, float, json

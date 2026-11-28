@@ -1,4 +1,4 @@
-"""``SmsWorkbench/Views/BackendLogPresenter.cs`` noise prefixes must stay real.
+"""``SmsWorkbench/Services/BackendLogPresenter.cs`` noise prefixes must stay real.
 
 ``NoiseLinePrefixes`` is a hand-maintained list of whole-line prefixes the
 WPF log panel never shows. It is a **duplicate of knowledge that lives in
@@ -24,11 +24,10 @@ thing is to keep the two lists from drifting apart.
 from __future__ import annotations
 
 import re
-import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-CSHARP = ROOT / "SmsWorkbench" / "Views" / "BackendLogPresenter.cs"
+CSHARP = ROOT / "SmsWorkbench" / "Services" / "BackendLogPresenter.cs"
 PYTHON_ROOT = ROOT / "sms_tool"
 
 # The array literal in BackendLogPresenter.cs.
@@ -126,37 +125,33 @@ def _matches(prefix: str, heads: list[str]) -> bool:
     return any(h.startswith(prefix) for h in heads)
 
 
-class NoisePrefixContract(unittest.TestCase):
-    def test_extractors_are_not_empty(self):
-        """An empty extraction turns every assertion below into a tautology."""
-        self.assertGreater(len(csharp_noise_prefixes()), 8)
-        self.assertGreater(len(python_emitted_lines()), 100)
-
-    def test_every_filtered_prefix_has_a_python_emitter(self):
-        heads = python_emitted_lines()
-        orphaned = [p for p in csharp_noise_prefixes() if not _matches(p, heads)]
-        self.assertEqual(
-            [],
-            orphaned,
-            "C# filters prefixes that no print() in sms_tool/ can emit; "
-            "they are dead entries and should be removed from NoiseLinePrefixes",
-        )
-
-    def test_prefixes_are_unique(self):
-        prefixes = csharp_noise_prefixes()
-        dupes = {p for p in prefixes if prefixes.count(p) > 1}
-        self.assertEqual(set(), dupes, f"duplicate noise prefixes: {sorted(dupes)}")
-
-    def test_an_over_specific_entry_is_orphaned(self):
-        # The panel filters by prefix, so an entry *longer* than any real
-        # emitter under-filters -- it is dead weight and must be reported.  This
-        # pins the strict match direction: accepting "a shorter head is a prefix
-        # of the entry" is what would let such an entry pass unnoticed.
-        self.assertFalse(_matches("Foo: bar", ["Foo: "]))
-        # ...while a genuine prefix still matches, so the check is not vacuous.
-        self.assertTrue(_matches("Foo", ["Foo: "]))
-        self.assertTrue(_matches("Foo: ", ["Foo: "]))
+def test_extractors_are_not_empty() -> None:
+    """An empty extraction turns every assertion below into a tautology."""
+    assert len(csharp_noise_prefixes()) > 8
+    assert len(python_emitted_lines()) > 100
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_every_filtered_prefix_has_a_python_emitter() -> None:
+    heads = python_emitted_lines()
+    orphaned = [p for p in csharp_noise_prefixes() if not _matches(p, heads)]
+    assert orphaned == [], (
+        "C# filters prefixes that no print() in sms_tool/ can emit; "
+        "they are dead entries and should be removed from NoiseLinePrefixes"
+    )
+
+
+def test_prefixes_are_unique() -> None:
+    prefixes = csharp_noise_prefixes()
+    dupes = {p for p in prefixes if prefixes.count(p) > 1}
+    assert dupes == set(), f"duplicate noise prefixes: {sorted(dupes)}"
+
+
+def test_an_over_specific_entry_is_orphaned() -> None:
+    # The panel filters by prefix, so an entry *longer* than any real
+    # emitter under-filters -- it is dead weight and must be reported.  This
+    # pins the strict match direction: accepting "a shorter head is a prefix
+    # of the entry" is what would let such an entry pass unnoticed.
+    assert not _matches("Foo: bar", ["Foo: "])
+    # ...while a genuine prefix still matches, so the check is not vacuous.
+    assert _matches("Foo", ["Foo: "])
+    assert _matches("Foo: ", ["Foo: "])
