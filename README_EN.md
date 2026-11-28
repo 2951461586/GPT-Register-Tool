@@ -68,6 +68,10 @@ Chinese interface, USDT payments supported, and 30% off your first purchase with
 
 ## Architecture Overview
 
+<div align="center">
+  <img src="./docs/assets/architecture-overview.jpg" alt="GPT-Register-Tool System Architecture Overview" width="100%" />
+</div>
+
 - **Five inward-only layers**: Surface → CLI / Command Adapters → Application Workflows → Provider / Driver / Persistence Adapters → Stdlib-only Foundation Kernel (`sms_tool/kernel/`), governed by `scripts/layer_manifest.json`.
 - **Dual read/write IPC**: `PythonBackendClient` runs write workflows over versioned `@@SMSWORKBENCH_V2@@` envelopes (passing proxy credentials via environment variables rather than `argv`), while `DesktopReadClient` queries a resident side-effect-free JSONL snapshot server.
 - **Native Rust core & CI gates**: `native/sentinel_vm/` provides the in-process Sentinel VM FFI; 71 `rust-anything`-managed PyO3 crates under `rust/` accelerate 132 hot functions (23,952 recorded cases 100% matched, 0 `unsafe`), guarded end-to-end by pre-commit and GitHub Actions CI ratchets.

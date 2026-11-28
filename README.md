@@ -69,6 +69,10 @@
 
 ## 架构简述
 
+<div align="center">
+  <img src="./docs/assets/architecture-overview.jpg" alt="GPT-Register-Tool 系统架构概览" width="100%" />
+</div>
+
 - **五层单向依赖**：按「表面层 → CLI / 命令适配 → 应用工作流 → Provider / 驱动 / 持久化适配 → 标准库内核（`sms_tool/kernel/`）」分层，模块导入严格向内（以 `scripts/layer_manifest.json` 为单一权威）。
 - **桌面读写双通道**：WPF 客户端通过 `PythonBackendClient` 子进程与版本化 `@@SMSWORKBENCH_V2@@` 信封执行写任务（代理凭据仅经环境变量传递，不进 `argv`），通过 `DesktopReadClient` 常驻 JSONL 通道无副作用读取快照。
 - **Rust 原生底座与自动化门禁**：`native/sentinel_vm/` 提供进程内 Sentinel VM FFI，`rust/` 下 71 个由 `rust-anything` 管理的 PyO3 扩展加速 132 个热点函数（23,952 条录制用例 100% 一致，0 `unsafe`）；跨语言契约清单与分层棘轮由预提交钩子与 GitHub Actions CI 全程守卫。
