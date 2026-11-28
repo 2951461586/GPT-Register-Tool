@@ -16,7 +16,7 @@ namespace SmsWorkbench.Views
     /// without a window.
     /// </para>
     /// </summary>
-    public partial class ProxyPoolWindow : Window
+    public partial class ProxyPoolWindow : FluentWindow
     {
         public ProxyPoolWindow(ProxyPoolViewModel viewModel)
         {

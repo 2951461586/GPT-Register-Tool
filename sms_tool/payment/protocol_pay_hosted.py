@@ -466,6 +466,55 @@ class HostedCheckoutProtocolClient:
         cs_id = stripe_checkout_id(session_id)
         return self._request("GET", f"payment_pages/{cs_id}/poll", params={"key": publishable_key})
 
+    @staticmethod
+    def _outcome_from_confirm_error(exc: ProtocolPaymentError) -> dict[str, Any]:
+        return classify_stripe_outcome(
+            {
+                "status": exc.status_code,
+                "body": {
+                    "error": {
+                        "code": exc.stripe_code or exc.error_code,
+                        "decline_code": exc.decline_code,
+                        "message": str(exc),
+                    }
+                },
+            }
+        )
+
+    def _confirm_with_mismatch_retry(
+        self,
+        ctx: dict[str, Any],
+        pm_id: str,
+        *,
+        cs_id: str,
+        publishable_key: str,
+        resolved_billing: Mapping[str, str],
+        resolved_currency: str,
+        on_confirm_start: Callable[[], None] | None = None,
+    ) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        if on_confirm_start is not None:
+            on_confirm_start()
+        try:
+            return self.confirm(ctx, pm_id), None
+        except ProtocolPaymentError as exc:
+            if exc.stripe_code != "checkout_amount_mismatch":
+                return {}, self._outcome_from_confirm_error(exc)
+        refreshed = self.quote(
+            session_id=cs_id,
+            publishable_key=publishable_key,
+            billing=resolved_billing,
+            currency=resolved_currency,
+        )
+        ctx["amount_minor"] = refreshed["amount_minor"]
+        if refreshed.get("eid"):
+            ctx["eid"] = refreshed["eid"]
+        if refreshed.get("checkout_config_id"):
+            ctx["checkout_config_id"] = refreshed["checkout_config_id"]
+        try:
+            return self.confirm(ctx, pm_id), None
+        except ProtocolPaymentError as retry_exc:
+            return {}, self._outcome_from_confirm_error(retry_exc)
+
     def pay(
         self,
         checkout_url: str,
@@ -479,6 +528,7 @@ class HostedCheckoutProtocolClient:
         max_poll_tries: int = 10,
         poll_interval_seconds: float = 1.0,
         fetch_timing: bool = True,
+        on_confirm_start: Callable[[], None] | None = None,
     ) -> dict[str, Any]:
         """Run the full non-CAPTCHA Hosted Checkout card payment flow."""
         cs_id = stripe_checkout_id(checkout_url)
@@ -514,39 +564,21 @@ class HostedCheckoutProtocolClient:
                 device=ctx,
             )
 
-        confirm_payload: dict[str, Any] = {}
-        try:
-            confirm_payload = self.confirm(ctx, pm_id)
-        except ProtocolPaymentError as exc:
-            if exc.stripe_code == "checkout_amount_mismatch":
-                refreshed = self.quote(
-                    session_id=cs_id,
-                    publishable_key=publishable_key,
-                    billing=resolved_billing,
-                    currency=resolved_currency,
-                )
-                ctx["amount_minor"] = refreshed["amount_minor"]
-                if refreshed.get("checkout_config_id"):
-                    ctx["checkout_config_id"] = refreshed["checkout_config_id"]
-                confirm_payload = self.confirm(ctx, pm_id)
-            else:
-                outcome = classify_stripe_outcome(
-                    {
-                        "status": exc.status_code,
-                        "body": {
-                            "error": {
-                                "code": exc.stripe_code or exc.error_code,
-                                "decline_code": exc.decline_code,
-                                "message": str(exc),
-                            }
-                        },
-                    }
-                )
-                return self._format_hosted_result(ctx, pm_id, outcome, confirm_payload={})
+        confirm_payload, error_outcome = self._confirm_with_mismatch_retry(
+            ctx,
+            pm_id,
+            cs_id=cs_id,
+            publishable_key=publishable_key,
+            resolved_billing=resolved_billing,
+            resolved_currency=resolved_currency,
+            on_confirm_start=on_confirm_start,
+        )
+        if error_outcome is not None:
+            return self._format_hosted_result(ctx, pm_id, error_outcome, confirm_payload={})
 
         initial = classify_stripe_outcome({"status": 200, "body": confirm_payload})
         poll_payload: dict[str, Any] | None = None
-        if initial["state"] not in {"paid", "card_declined", "confirm_error", "challenge_required"}:
+        if initial["state"] not in {"paid", "card_declined", "confirm_error", "challenge_required", "unknown"}:
             if not payment_page_settled(confirm_payload):
                 for _ in range(max(1, int(max_poll_tries))):
                     self._sleep(max(0.0, float(poll_interval_seconds)))
@@ -574,10 +606,13 @@ class HostedCheckoutProtocolClient:
             message = decline_message(decline_code)
         elif state == "challenge_required" and not message:
             message = "Stripe requires manual verification (3DS/challenge); complete it directly at checkout_url"
+        elif state == "unknown" and not message:
+            message = "Stripe confirm outcome unknown; reconcile checkout status before retrying"
         failure_detail = submission_failure_detail(poll_payload or confirm_payload)
-        return {
+        status = "completed" if state == "paid" else ("unknown" if state == "unknown" else "failed")
+        result: dict[str, Any] = {
             "ok": state == "paid",
-            "status": "completed" if state == "paid" else "failed",
+            "status": status,
             "mode": "hosted_checkout",
             "state": state,
             "session_id": str(ctx["session_id"]),
@@ -595,3 +630,11 @@ class HostedCheckoutProtocolClient:
             "failure_detail": failure_detail,
             "rv_timestamp_present": bool(ctx.get("rv_timestamp")),
         }
+        if state == "unknown":
+            result["requires_reconciliation"] = True
+            result["side_effect_started"] = True
+            result["retryable"] = False
+        elif state == "pending":
+            result["side_effect_started"] = True
+            result["retryable"] = False
+        return result

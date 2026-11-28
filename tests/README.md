@@ -39,10 +39,11 @@ payment requests are never part of the default suite.
 - `tests/governance/test_config_schema_check.py` and `test_ipc_schema_check.py` guard cross-language manifests.
 - `tests/governance/test_result_schema_check.py` guards `result_schema.json`: a builder's result keys and every declared C# reader's reads are checked against it in both directions.
 - `tests/governance/test_experiment_ratchet.py` guards `scripts/experiment_ledger.json`: every `registration.*` A/B toggle has a kind, default, status and runbook id, and the ledger still matches the code and `config.example.json`.
-- `tests/governance/test_rust_stats_consistency.py`, `test_protocol_payment_rust_parity.py`, and `test_wave*_rust_parity.py` guard all 71 `rust/*-rs/` PyO3 crates, zero-`unsafe` policy, doc totals, and dual-mode Python-vs-Rust parity.
+- `tests/governance/test_rust_stats_consistency.py`, `test_protocol_payment_rust_parity.py`, and `test_wave*_rust_parity.py` guard all 78 `rust/*-rs/` PyO3 crates, zero-`unsafe` policy, doc totals, and dual-mode Python-vs-Rust parity.
+- `tests/governance/test_protocol_payment_contracts_parity.py` locks Stripe zero-decimal currencies and the 25-region billing catalog across Python, Rust, and C#.
 - `tests/governance/test_docs_consistency.py` guards current release pointers and documented provider paths.
 - `tests/payment/test_extract_server.py` covers the unified external paylink extraction server adapter for all 15 catalog payment methods.
-- `tests/payment/test_protocol_pay.py` covers offline protocol card payment codecs (`protocol_codec.py`), billing catalog, Stripe classifiers, and `protocol_pay.py` workflows.
+- `tests/payment/test_protocol_pay.py` covers offline protocol card payment codecs (`protocol_codec.py`), billing catalog, Stripe classifiers, durable `PaymentOperationStore` replay guards, and `protocol_pay.py` workflows.
 - `tests/payment/test_checkout_contract.py` covers canonical Checkout/Stripe init payloads, response normalization, and payment-method evidence extraction.
 - `tests/payment/test_payment_capability.py` and `test_payment_capability_batch.py` cover read-only Checkout + Stripe init probes, matrix routing, and capability-aware Canary decisions.
 - `tests/payment/test_payment_result_contract.py` covers `cancelled`, `unknown`, and `timed_out` terminal states plus normalized `retryable`/`error_stage` fields.

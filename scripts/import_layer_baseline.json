@@ -72,7 +72,7 @@
     "sms_tool/pay_link -> sms_tool": 5,
     "sms_tool/pay_link -> sms_tool/kernel": 5,
     "sms_tool/pay_link -> sms_tool/payment": 11,
-    "sms_tool/payment -> sms_tool": 2,
+    "sms_tool/payment -> sms_tool": 3,
     "sms_tool/payment -> sms_tool/kernel": 11,
     "sms_tool/payment -> sms_tool/observability": 1,
     "sms_tool/payment -> sms_tool/proxy": 2,
@@ -138,6 +138,6 @@
     "sms_tool/transport -> sms_tool/observability": 1,
     "sms_tool/transport -> sms_tool/proxy": 1
   },
-  "total_module_edges": 538,
+  "total_module_edges": 539,
   "type_only_edges": 13
 }

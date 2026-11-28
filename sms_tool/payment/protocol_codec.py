@@ -924,6 +924,10 @@ def decline_message(detail: Any) -> str:
     return f"发卡行拒绝: {code}。{advice}" if advice else f"发卡行拒绝: {code}"
 
 
+_UNKNOWN_CONFIRM_CODES = frozenset({"payment_outcome_unknown", "stripe_transport_error"})
+_GATEWAY_UNKNOWN_HTTP = frozenset({408, 500, 502, 503, 504})
+
+
 def classify_stripe_outcome(confirm: Any, poll: Any = None) -> dict[str, Any]:
     """Classify a Stripe Hosted/Custom Checkout confirm + optional poll response."""
     out: dict[str, Any] = {
@@ -995,9 +999,19 @@ def classify_stripe_outcome(confirm: Any, poll: Any = None) -> dict[str, Any]:
     raw_http = confirm_dict.get("status")
     confirm_http = raw_http if isinstance(raw_http, int) and not isinstance(raw_http, bool) else 0
     poll_state = str(poll_dict.get("state") or poll_dict.get("payment_object_status") or "").lower()
+    err_code = out["code"].lower()
+    gateway_unknown = not out["decline_code"] and (
+        confirm_http in _GATEWAY_UNKNOWN_HTTP or err_code.startswith("stripe_http_5") or err_code == "stripe_http_408"
+    )
     if status in {"succeeded", "requires_capture"} or poll_state == "succeeded":
         out["state"] = "paid"
-    elif out["code"] == "checkout_confirm_error" or confirm_http == 400:
+    elif err_code in _UNKNOWN_CONFIRM_CODES or gateway_unknown:
+        out["state"] = "unknown"
+    elif (
+        err_code == "checkout_confirm_error"
+        or confirm_http in {400, 429}
+        or err_code in {"stripe_http_400", "stripe_http_429"}
+    ):
         out["state"] = "confirm_error"
     elif out["decline_code"] or out["code"]:
         out["state"] = "challenge_required" if "captcha" in out["message"].lower() else "card_declined"

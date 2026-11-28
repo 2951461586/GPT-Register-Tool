@@ -333,24 +333,69 @@ public sealed class DesktopWindowSmokeTests
             var tasksPane = Assert.IsType<Border>(console.FindName("TasksPane"));
             var tasksTab = Assert.IsType<RadioButton>(console.FindName("TasksTabButton"));
             var logTab = Assert.IsType<RadioButton>(console.FindName("LogTabButton"));
+            var jumpToBottomBtn = Assert.IsType<Button>(console.FindName("JumpToBottomButton"));
             var collapseConsoleBtn = Assert.IsType<Button>(console.FindName("CollapseToggleButton"));
             Assert.Equal(Visibility.Visible, logPane.Visibility);
+            Assert.Equal(Visibility.Visible, jumpToBottomBtn.Visibility);
             Assert.Equal(Visibility.Collapsed, tasksPane.Visibility);
+            Assert.True(console.FollowLogTail);
             tasksTab.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
             Assert.Equal(Visibility.Collapsed, logPane.Visibility);
+            Assert.Equal(Visibility.Collapsed, jumpToBottomBtn.Visibility);
             Assert.Equal(Visibility.Visible, tasksPane.Visibility);
             logTab.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
             Assert.Equal(Visibility.Visible, logPane.Visibility);
+            Assert.Equal(Visibility.Visible, jumpToBottomBtn.Visibility);
             Assert.Equal(Visibility.Collapsed, tasksPane.Visibility);
+
+            // Live log defaults to sticking to the lowest line, lets the user
+            // drag/scroll up freely without snapping back, and resumes tail-follow
+            // when JumpToBottomButton is clicked.
+            var logBox = Assert.IsType<TextBox>(console.FindName("LogTextBox"));
+            for (int i = 0; i < 80; i++)
+            {
+                Assert.True(console.TryAppendLogLine($"line-{i:D3}: synthetic log output for scroll test\n"));
+            }
+            console.FlushPendingLogs();
+            main.UpdateLayout();
+            var logScroll = Assert.Single(FindVisualChildren<ScrollViewer>(logBox));
+            Assert.True(logScroll.ScrollableHeight > 0, "expected scrollable log content");
+            Assert.True(
+                logScroll.VerticalOffset >= logScroll.ScrollableHeight - 4.0,
+                $"expected auto-scroll to bottom: offset={logScroll.VerticalOffset}, max={logScroll.ScrollableHeight}");
+            Assert.True(console.FollowLogTail);
+
+            // User scrolls up toward the top -> auto-follow pauses and stays put as new lines arrive.
+            logScroll.ScrollToVerticalOffset(0);
+            main.UpdateLayout();
+            Assert.False(console.FollowLogTail);
+            Assert.True(console.TryAppendLogLine("line-080: streamed while user reads earlier output\n"));
+            console.FlushPendingLogs();
+            main.UpdateLayout();
+            Assert.False(console.FollowLogTail);
+            Assert.True(
+                logScroll.VerticalOffset < 5.0,
+                $"expected user scroll position to stay preserved, got {logScroll.VerticalOffset}");
+
+            // Clicking JumpToBottomButton re-enables tail-follow and jumps to the lowest line.
+            jumpToBottomBtn.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            main.UpdateLayout();
+            Assert.True(console.FollowLogTail);
+            Assert.True(
+                logScroll.VerticalOffset >= logScroll.ScrollableHeight - 4.0,
+                $"expected jump to bottom: offset={logScroll.VerticalOffset}, max={logScroll.ScrollableHeight}");
+
             Assert.False(console.IsCollapsed);
             collapseConsoleBtn.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
             main.UpdateLayout();
             Assert.True(console.IsCollapsed);
+            Assert.Equal(Visibility.Collapsed, jumpToBottomBtn.Visibility);
             Assert.Equal(36.0, Assert.IsType<RowDefinition>(main.FindName("ConsoleRow")).Height.Value);
             Assert.Equal(Visibility.Collapsed, Assert.IsType<GridSplitter>(main.FindName("ConsoleSplitter")).Visibility);
             collapseConsoleBtn.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
             main.UpdateLayout();
             Assert.False(console.IsCollapsed);
+            Assert.Equal(Visibility.Visible, jumpToBottomBtn.Visibility);
             Assert.Equal(Visibility.Visible, Assert.IsType<GridSplitter>(main.FindName("ConsoleSplitter")).Visibility);
             Assert.DoesNotContain(
                 FindVisualChildren<TextBlock>(main),

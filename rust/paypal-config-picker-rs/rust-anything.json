@@ -1,0 +1,61 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/paypal/config_picker.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "paypal-config-picker-rs",
+  "exports": [
+    {
+      "name": "_safe_paypal_session_stem",
+      "file": "sms_tool/paypal/config_picker.py",
+      "line": 94,
+      "params": [
+        {
+          "name": "email",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_normalize_us_state",
+      "file": "sms_tool/paypal/config_picker.py",
+      "line": 79,
+      "reason": "stays in Python (benchmarked 0.7x; dict lookup slower across PyO3)"
+    },
+    {
+      "name": "_sanitize_paypal_alias_local",
+      "file": "sms_tool/paypal/config_picker.py",
+      "line": 86,
+      "reason": "stays in Python (benchmarked 0.6x; short-string PyO3 overhead)"
+    },
+    {
+      "name": "_pick_card_and_address",
+      "file": "sms_tool/paypal/config_picker.py",
+      "line": 99,
+      "reason": "stays in Python (disk index counter I/O)"
+    },
+    {
+      "name": "_generate_alias_email",
+      "file": "sms_tool/paypal/config_picker.py",
+      "line": 136,
+      "reason": "stays in Python (random suffix generation)"
+    },
+    {
+      "name": "_save_paypal_result",
+      "file": "sms_tool/paypal/config_picker.py",
+      "line": 145,
+      "reason": "stays in Python (JSON and SQLite persistence)"
+    }
+  ]
+}

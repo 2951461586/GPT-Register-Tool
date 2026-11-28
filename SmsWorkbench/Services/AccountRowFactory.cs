@@ -74,7 +74,7 @@ namespace SmsWorkbench.Services
                 EgressCountry = egressCountry,
                 IdentityBound = identityBound,
                 Status = AccountStatusInterpreter.DisplayAccountStatus(status, paypalOk, accessState, BackendJson.GetString(data, "error"), paypalStatus, refreshStatus, importedStatus),
-                RegistrationStatus = BackendJson.FirstNonEmpty(BackendJson.GetString(data, "registration_status"), BackendJson.GetString(data, "registration_state")),
+                RegistrationStatus = ResolveRegistrationStatus(data),
                 PayPalStatus = paypalStatusDisplay,
                 PayPalAmount = paypalAmount,
                 // Python owns the display composition and sends it as
@@ -107,6 +107,40 @@ namespace SmsWorkbench.Services
                 MailboxProvider = provider
             };
             return row;
+        }
+
+        /// <summary>
+        /// Resolves the row's canonical machine status for <see cref="AccountMachineState"/>.
+        /// <c>accounts.status</c> tracks live lifecycle transitions (such as
+        /// <c>registered</c>, <c>account_deactivated</c>, <c>at_invalid</c>,
+        /// <c>pending</c>), whereas <c>registration_state</c> stays frozen at the
+        /// signup outcome (<c>active</c> even after later deactivation, or
+        /// <c>at_probe_transport_unknown</c> while awaiting AT verification).
+        /// </summary>
+        private static string ResolveRegistrationStatus(Dictionary<string, object> data)
+        {
+            string explicitRegStatus = BackendJson.GetString(data, "registration_status").Trim();
+            if (explicitRegStatus.Length > 0)
+            {
+                return explicitRegStatus;
+            }
+
+            string status = BackendJson.GetString(data, "status").Trim();
+            string regState = BackendJson.GetString(data, "registration_state").Trim();
+            if (status.Length > 0)
+            {
+                string lowerStatus = status.ToLowerInvariant();
+                string lowerRegState = regState.ToLowerInvariant();
+                if ((lowerStatus == "pending" || lowerStatus == "registered")
+                    && lowerRegState is "partial_registered" or "at_probe_pending" or "at_probe_transport_unknown" or "retry_pending")
+                {
+                    return regState;
+                }
+
+                return status;
+            }
+
+            return regState;
         }
 
         /// <summary>

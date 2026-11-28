@@ -1,0 +1,43 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/registration/state.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "registration-device-seed-rs",
+  "exports": [
+    {
+      "name": "_derive_seeded_device_ids",
+      "file": "sms_tool/registration/state.py",
+      "line": 286,
+      "params": [
+        {
+          "name": "key",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "[string, string]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "seeded_device_identity",
+      "file": "sms_tool/registration/state.py",
+      "line": 300,
+      "reason": "stays in Python (Unicode casefold normalization and dict wrapper)"
+    },
+    {
+      "name": "prepare_registration_context",
+      "file": "sms_tool/registration/state.py",
+      "line": 318,
+      "reason": "stays in Python (dataclass construction and callback orchestration)"
+    }
+  ]
+}

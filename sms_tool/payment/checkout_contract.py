@@ -9,7 +9,7 @@ from typing import Any, Iterable
 
 from .catalog import PAYMENT_METHODS as CATALOG_PAYMENT_METHODS
 from .promotion_states import TEAM_TRIAL_CAMPAIGN_ID as TEAM_TRIAL_CAMPAIGN_ID
-from .protocol_codec import billing_currency_for as billing_currency_for
+from .protocol_codec import BILLING_REGIONS, billing_currency_for as billing_currency_for
 from ..transport import endpoints
 
 
@@ -72,29 +72,18 @@ class BrowserProfile:
 # Egress country -> browser locale/timezone presented to Stripe.  A checkout
 # created from a JP exit must not advertise an unrelated timezone, so callers
 # that pick a country at runtime resolve the pair here instead of hardcoding one.
-COUNTRY_BROWSER_PROFILES: dict[str, BrowserProfile] = {
-    "US": BrowserProfile("en-US", "America/New_York"),
-    "CA": BrowserProfile("en-CA", "America/Toronto"),
-    "BR": BrowserProfile("pt-BR", "America/Sao_Paulo"),
-    "GB": BrowserProfile("en-GB", "Europe/London"),
+# Shared markets come straight from ``protocol_codec.BILLING_REGIONS`` (single
+# source of truth); only the five non-billing-catalog markets live below.
+_EXTRA_COUNTRY_BROWSER_PROFILES: dict[str, BrowserProfile] = {
     "IE": BrowserProfile("en-IE", "Europe/Dublin"),
-    "DE": BrowserProfile("de-DE", "Europe/Berlin"),
     "FR": BrowserProfile("fr-FR", "Europe/Paris"),
-    "NL": BrowserProfile("nl-NL", "Europe/Amsterdam"),
     "CH": BrowserProfile("de-CH", "Europe/Zurich"),
-    "PL": BrowserProfile("pl-PL", "Europe/Warsaw"),
-    "TR": BrowserProfile("tr-TR", "Europe/Istanbul"),
-    "IN": BrowserProfile("en-IN", "Asia/Kolkata"),
-    "SG": BrowserProfile("en-SG", "Asia/Singapore"),
-    "TH": BrowserProfile("th-TH", "Asia/Bangkok"),
-    "ID": BrowserProfile("id-ID", "Asia/Jakarta"),
     "ES": BrowserProfile("es-ES", "Europe/Madrid"),
-    "PH": BrowserProfile("en-PH", "Asia/Manila"),
-    "VN": BrowserProfile("vi-VN", "Asia/Ho_Chi_Minh"),
-    "KR": BrowserProfile("ko-KR", "Asia/Seoul"),
-    "JP": BrowserProfile("ja-JP", "Asia/Tokyo"),
-    "AU": BrowserProfile("en-AU", "Australia/Sydney"),
     "NZ": BrowserProfile("en-NZ", "Pacific/Auckland"),
+}
+COUNTRY_BROWSER_PROFILES: dict[str, BrowserProfile] = {
+    **{code: BrowserProfile(locale, tz) for code, _label, _cur, locale, tz in BILLING_REGIONS},
+    **_EXTRA_COUNTRY_BROWSER_PROFILES,
 }
 DEFAULT_BROWSER_PROFILE = BrowserProfile("en-US", "America/New_York")
 

@@ -46,6 +46,12 @@ def checkpoint_payload(workflow: RegistrationWorkflow) -> dict[str, Any]:
         workflow.runtime, lambda: workflow.r._mailbox_snapshot(workflow.runtime.mailbox)
     )
     payload["auth_fingerprint_profile"] = str(current_auth_fingerprint().get("impersonate") or "")
+    fingerprint_country = str(getattr(workflow, "fingerprint_country", "") or "").strip().upper()
+    if fingerprint_country:
+        payload["fingerprint_country"] = fingerprint_country
+    device_identity = getattr(workflow, "device_identity", None)
+    if isinstance(device_identity, dict) and device_identity:
+        payload["device_identity"] = dict(device_identity)
     return payload
 
 
@@ -93,6 +99,18 @@ def resume_post_create(workflow: RegistrationWorkflow) -> dict[str, Any] | None:
     registration_checkpoint.apply_resume_payload(workflow.runtime, payload)
     workflow.runtime.username = mailbox_email
     set_auth_fingerprint(str(payload.get("auth_fingerprint_profile") or ""))
+    saved_fp_country = str(payload.get("fingerprint_country") or "").strip().upper()
+    if saved_fp_country:
+        workflow.fingerprint_country = saved_fp_country
+    saved_device_identity = payload.get("device_identity")
+    if isinstance(saved_device_identity, dict) and saved_device_identity:
+        workflow.device_identity = dict(saved_device_identity)
+    elif workflow.runtime.device_id:
+        workflow.device_identity = {
+            "oai_did": workflow.runtime.device_id,
+            "reused": True,
+            "seeded": "none",
+        }
     _emit(_LOGGER, "[*] Resuming saved registration checkpoint for %s", mailbox_email)
     if not workflow.runtime.access_token:
         s = workflow.runtime

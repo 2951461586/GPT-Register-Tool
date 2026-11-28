@@ -3,8 +3,9 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:SmsWorkbench.Localization">
   <!-- Ambient batch status pill: hidden at rest to keep the top chrome calm;
-       appears cleanly while a background batch runs. -->
-  <Border HorizontalAlignment="Left"
+       appears with a restrained slide-fade and breathing pulse while a batch runs. -->
+  <Border x:Name="PillChrome"
+          HorizontalAlignment="Left"
           VerticalAlignment="Center"
           Margin="4,0,0,0"
           Padding="10,3"
@@ -13,6 +14,9 @@
           BorderBrush="{DynamicResource WorkspaceFrameOutline}"
           BorderThickness="1"
           IsHitTestVisible="False">
+    <Border.RenderTransform>
+      <TranslateTransform x:Name="PillSlide" X="0" Y="0"/>
+    </Border.RenderTransform>
     <Border.Style>
       <Style TargetType="Border">
         <Setter Property="Visibility" Value="Visible"/>
@@ -23,15 +27,90 @@
           <DataTrigger Binding="{Binding ActiveNavKey, RelativeSource={RelativeSource AncestorType=Window}}" Value="{x:Null}">
             <Setter Property="Visibility" Value="Collapsed"/>
           </DataTrigger>
+          <Trigger Property="Visibility" Value="Visible">
+            <Trigger.EnterActions>
+              <BeginStoryboard x:Name="PillEntranceStoryboard">
+                <Storyboard>
+                  <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                   From="0" To="1"
+                                   Duration="{StaticResource Motion.Normal}">
+                    <DoubleAnimation.EasingFunction>
+                      <CubicEase EasingMode="EaseOut"/>
+                    </DoubleAnimation.EasingFunction>
+                  </DoubleAnimation>
+                  <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                                   From="-6" To="0"
+                                   Duration="{StaticResource Motion.Normal}">
+                    <DoubleAnimation.EasingFunction>
+                      <CubicEase EasingMode="EaseOut"/>
+                    </DoubleAnimation.EasingFunction>
+                  </DoubleAnimation>
+                </Storyboard>
+              </BeginStoryboard>
+            </Trigger.EnterActions>
+            <Trigger.ExitActions>
+              <StopStoryboard BeginStoryboardName="PillEntranceStoryboard"/>
+            </Trigger.ExitActions>
+          </Trigger>
         </Style.Triggers>
       </Style>
     </Border.Style>
     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-      <Ellipse Width="6"
-               Height="6"
-               Fill="{DynamicResource AccentIndicator}"
-               VerticalAlignment="Center"
-               Margin="0,0,7,0"/>
+      <Grid Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,6,0">
+        <Ellipse x:Name="PulseHalo"
+                 Width="12"
+                 Height="12"
+                 Fill="{DynamicResource AccentIndicator}"
+                 Opacity="0"
+                 RenderTransformOrigin="0.5,0.5">
+          <Ellipse.RenderTransform>
+            <ScaleTransform ScaleX="0.5" ScaleY="0.5"/>
+          </Ellipse.RenderTransform>
+          <Ellipse.Style>
+            <Style TargetType="Ellipse">
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding Visibility, ElementName=PillChrome}" Value="Visible">
+                  <DataTrigger.EnterActions>
+                    <BeginStoryboard x:Name="PulseLoopStoryboard">
+                      <Storyboard RepeatBehavior="Forever">
+                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                         From="0.5" To="1.5"
+                                         Duration="{StaticResource Motion.Pulse}">
+                          <DoubleAnimation.EasingFunction>
+                            <CubicEase EasingMode="EaseOut"/>
+                          </DoubleAnimation.EasingFunction>
+                        </DoubleAnimation>
+                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                         From="0.5" To="1.5"
+                                         Duration="{StaticResource Motion.Pulse}">
+                          <DoubleAnimation.EasingFunction>
+                            <CubicEase EasingMode="EaseOut"/>
+                          </DoubleAnimation.EasingFunction>
+                        </DoubleAnimation>
+                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                         From="0.55" To="0"
+                                         Duration="{StaticResource Motion.Pulse}">
+                          <DoubleAnimation.EasingFunction>
+                            <CubicEase EasingMode="EaseOut"/>
+                          </DoubleAnimation.EasingFunction>
+                        </DoubleAnimation>
+                      </Storyboard>
+                    </BeginStoryboard>
+                  </DataTrigger.EnterActions>
+                  <DataTrigger.ExitActions>
+                    <StopStoryboard BeginStoryboardName="PulseLoopStoryboard"/>
+                  </DataTrigger.ExitActions>
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Ellipse.Style>
+        </Ellipse>
+        <Ellipse Width="6"
+                 Height="6"
+                 Fill="{DynamicResource AccentIndicator}"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Center"/>
+      </Grid>
       <TextBlock Text="{loc:Tr Key='批次运行中'}"
                  Style="{StaticResource Text.Caption}"
                  Foreground="{DynamicResource TextMain}"

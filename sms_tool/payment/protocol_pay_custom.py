@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable, Mapping
 from decimal import Decimal
 from typing import Any
@@ -22,6 +23,7 @@ from .checkout_contract import (
 )
 from .protocol_codec import (
     decline_message,
+    expected_amount_minor,
     minor_units_from_amount,
     normalize_card,
     openai_internal_checkout_id,
@@ -64,6 +66,10 @@ class CustomCheckoutProtocolClient:
         stripe_session: Any | None = None,
         checkout_get_fn: Callable[..., Any] | None = None,
         checkout_post_fn: Callable[..., Any] | None = None,
+        sleep_fn: Callable[[float], None] | None = None,
+        max_poll_tries: int = 5,
+        poll_interval_seconds: float = 1.0,
+        on_confirm_start: Callable[[], None] | None = None,
     ) -> None:
         self.access_token = str(access_token or "").strip()
         self.cookie_header = str(cookie_header or "").strip()
@@ -74,6 +80,31 @@ class CustomCheckoutProtocolClient:
         self.stripe_http = stripe_session if stripe_session is not None else _new_session(self.proxy)
         self._checkout_get = checkout_get_fn or _checkout_get
         self._checkout_post = checkout_post_fn or _checkout_post
+        self._sleep = sleep_fn or time.sleep
+        self._max_poll_tries = max(1, int(max_poll_tries))
+        self._poll_interval_seconds = max(0.0, float(poll_interval_seconds))
+        self._on_confirm_start = on_confirm_start
+
+    @staticmethod
+    def _outcome(
+        context: Mapping[str, Any],
+        state: str,
+        stage: str,
+        message: str,
+        **extra: Any,
+    ) -> dict[str, Any]:
+        raw_amount = context.get("amount_minor")
+        amount_minor = int(raw_amount) if isinstance(raw_amount, int) and not isinstance(raw_amount, bool) else None
+        return _custom_outcome(
+            state,
+            stage,
+            message,
+            session_id=str(context.get("checkout_id") or ""),
+            checkout_url=str(extra.pop("checkout_url", "") or context.get("checkout_url") or ""),
+            amount_minor=amount_minor,
+            currency=str(context.get("currency") or ""),
+            **extra,
+        )
 
     def _route_headers(self, route: str, *, page_url: str) -> dict[str, str]:
         headers = {
@@ -293,12 +324,12 @@ class CustomCheckoutProtocolClient:
             err = _stripe_error_fields(payload)
             msg = scrub_card_secrets(err["message"] or f"confirmation_tokens HTTP {status}", safe)
             state = "card_declined" if err["decline_code"] or status == 402 else "request_rejected"
-            result = _custom_outcome(state, "setup", msg, code=err["code"], decline_code=err["decline_code"])
+            result = self._outcome(context, state, "setup", msg, code=err["code"], decline_code=err["decline_code"])
             context["terminal_result"] = result
             return result
         token = str(payload.get("id") or "")
         if not token.startswith("ctoken_"):
-            return _custom_outcome("unknown", "setup", "confirmation_tokens response missing ctoken_ id")
+            return self._outcome(context, "unknown", "setup", "confirmation_tokens response missing ctoken_ id")
         context["confirmation_token"] = token
         preview = payload.get("payment_method_preview")
         if isinstance(preview, Mapping) and str(preview.get("id") or "").startswith("pm_"):
@@ -308,6 +339,8 @@ class CustomCheckoutProtocolClient:
     def _app_confirm(self, context: dict[str, Any]) -> dict[str, Any] | None:
         page_url = self._validated_page_url(context)
         context["app_confirmation_started"] = True
+        if self._on_confirm_start is not None:
+            self._on_confirm_start()
         resp = self._checkout_post(
             CHATGPT_CHECKOUT_CONFIRM,
             {
@@ -326,7 +359,8 @@ class CustomCheckoutProtocolClient:
         payload = _safe_json(resp)
         if status >= 400:
             err = _stripe_error_fields(payload)
-            result = _custom_outcome(
+            result = self._outcome(
+                context,
                 "request_rejected" if 400 <= status < 500 else "unknown",
                 "payment",
                 err["message"] or f"checkout/confirm HTTP {status}",
@@ -336,14 +370,17 @@ class CustomCheckoutProtocolClient:
                 context["terminal_result"] = result
             return result
         if str(payload.get("status") or "").lower() in {"blocked", "failed", "error"}:
-            result = _custom_outcome(
-                "request_rejected", "payment", str(payload.get("message") or "checkout confirm blocked")[:240]
+            result = self._outcome(
+                context,
+                "request_rejected",
+                "payment",
+                str(payload.get("message") or "checkout confirm blocked")[:240],
             )
             context["terminal_result"] = result
             return result
         intent_id, secret, return_url = payment_intent_from_confirm(payload)
         if not intent_id.startswith(("pi_", "seti_")) or not secret.startswith(f"{intent_id}_secret_"):
-            return _custom_outcome("unknown", "payment", "checkout/confirm missing verifiable intent")
+            return self._outcome(context, "unknown", "payment", "checkout/confirm missing verifiable intent")
         ret = return_url or str(context.get("confirm_return_url") or "")
         parts = urlsplit(ret)
         if parts.scheme != "https" or parts.hostname != _CHATGPT_HOST or parts.username or parts.password:
@@ -391,24 +428,39 @@ class CustomCheckoutProtocolClient:
         if payload.get("is_active") is False or ent.get("has_active_subscription") is False:
             active = False
         delinquent = payload.get("is_delinquent") is True or ent.get("is_delinquent") is True
-        return plan in {"plus", "chatgptplusplan"} and active and not delinquent
+        return bool(plan) and plan != "free" and active and not delinquent
+
+    def _poll_subscription_active(self, *, read_only: bool) -> bool:
+        if self._subscription_active():
+            return True
+        if read_only:
+            return False
+        retries = max(0, min(self._max_poll_tries, 3) - 1)
+        for _ in range(retries):
+            self._sleep(self._poll_interval_seconds)
+            if self._subscription_active():
+                return True
+        return False
 
     def _reconcile_paid_checkout(self, context: dict[str, Any], *, read_only: bool) -> dict[str, Any] | None:
         page = self._read_checkout(context)
         if page.get("status") != "complete" or page.get("payment_status") not in {"paid", "no_payment_required"}:
             return None
         if page.get("payment_status") == "no_payment_required" and int(context["amount_minor"]) != 0:
-            return _custom_outcome("unknown", "payment", "non-zero checkout returned no_payment_required")
+            return self._outcome(context, "unknown", "payment", "non-zero checkout returned no_payment_required")
         minor, currency = self._verified_quote(page, str(context["currency"]))
         if minor != int(context["amount_minor"]) or currency != str(context["currency"]).upper():
-            return _custom_outcome("unknown", "payment", "completed checkout quote mismatch")
+            return self._outcome(context, "unknown", "payment", "completed checkout quote mismatch")
         if not context.get("ack_started"):
             if read_only:
-                return _custom_outcome(
+                return self._outcome(
+                    context,
                     "pending",
                     "checkout",
                     "checkout paid; ack required to activate subscription",
                     intent_status="succeeded",
+                    status_override="read_only",
+                    ok_override=True,
                 )
             context["ack_started"] = True
             page_url = self._validated_page_url(context)
@@ -426,67 +478,48 @@ class CustomCheckoutProtocolClient:
                 context["ack_complete"] = int(getattr(resp, "status_code", 0) or 0) < 400 and ack.get("success") is True
             except (OSError, RuntimeError, ValueError):
                 context["ack_complete"] = False
-        if self._subscription_active():
-            return _custom_outcome(
-                "paid", "payment", "checkout completed and subscription active", intent_status="succeeded"
+        if self._poll_subscription_active(read_only=read_only):
+            return self._outcome(
+                context, "paid", "payment", "checkout completed and subscription active", intent_status="succeeded"
             )
-        return _custom_outcome(
+        return self._outcome(
+            context,
             "pending" if context.get("ack_complete") else "unknown",
             "payment",
             "payment confirmed; awaiting subscription activation",
             intent_status="succeeded",
         )
 
-    def _reconcile_or_confirm_intent(self, context: dict[str, Any], *, read_only: bool) -> dict[str, Any]:
-        paid = self._reconcile_paid_checkout(context, read_only=read_only)
-        if paid:
-            return paid
-        intent_id = str(context.get("intent_id") or "")
-        if not intent_id or not context.get("intent_secret"):
-            return _custom_outcome("unknown", "payment", "intent reference missing; refusing to retry payment")
-        intent = self._retrieve_intent(context)
-        if not intent or intent.get("id") != intent_id:
-            return _custom_outcome("unknown", "payment", "unable to retrieve Stripe intent")
-        status = str(intent.get("status") or "")
-        if intent_id.startswith("pi_"):
-            raw_amt = intent.get("amount")
-            if (
-                not isinstance(raw_amt, int)
-                or isinstance(raw_amt, bool)
-                or str(intent.get("currency") or "").upper() != str(context["currency"]).upper()
-                or raw_amt != int(context["amount_minor"])
-            ):
-                return _custom_outcome("unknown", "payment", "Stripe intent amount/currency mismatch")
-        if status == "requires_confirmation" and not context.get("stripe_confirmation_started"):
-            if read_only:
-                return _custom_outcome(
-                    "pending", "checkout", "intent ready; run without read_only to confirm", intent_status=status
-                )
-            context["stripe_confirmation_started"] = True
-            base = STRIPE_PAYMENT_INTENTS if intent_id.startswith("pi_") else STRIPE_SETUP_INTENTS
-            try:
-                self.stripe_http.post(
-                    f"{base}/{intent_id}/confirm",
-                    data=urlencode(
-                        {
-                            "key": str(context["publishable_key"]),
-                            "_stripe_version": DEFAULT_STRIPE_VERSION,
-                            "client_secret": str(context["intent_secret"]),
-                            "confirmation_token": str(context["confirmation_token"]),
-                            "return_url": str(context["intent_return_url"]),
-                        }
-                    ),
-                    timeout=self.timeout,
-                )
-            except (OSError, RuntimeError, ValueError):
-                pass
-            return self._reconcile_or_confirm_intent(context, read_only=read_only)
+    def _submit_stripe_intent_confirm(self, context: dict[str, Any], intent_id: str) -> None:
+        context["stripe_confirmation_started"] = True
+        if self._on_confirm_start is not None:
+            self._on_confirm_start()
+        base = STRIPE_PAYMENT_INTENTS if intent_id.startswith("pi_") else STRIPE_SETUP_INTENTS
+        try:
+            self.stripe_http.post(
+                f"{base}/{intent_id}/confirm",
+                data=urlencode(
+                    {
+                        "key": str(context["publishable_key"]),
+                        "_stripe_version": DEFAULT_STRIPE_VERSION,
+                        "client_secret": str(context["intent_secret"]),
+                        "confirmation_token": str(context["confirmation_token"]),
+                        "return_url": str(context["intent_return_url"]),
+                    }
+                ),
+                timeout=self.timeout,
+            )
+        except (OSError, RuntimeError, ValueError):
+            pass
+
+    def _classify_intent(self, context: dict[str, Any], intent: Mapping[str, Any], status: str) -> dict[str, Any]:
         if status in {"requires_payment_method", "canceled"}:
             err = _stripe_error_from_intent(intent)
             msg = (
                 decline_message(err["decline_code"]) if err.get("decline_code") else err.get("message", "card declined")
             )
-            return _custom_outcome(
+            return self._outcome(
+                context,
                 "card_declined",
                 "payment",
                 msg,
@@ -497,19 +530,73 @@ class CustomCheckoutProtocolClient:
         if status == "requires_action":
             raw_na: object = intent.get("next_action")
             na: Mapping[str, Any] = raw_na if isinstance(raw_na, Mapping) else {}
-            return _custom_outcome(
+            return self._outcome(
+                context,
                 "challenge_required",
                 "payment",
                 "Stripe requires manual verification (3DS/challenge); complete at checkout_url",
                 intent_status=status,
                 next_action={"type": str(na.get("type") or "requires_action")},
-                checkout_url=str(context.get("checkout_url") or ""),
             )
         if status in {"succeeded", "processing", "requires_capture"}:
-            return _custom_outcome(
-                "pending", "payment", "payment processing; awaiting checkout settlement", intent_status=status
+            return self._outcome(
+                context, "pending", "payment", "payment processing; awaiting checkout settlement", intent_status=status
             )
-        return _custom_outcome("unknown", "payment", "unverified intent state", intent_status=status)
+        return self._outcome(context, "unknown", "payment", "unverified intent state", intent_status=status)
+
+    def _reconcile_or_confirm_intent(self, context: dict[str, Any], *, read_only: bool) -> dict[str, Any]:
+        paid = self._reconcile_paid_checkout(context, read_only=read_only)
+        if paid:
+            return paid
+        intent_id = str(context.get("intent_id") or "")
+        if not intent_id or not context.get("intent_secret"):
+            return self._outcome(context, "unknown", "payment", "intent reference missing; refusing to retry payment")
+        intent = self._retrieve_intent(context)
+        if not intent or intent.get("id") != intent_id:
+            return self._outcome(context, "unknown", "payment", "unable to retrieve Stripe intent")
+        status = str(intent.get("status") or "")
+        if intent_id.startswith("pi_"):
+            raw_amt = intent.get("amount")
+            if (
+                not isinstance(raw_amt, int)
+                or isinstance(raw_amt, bool)
+                or str(intent.get("currency") or "").upper() != str(context["currency"]).upper()
+                or raw_amt != int(context["amount_minor"])
+            ):
+                return self._outcome(context, "unknown", "payment", "Stripe intent amount/currency mismatch")
+        if status == "requires_confirmation" and not context.get("stripe_confirmation_started"):
+            if read_only:
+                return self._outcome(
+                    context,
+                    "pending",
+                    "checkout",
+                    "intent ready; run without read_only to confirm",
+                    intent_status=status,
+                    status_override="read_only",
+                    ok_override=True,
+                )
+            self._submit_stripe_intent_confirm(context, intent_id)
+            for attempt in range(self._max_poll_tries):
+                outcome = self._reconcile_or_confirm_intent(context, read_only=False)
+                if outcome.get("state") != "pending" or attempt + 1 >= self._max_poll_tries:
+                    return outcome
+                self._sleep(self._poll_interval_seconds)
+        return self._classify_intent(context, intent, status)
+
+    @staticmethod
+    def _populate_read_only_quote(context: dict[str, Any], original: Mapping[str, Any]) -> None:
+        minor = expected_amount_minor(original)
+        if minor is not None:
+            context["amount_minor"] = minor
+        raw_state = original.get("checkout_state")
+        state = raw_state if isinstance(raw_state, Mapping) else {}
+        raw_details = original.get("billing_details")
+        details = raw_details if isinstance(raw_details, Mapping) else {}
+        for candidate in (original.get("currency"), state.get("currency"), details.get("currency")):
+            text = str(candidate or "").strip().upper()
+            if text:
+                context["currency"] = text
+                break
 
     def run(
         self,
@@ -539,12 +626,14 @@ class CustomCheckoutProtocolClient:
                     publishable_key=str(spec.get("publishable_key") or ""),
                     currency=currency,
                     amount_minor=amount_minor,
+                    country=str(spec.get("country") or "").strip().upper(),
                     processor=str(spec.get("processor") or processor_from_checkout_url(checkout_url) or "openai_llc"),
                     customer_session_client_secret=str(spec.get("customer_session_client_secret") or ""),
                     confirm_return_url=str(spec.get("confirm_return_url") or ""),
                 )
             if not str(context.get("checkout_id") or "").startswith("oaics_"):
-                return _custom_outcome(
+                return self._outcome(
+                    context,
                     "integration_error",
                     "checkout",
                     "CustomCheckoutProtocolClient requires an oaics_ session",
@@ -554,18 +643,32 @@ class CustomCheckoutProtocolClient:
                 return self._reconcile_or_confirm_intent(context, read_only=read_only)
             original = self._read_checkout(context)
             if original.get("status") == "complete":
-                return self._reconcile_paid_checkout(context, read_only=read_only) or _custom_outcome(
-                    "unknown", "payment", "checkout complete; payment state unverified"
+                return self._reconcile_paid_checkout(context, read_only=read_only) or self._outcome(
+                    context, "unknown", "payment", "checkout complete; payment state unverified"
                 )
             if original.get("status") != "open" or original.get("payment_status") != "unpaid":
-                return _custom_outcome("request_rejected", "checkout", "checkout is not open and unpaid")
+                return self._outcome(context, "request_rejected", "checkout", "checkout is not open and unpaid")
             if context.get("token_started") and not context.get("confirmation_token"):
-                return _custom_outcome(
-                    "unknown", "setup", "confirmation token creation unverified; refusing duplicate submission"
+                return self._outcome(
+                    context, "unknown", "setup", "confirmation token creation unverified; refusing duplicate submission"
                 )
             if read_only:
-                return _custom_outcome("pending", "checkout", "checkout open and unpaid (read-only inspection)")
-            resolved_billing = _resolve_billing(billing, country=str((billing or {}).get("country") or "US"))
+                self._populate_read_only_quote(context, original)
+                return self._outcome(
+                    context,
+                    "read_only",
+                    "checkout",
+                    "checkout open and unpaid (read-only inspection)",
+                    status_override="read_only",
+                    ok_override=True,
+                )
+            target_country = (
+                str((billing or {}).get("country") or spec.get("country") or context.get("country") or "US")
+                .strip()
+                .upper()
+                or "US"
+            )
+            resolved_billing = _resolve_billing(billing, country=target_country)
             self._sync_quote(context, resolved_billing)
             expected_currency = str(spec.get("expected_currency") or context["currency"]).upper()
             expected_minor = (
@@ -578,8 +681,8 @@ class CustomCheckoutProtocolClient:
                 )
             )
             if int(context["amount_minor"]) != expected_minor or str(context["currency"]).upper() != expected_currency:
-                return _custom_outcome(
-                    "pending", "checkout", "taxes changed payable amount; confirm updated quote before paying"
+                return self._outcome(
+                    context, "pending", "checkout", "taxes changed payable amount; confirm updated quote before paying"
                 )
             if not context.get("confirmation_token"):
                 stage = "setup"
@@ -597,6 +700,8 @@ class CustomCheckoutProtocolClient:
             stopped = self._app_confirm(context)
             return stopped or self._reconcile_or_confirm_intent(context, read_only=False)
         except ProtocolPaymentError as exc:
-            return _custom_outcome("unknown", exc.error_stage or stage, str(exc)[:240], code=exc.error_code)
+            return self._outcome(context, "unknown", exc.error_stage or stage, str(exc)[:240], code=exc.error_code)
         except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
-            return _custom_outcome("unknown", stage, f"upstream failure ({type(exc).__name__}); verify before retrying")
+            return self._outcome(
+                context, "unknown", stage, f"upstream failure ({type(exc).__name__}); verify before retrying"
+            )

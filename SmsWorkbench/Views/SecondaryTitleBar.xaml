@@ -1,0 +1,153 @@
+<UserControl x:Class="SmsWorkbench.Views.SecondaryTitleBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:SmsWorkbench.Views"
+             xmlns:loc="clr-namespace:SmsWorkbench.Localization">
+  <!-- Unified 38px frameless chrome bar for secondary FluentWindows (Settings,
+       PaymentBatch, ProtocolCardPayment, ProxyPool), matching MainWindow's
+       Surface.Chrome cadence and 46x38 caption button geometry. -->
+  <UserControl.Resources>
+    <Style x:Key="SecCaptionButtonStyle" TargetType="Button">
+      <Setter Property="Width" Value="46"/>
+      <Setter Property="VerticalAlignment" Value="Stretch"/>
+      <Setter Property="Margin" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Background" Value="{DynamicResource WindowControlHover}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource WindowControlPressed}"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      <Setter Property="Cursor" Value="Arrow"/>
+      <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingStyle}"/>
+      <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Grid Background="Transparent">
+              <Border x:Name="HoverFill" Background="{TemplateBinding Background}" Opacity="0" IsHitTestVisible="False"/>
+              <Border x:Name="PressedFill" Background="{TemplateBinding BorderBrush}" Opacity="0" IsHitTestVisible="False"/>
+              <Path x:Name="GlyphPath"
+                    Width="10" Height="10" Stretch="None" SnapsToDevicePixels="True"
+                    Data="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
+                    Stroke="{DynamicResource IconMuted}"
+                    StrokeThickness="{StaticResource Icon.Stroke.Chrome}"
+                    StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                <Path.RenderTransform><ScaleTransform ScaleX="1" ScaleY="1"/></Path.RenderTransform>
+              </Path>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="GlyphPath" Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
+                <Trigger.EnterActions>
+                  <BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Fast}"/></Storyboard></BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                  <BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource Motion.Normal}"/></Storyboard></BeginStoryboard>
+                </Trigger.ExitActions>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="GlyphPath" Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
+                <Trigger.EnterActions>
+                  <BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="PressedFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Press}"/></Storyboard></BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                  <BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="PressedFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource Motion.Normal}"/></Storyboard></BeginStoryboard>
+                </Trigger.ExitActions>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="SecDangerCaptionButtonStyle" TargetType="Button" BasedOn="{StaticResource SecCaptionButtonStyle}">
+      <Setter Property="Background" Value="{DynamicResource Danger}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource DangerPressed}"/>
+      <Setter Property="Foreground" Value="{DynamicResource OnDanger}"/>
+    </Style>
+  </UserControl.Resources>
+
+  <Grid Height="38" Background="Transparent" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*"/>
+      <ColumnDefinition Width="Auto"/>
+      <ColumnDefinition Width="Auto"/>
+    </Grid.ColumnDefinitions>
+
+    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,8,0">
+      <TextBlock Text="{Binding TitleText, RelativeSource={RelativeSource AncestorType=local:SecondaryTitleBar}}"
+                 FontSize="{StaticResource Type.Body.Size}"
+                 FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextMain}"
+                 VerticalAlignment="Center"/>
+      <TextBlock Text="{Binding SubtitleText, RelativeSource={RelativeSource AncestorType=local:SecondaryTitleBar}}"
+                 FontSize="{StaticResource Type.Caption.Size}"
+                 Foreground="{DynamicResource TextMuted}"
+                 Margin="10,0,0,0"
+                 VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis">
+        <TextBlock.Style>
+          <Style TargetType="TextBlock">
+            <Style.Triggers>
+              <Trigger Property="Text" Value="">
+                <Setter Property="Visibility" Value="Collapsed"/>
+              </Trigger>
+            </Style.Triggers>
+          </Style>
+        </TextBlock.Style>
+      </TextBlock>
+    </StackPanel>
+
+    <Border Grid.Column="1"
+            Background="{DynamicResource Surface.Card}"
+            BorderBrush="{DynamicResource Divider}"
+            BorderThickness="1"
+            CornerRadius="{DynamicResource Corner.Sm}"
+            Padding="9,3"
+            Margin="0,0,10,0"
+            VerticalAlignment="Center">
+      <Border.Style>
+        <Style TargetType="Border">
+          <Setter Property="Visibility" Value="Visible"/>
+          <Style.Triggers>
+            <DataTrigger Binding="{Binding BadgeText, RelativeSource={RelativeSource AncestorType=local:SecondaryTitleBar}}" Value="">
+              <Setter Property="Visibility" Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding BadgeText, RelativeSource={RelativeSource AncestorType=local:SecondaryTitleBar}}" Value="{x:Null}">
+              <Setter Property="Visibility" Value="Collapsed"/>
+            </DataTrigger>
+          </Style.Triggers>
+        </Style>
+      </Border.Style>
+      <TextBlock Text="{Binding BadgeText, RelativeSource={RelativeSource AncestorType=local:SecondaryTitleBar}}"
+                 FontSize="{StaticResource Type.Caption.Size}"
+                 Foreground="{DynamicResource TextSub}"
+                 TextTrimming="CharacterEllipsis"
+                 MaxWidth="360"/>
+    </Border>
+
+    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Stretch">
+      <Button Style="{StaticResource SecCaptionButtonStyle}"
+              Tag="{StaticResource Glyph.WindowMinimize}"
+              Click="Minimize_Click"
+              ToolTip="{loc:Tr Key='最小化'}"/>
+      <Button Click="Maximize_Click">
+        <Button.Style>
+          <Style TargetType="Button" BasedOn="{StaticResource SecCaptionButtonStyle}">
+            <Setter Property="Tag" Value="{StaticResource Glyph.WindowMaximize}"/>
+            <Setter Property="ToolTip" Value="{loc:Tr Key='最大化'}"/>
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding IsWindowMaximized, RelativeSource={RelativeSource AncestorType=local:SecondaryTitleBar}}" Value="True">
+                <Setter Property="Tag" Value="{StaticResource Glyph.WindowRestore}"/>
+                <Setter Property="ToolTip" Value="{loc:Tr Key='还原'}"/>
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Button.Style>
+      </Button>
+      <Button Style="{StaticResource SecDangerCaptionButtonStyle}"
+              Tag="{StaticResource Glyph.WindowClose}"
+              Click="Close_Click"
+              ToolTip="{loc:Tr Key='关闭'}"/>
+    </StackPanel>
+  </Grid>
+</UserControl>

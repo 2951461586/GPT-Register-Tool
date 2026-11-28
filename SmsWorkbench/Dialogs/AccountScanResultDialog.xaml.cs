@@ -31,34 +31,36 @@ namespace SmsWorkbench.Dialogs
             }
             if (BodyStackPanel.Children.Count == 0)
             {
-                BodyStackPanel.Children.Add(new TextBlock
+                var emptyText = new TextBlock
                 {
                     Text = Loc.F("没有可展示的{0}明细。", title),
-                    Foreground = (Brush)FindResource("TextSub"),
-                });
+                };
+                emptyText.SetResourceReference(TextBlock.ForegroundProperty, "TextSub");
+                BodyStackPanel.Children.Add(emptyText);
             }
         }
 
         private void AddSection(string sectionTitle, List<Dictionary<string, object>> rows)
         {
-            BodyStackPanel.Children.Add(new TextBlock
+            var header = new TextBlock
             {
                 Text = sectionTitle + "（" + rows.Count + "）",
-                FontSize = (double)FindResource("Type.Subtitle.Size"),
                 FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)FindResource("TextMain"),
                 Margin = new Thickness(0, BodyStackPanel.Children.Count == 0 ? 0 : 12, 0, 8),
-            });
+            };
+            header.SetResourceReference(TextBlock.FontSizeProperty, "Type.Subtitle.Size");
+            header.SetResourceReference(TextBlock.ForegroundProperty, "TextMain");
+            BodyStackPanel.Children.Add(header);
 
             var card = new Border
             {
-                Background = (Brush)FindResource("PanelBg"),
-                BorderBrush = (Brush)FindResource("Line"),
                 BorderThickness = new Thickness(1),
-                CornerRadius = (CornerRadius)FindResource("Corner.Lg"),
                 Padding = new Thickness(10),
                 Margin = new Thickness(0, 0, 0, 4),
             };
+            card.SetResourceReference(Border.BackgroundProperty, "Surface.Card");
+            card.SetResourceReference(Border.BorderBrushProperty, "Divider");
+            card.SetResourceReference(Border.CornerRadiusProperty, "Corner.Lg");
             var stack = new StackPanel();
             foreach (Dictionary<string, object> row in rows)
             {
@@ -90,14 +92,15 @@ namespace SmsWorkbench.Dialogs
                 }
 
                 string line = error.Length > 0 ? email + "  ·  " + status + "  ·  " + error : email + "  ·  " + status;
-                stack.Children.Add(new TextBlock
+                var rowText = new TextBlock
                 {
                     Text = line,
                     TextWrapping = TextWrapping.Wrap,
                     LineHeight = 20,
                     Margin = new Thickness(0, 0, 0, 6),
-                    Foreground = (Brush)FindResource("TextSub"),
-                });
+                };
+                rowText.SetResourceReference(TextBlock.ForegroundProperty, "TextSub");
+                stack.Children.Add(rowText);
             }
             card.Child = stack;
             BodyStackPanel.Children.Add(card);

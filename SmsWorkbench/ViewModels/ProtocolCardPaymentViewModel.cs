@@ -108,6 +108,12 @@ namespace SmsWorkbench.ViewModels
         [NotifyCanExecuteChangedFor(nameof(CopyResultJsonCommand))]
         private string resultJson = "";
 
+        [ObservableProperty]
+        private int activeStepIndex;
+
+        [ObservableProperty]
+        private string stepState = "idle";
+
         public bool HasBoundAccount => !string.IsNullOrWhiteSpace(AccountEmail);
 
         public string BoundAccountSummary => HasBoundAccount
@@ -171,6 +177,13 @@ namespace SmsWorkbench.ViewModels
             if (!TryValidateCommon(out int timeoutSeconds, out string error))
             {
                 StatusText = error;
+                return;
+            }
+
+            bool isOaics = CheckoutUrl.Contains("oaics_", StringComparison.OrdinalIgnoreCase);
+            if (!ReadOnlyMode && isOaics && !string.IsNullOrWhiteSpace(PaymentMethodId) && string.IsNullOrWhiteSpace(CardNumber))
+            {
+                StatusText = Loc.T("oaics_ 自定义结账不支持复用已有 pm_，请直接填写卡号、有效期与 CVC。");
                 return;
             }
 
@@ -248,6 +261,8 @@ namespace SmsWorkbench.ViewModels
             CancellationToken cancellationToken)
         {
             IsRunning = true;
+            ActiveStepIndex = request.QuoteOnly ? 0 : 1;
+            StepState = "running";
             StatusText = runningStatus;
             try
             {
@@ -256,6 +271,7 @@ namespace SmsWorkbench.ViewModels
             }
             catch (OperationCanceledException)
             {
+                StepState = "idle";
                 StatusText = Loc.T("已取消");
             }
             catch (Exception ex)
@@ -263,6 +279,8 @@ namespace SmsWorkbench.ViewModels
                 HasResult = true;
                 ResultBadgeText = Loc.T("执行失败");
                 ResultBadgeSeverity = "danger";
+                ActiveStepIndex = 2;
+                StepState = "danger";
                 ResultModeText = "";
                 AmountSummary = "";
                 ManualActionRequired = false;
@@ -292,16 +310,22 @@ namespace SmsWorkbench.ViewModels
 
             if (result.ManualActionRequired)
             {
+                ActiveStepIndex = 2;
+                StepState = "warn";
                 StatusText = Loc.T("已安全中止：检测到 3DS / 人机挑战，请点击“在浏览器打开结账页”手动完成。");
             }
             else if (result.Ok)
             {
+                ActiveStepIndex = result.QuoteOnly ? 1 : 3;
+                StepState = "success";
                 StatusText = result.AmountDisplay.Length > 0
                     ? $"{result.BadgeLabel} · {result.AmountDisplay}"
                     : result.BadgeLabel;
             }
             else
             {
+                ActiveStepIndex = result.QuoteOnly ? 0 : 2;
+                StepState = "danger";
                 StatusText = $"{result.BadgeLabel} · {result.SummaryMessage}";
             }
         }

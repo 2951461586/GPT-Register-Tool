@@ -28,7 +28,7 @@
 
 - **自动化注册与接码**：支持协议直连与多浏览器驱动双泳道注册、多供应商邮箱 OTP 与手机接码、断点续跑及 AT 200 验真。
 - **账号与支付工作流**：内置账号测活、401 分层恢复、离线 JWT 巡检、Plus / GPT Team 5 席位试用检测、原生 Team 托管提链、协议绑卡支付与统一外部提链服务器对接，支持 Codex / CPA / SUB2API 导入导出。
-- **高性能与本机隔离**：内置进程内 Rust Sentinel VM（零 Node.js 依赖）与 [71 个 PyO3 热点加速扩展](docs/current/rust-acceleration.md)；配置分片、Session 与运行数据默认存放在本机用户目录，不写入 Git。
+- **高性能与本机隔离**：内置进程内 Rust Sentinel VM（零 Node.js 依赖）与 [78 个 PyO3 热点加速扩展](docs/current/rust-acceleration.md)；配置分片、Session 与运行数据默认存放在本机用户目录，不写入 Git。
 
 当前发布说明：[release-v2026.11.28.md](docs/releases/release-v2026.11.28.md)
 
@@ -64,7 +64,7 @@
 | **协议一致性与风控隔离** | 账号 ↔ 代理会话槽绑定，指纹语言与时区随出口 GeoIP 自动对齐；内置进程内 Sentinel Token 签发、网络三段预检与 403/429 熔断保护，避免无效消耗邮箱或 OTP |
 | **存量测活与账号治理** | Session JSON + SQLite 双层索引；支持并发测活、离线 JWT 快速巡检（`--inspect-accounts`）、401 分层重登恢复、2FA 自动登记、Plus 与 GPT Team 5 席位试用资格探测，以及 Codex / CPA / SUB2API 一键导入导出 |
 | **16 种提链与协议卡付** | 15 种 Plus 支付方式经 `sms_tool/pay_link/extract_server.py` 对接外部提链服务；原生内置 GPT Team 5 席位试用托管提链（`team_trial`）与非验证码 Stripe `cs_` / ChatGPT `oaics_` 协议直付引擎，遇 3DS 挑战自动中止并交还链接 |
-| **原生 Rust 加速** | `native/sentinel_vm/` 编译为进程内 `sentinel_vm.dll` FFI，零 Node.js 运行时依赖；71 个 `rust-anything` PyO3 扩展加速 132 个热点函数，零 `unsafe`、零 MinGW 运行时 DLL，详见 [Rust 原生加速架构](docs/current/rust-acceleration.md) |
+| **原生 Rust 加速** | `native/sentinel_vm/` 编译为进程内 `sentinel_vm.dll` FFI，零 Node.js 运行时依赖；78 个 `rust-anything` PyO3 扩展加速 139 个热点函数，零 `unsafe`、零 MinGW 运行时 DLL，详见 [Rust 原生加速架构](docs/current/rust-acceleration.md) |
 | **现代化桌面工作台** | 浅色 / 深色 / 跟随系统三态主题与中英双语切换；实时吞吐与失败分类状态栏、可折叠日志/队列底栏、代理池内联测速、关闭隐藏到托盘（`Ctrl+Alt+R` 唤回）及工作区配置/账号库一键备份恢复 |
 
 ## 架构简述
@@ -75,7 +75,7 @@
 
 - **五层单向依赖**：按「表面层 → CLI / 命令适配 → 应用工作流 → Provider / 驱动 / 持久化适配 → 标准库内核（`sms_tool/kernel/`）」分层，模块导入严格向内（以 `scripts/layer_manifest.json` 为单一权威）。
 - **桌面读写双通道**：WPF 客户端通过 `PythonBackendClient` 子进程与版本化 `@@SMSWORKBENCH_V2@@` 信封执行写任务（代理凭据仅经环境变量传递，不进 `argv`），通过 `DesktopReadClient` 常驻 JSONL 通道无副作用读取快照。
-- **Rust 原生底座与自动化门禁**：`native/sentinel_vm/` 提供进程内 Sentinel VM FFI，`rust/` 下 71 个由 `rust-anything` 管理的 PyO3 扩展加速 132 个热点函数（23,952 条录制用例 100% 一致，0 `unsafe`）；跨语言契约清单与分层棘轮由预提交钩子与 GitHub Actions CI 全程守卫。
+- **Rust 原生底座与自动化门禁**：`native/sentinel_vm/` 提供进程内 Sentinel VM FFI，`rust/` 下 78 个由 `rust-anything` 管理的 PyO3 扩展加速 139 个热点函数（26,308 条录制用例 100% 一致，0 `unsafe`）；跨语言契约清单与分层棘轮由预提交钩子与 GitHub Actions CI 全程守卫。
 
 详细设计见 [架构与边界说明](docs/architecture.md)、[桌面端 UI 架构](docs/current/ui-architecture.md)、[Rust 加速架构](docs/current/rust-acceleration.md) 与 [目录职责](docs/directory-map.md)。
 

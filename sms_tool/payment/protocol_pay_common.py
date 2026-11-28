@@ -151,10 +151,19 @@ def _custom_outcome(
     decline_code: str = "",
     next_action: dict[str, Any] | None = None,
     checkout_url: str = "",
+    mode: str = "custom_checkout",
+    session_id: str = "",
+    amount_minor: int | None = None,
+    currency: str = "",
+    status_override: str = "",
+    ok_override: bool | None = None,
 ) -> dict[str, Any]:
+    ok = ok_override if ok_override is not None else (state == "paid")
+    status = status_override or ("completed" if state == "paid" else ("unknown" if state == "unknown" else "failed"))
     result: dict[str, Any] = {
-        "ok": state == "paid",
-        "status": "completed" if state == "paid" else "failed",
+        "ok": ok,
+        "status": status,
+        "mode": mode,
         "state": state,
         "stage": stage,
         "message": message,
@@ -163,10 +172,23 @@ def _custom_outcome(
         "decline_code": decline_code,
         "manual_action_required": state == "challenge_required",
     }
+    if session_id:
+        result["session_id"] = session_id
     if checkout_url:
         result["checkout_url"] = checkout_url
+    if amount_minor is not None:
+        result["amount_minor"] = int(amount_minor)
+    if currency:
+        result["currency"] = str(currency).upper()
     if next_action:
         result["next_action"] = next_action
+    if state == "unknown":
+        result["requires_reconciliation"] = True
+        result["side_effect_started"] = True
+        result["retryable"] = False
+    elif state == "pending" and status != "read_only":
+        result["side_effect_started"] = True
+        result["retryable"] = False
     return result
 
 

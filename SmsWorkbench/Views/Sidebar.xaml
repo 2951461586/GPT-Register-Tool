@@ -124,7 +124,7 @@
                 BorderThickness="1"
                 CornerRadius="{StaticResource Corner.Lg}">
           <Border.Effect>
-            <DropShadowEffect Color="{DynamicResource ShadowColor}" BlurRadius="16" ShadowDepth="3" Direction="270"/>
+            <DropShadowEffect Color="{DynamicResource ShadowColor}" BlurRadius="{StaticResource Shadow.Md.Blur}" ShadowDepth="{StaticResource Shadow.Md.Depth}" Direction="270"/>
           </Border.Effect>
           <StackPanel>
             <DockPanel Margin="0,0,0,10">

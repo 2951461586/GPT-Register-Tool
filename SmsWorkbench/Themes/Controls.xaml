@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:local="clr-namespace:SmsWorkbench.Views"
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime">
   <!--
     Core typography, focus ring, text box, scrollbar, splitter, tooltip, and icon
@@ -122,14 +123,35 @@
           <Border x:Name="BoxChrome" Background="{TemplateBinding Background}"
                   BorderBrush="{TemplateBinding BorderBrush}"
                   BorderThickness="{TemplateBinding BorderThickness}"
-                  CornerRadius="{StaticResource Corner.Md}">
-            <ScrollViewer x:Name="PART_ContentHost"
-                          Margin="{TemplateBinding Padding}"
-                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                          HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
-                          VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}"/>
+                  CornerRadius="{DynamicResource Corner.Md}">
+            <Grid>
+              <ScrollViewer x:Name="PART_ContentHost"
+                            Margin="0"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                            HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                            VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}"/>
+              <TextBlock x:Name="PlaceholderText"
+                         Text="{Binding Path=(local:MotionBehaviors.Placeholder), RelativeSource={RelativeSource TemplatedParent}}"
+                         Margin="{TemplateBinding Padding}"
+                         Padding="2,0,0,0"
+                         VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                         Foreground="{DynamicResource TextMuted}"
+                         Opacity="0.72"
+                         IsHitTestVisible="False"
+                         TextTrimming="CharacterEllipsis"
+                         Visibility="Collapsed"/>
+            </Grid>
           </Border>
           <ControlTemplate.Triggers>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="Text" Value=""/>
+              </MultiTrigger.Conditions>
+              <Setter TargetName="PlaceholderText" Property="Visibility" Value="Visible"/>
+            </MultiTrigger>
+            <Trigger Property="local:MotionBehaviors.Placeholder" Value="">
+              <Setter TargetName="PlaceholderText" Property="Visibility" Value="Collapsed"/>
+            </Trigger>
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="BoxChrome" Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
             </Trigger>
@@ -270,11 +292,83 @@
               <Setter TargetName="Grip" Property="Height" Value="{StaticResource Size.Splitter.GripLength}"/>
             </Trigger>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="Grip" Property="Opacity" Value="1"/>
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="Grip" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Fast}">
+                      <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="Grip" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource Motion.Normal}">
+                      <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
             <Trigger Property="IsDragging" Value="True">
               <Setter TargetName="Grip" Property="Opacity" Value="1"/>
               <Setter TargetName="Grip" Property="Background" Value="{DynamicResource AccentIndicator}"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Modern rounded ProgressBar with subtle shimmer sheen sweep while active -->
+  <Style TargetType="ProgressBar">
+    <Setter Property="Height" Value="8"/>
+    <Setter Property="Background" Value="{DynamicResource Surface.Block}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ProgressBar">
+          <Grid x:Name="TemplateRoot" SnapsToDevicePixels="True">
+            <Border x:Name="PART_Track"
+                    Background="{TemplateBinding Background}"
+                    CornerRadius="{StaticResource Corner.Xs}"/>
+            <Grid x:Name="PART_Indicator" HorizontalAlignment="Left" ClipToBounds="True">
+              <Border Background="{TemplateBinding Foreground}"
+                      CornerRadius="{StaticResource Corner.Xs}"/>
+              <Border x:Name="Sheen"
+                      CornerRadius="{StaticResource Corner.Xs}"
+                      Opacity="0.28"
+                      IsHitTestVisible="False">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="#00FFFFFF" Offset="0.0"/>
+                    <GradientStop Color="#CCFFFFFF" Offset="0.5"/>
+                    <GradientStop Color="#00FFFFFF" Offset="1.0"/>
+                    <LinearGradientBrush.RelativeTransform>
+                      <TranslateTransform x:Name="SheenSlide" X="-1"/>
+                    </LinearGradientBrush.RelativeTransform>
+                  </LinearGradientBrush>
+                </Border.Background>
+              </Border>
+            </Grid>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsVisible" Value="True">
+              <Trigger.EnterActions>
+                <BeginStoryboard x:Name="SheenLoop">
+                  <Storyboard RepeatBehavior="Forever">
+                    <DoubleAnimation Storyboard.TargetName="SheenSlide"
+                                     Storyboard.TargetProperty="X"
+                                     From="-1" To="2"
+                                     Duration="{StaticResource Motion.Pulse}"/>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <StopStoryboard BeginStoryboardName="SheenLoop"/>
+              </Trigger.ExitActions>
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -303,7 +397,7 @@
                   CornerRadius="{StaticResource Corner.Md}"
                   Padding="{TemplateBinding Padding}">
             <Border.Effect>
-              <DropShadowEffect Color="{DynamicResource ShadowColor}" BlurRadius="12" ShadowDepth="2" Direction="270"/>
+              <DropShadowEffect Color="{DynamicResource ShadowColor}" BlurRadius="{StaticResource Shadow.Sm.Blur}" ShadowDepth="{StaticResource Shadow.Sm.Depth}" Direction="270"/>
             </Border.Effect>
             <ContentPresenter/>
           </Border>

@@ -287,17 +287,16 @@ can revive them**: they need the custom Checkout flow
 in-process machinery that already implements it (UPI, direct_card, gopay,
 gcash). That fork is open and deliberately undecided here.
 
-**Until it is decided, the six are `release_tier: "offline"` in
-`payment_methods.json`** (with `batch_enabled` and `registration_enabled` false, so
-the desktop batch and registration pickers no longer offer them).
+When a catalog method is marked `release_tier: "offline"` in
+`payment_methods.json` (with `batch_enabled` and `registration_enabled` false),
 `payment_catalog.offline_method_error` is the single refusal: `generate_payment_link`
 and `run_payment_batch` return `payment_method_offline` (stage `validation`, not
-retryable) **before** any Checkout create, because a create for these methods only
-spends the account's create budget and then dies on the `cs_` prefix check. The
-read-only capability probe (`probe_only`) is exempt, since it never runs the
-extractor. Reviving one means moving its extractor onto the custom Checkout flow and
-flipping its three catalog fields back; tests opt into the real refusal with
-`@pytest.mark.enforce_offline_methods` and otherwise see the methods as online.
+retryable) **before** any Checkout create, because a create for an offline method only
+spends the account's create budget. The read-only capability probe (`probe_only`) stays
+exempt, since it never runs the extractor. All six methods above (`ideal` / `pix` /
+`kakao` / `blik` / `twint` / `momo`) have since moved to `release_tier: "production"`
+via `extract_server`; `tests/payment/test_payment_offline_methods.py` exercises the
+refusal gate by temporarily patching a method offline.
 
 `direct_card` is the exception because it accepts `oaics_*` and never touches
 `payment_pages`. With a country-correct exit and the injected pair it produces a

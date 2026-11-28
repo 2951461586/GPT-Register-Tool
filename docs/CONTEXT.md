@@ -24,7 +24,7 @@
 - **Protocol card payment**: in-repo offline Stripe/Checkout codec and card-payment
   workflow owned by `sms_tool/payment/protocol_codec.py` (accelerated by
   `rust/protocol-payment-rs/`) and `sms_tool/payment/protocol_pay.py`, surfaced
-  through CLI (`--protocol-pay`) and WPF (`ProtocolCardPaymentWindow`).
+  through CLI (`--protocol-card-pay` / `--protocol-card-quote`) and WPF (`ProtocolCardPaymentWindow`).
 
 ## Ownership Rules
 

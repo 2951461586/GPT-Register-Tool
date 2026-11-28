@@ -5,7 +5,15 @@ from __future__ import annotations
 import re
 from typing import Any, Mapping, Protocol
 
+from .qualification_states import load_native_module
 from ..transport import endpoints
+
+_NATIVE_PAYMENT_CAPABILITY_PARSE = load_native_module(
+    "payment-capability-parse-rs",
+    "payment_capability_parse_rs",
+    "RUST_ANYTHING_UNIT_PAYMENT_CAPABILITY_PARSE",
+)
+_NATIVE_REDACT_CAPABILITY_ERROR = getattr(_NATIVE_PAYMENT_CAPABILITY_PARSE, "_redact_capability_error", None)
 from . import wire as _payment_wire
 from .errors import error_code_of, error_stage_of, retryable_flag
 from .checkout_contract import (
@@ -923,8 +931,14 @@ def _amount_from_init(init: Mapping[str, Any]) -> dict[str, Any]:
     return stripe_amount_details(dict(init or {}))
 
 
+def _redact_capability_error(text: Any) -> str:
+    if _NATIVE_REDACT_CAPABILITY_ERROR is not None and isinstance(text, (str, type(None))):
+        return str(_NATIVE_REDACT_CAPABILITY_ERROR(text))
+    cleaned = str(text or "")
+    cleaned = re.sub(r"(?i)((?:https?|socks5h?|socks4a?)://)[^/@\s]+:[^/@\s]+@", r"\1***:***@", cleaned)
+    cleaned = re.sub(r"(?i)bearer\s+[A-Za-z0-9._~+/-]+", "Bearer [REDACTED]", cleaned)
+    return cleaned[:500]
+
+
 def _safe_error(exc: BaseException) -> str:
-    text = str(exc or type(exc).__name__)
-    text = re.sub(r"(?i)((?:https?|socks5h?|socks4a?)://)[^/@\s]+:[^/@\s]+@", r"\1***:***@", text)
-    text = re.sub(r"(?i)bearer\s+[A-Za-z0-9._~+/-]+", "Bearer [REDACTED]", text)
-    return text[:500]
+    return _redact_capability_error(str(exc or type(exc).__name__))

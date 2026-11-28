@@ -45,7 +45,7 @@
       <!-- Floating rounded workspace canvas sheet -->
       <Border Grid.Row="1"
               Margin="0,0,8,8"
-              CornerRadius="{StaticResource Corner.Xl}"
+              CornerRadius="{DynamicResource Corner.Xl}"
               Background="{DynamicResource Surface.Page}"
               BorderBrush="{DynamicResource WorkspaceFrameOutline}"
               BorderThickness="1"

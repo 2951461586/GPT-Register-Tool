@@ -1,0 +1,231 @@
+{"fn": "_hash_public_operation_id", "args": ["Hello World"], "ok": "op_a591a6d40bf420404a011733"}
+{"fn": "_hash_public_operation_id", "args": ["İstanbul"], "ok": "op_24ec8f72b5eac4594cf44012"}
+{"fn": "_hash_public_operation_id", "args": ["ünïcödé"], "ok": "op_b09ad3e278dfb341468394a3"}
+{"fn": "_hash_public_operation_id", "args": [":"], "ok": "op_e7ac0786668e0ff0f02b62bd"}
+{"fn": "_hash_public_operation_id", "args": ["emoji 👍🏽 mix"], "ok": "op_7839fd7a65ab6e7d304ce230"}
+{"fn": "_hash_public_operation_id", "args": ["a"], "ok": "op_ca978112ca1bbdcafac231b3"}
+{"fn": "_hash_public_operation_id", "args": ["straße"], "ok": "op_787f4770613d3824cbc89b6d"}
+{"fn": "_hash_public_operation_id", "args": ["src/a/b.ts"], "ok": "op_eb7041468cb32feadbbbcf82"}
+{"fn": "_hash_public_operation_id", "args": ["a.b.c"], "ok": "op_845e30448809e2bc8958eb02"}
+{"fn": "_hash_public_operation_id", "args": ["ΣΊΣΥΦΟΣ"], "ok": "op_5b04c6021d490c76e976b01f"}
+{"fn": "_hash_public_operation_id", "args": ["abc"], "ok": "op_ba7816bf8f01cfea414140de"}
+{"fn": "_hash_public_operation_id", "args": ["a..b"], "ok": "op_f62b42414c514fa689d3e087"}
+{"fn": "_hash_public_operation_id", "args": [""], "ok": "op_e3b0c44298fc1c149afbf4c8"}
+{"fn": "_hash_public_operation_id", "args": ["﻿bom"], "ok": "op_2623148f0d047ef6feae6342"}
+{"fn": "_hash_public_operation_id", "args": ["a😀b😀c"], "ok": "op_3b0fa9d763b5cb38e6cdd6c5"}
+{"fn": "_hash_public_operation_id", "args": ["abcΣΊΣΥΦΟΣ"], "ok": "op_dcfa7117c8aee0113385c9f4"}
+{"fn": "_hash_public_operation_id", "args": ["trailing."], "ok": "op_44c12a4e432eba3f7fa634fd"}
+{"fn": "_hash_public_operation_id", "args": ["{name} has {count} items"], "ok": "op_42ff2ad309da81ff6c5bab25"}
+{"fn": "_hash_public_operation_id", "args": ["hello world"], "ok": "op_b94d27b9934d3e08a52e52d7"}
+{"fn": "_hash_public_operation_id", "args": ["abc:"], "ok": "op_16a3ed414449413487c2735c"}
+{"fn": "_hash_public_operation_id", "args": ["﻿bom.leading"], "ok": "op_229daee164a8023175bfae70"}
+{"fn": "_hash_public_operation_id", "args": ["日本語のテキスト"], "ok": "op_d4192d3b01dfa9f5b08388f1"}
+{"fn": "_hash_public_operation_id", "args": ["a:b:ca"], "ok": "op_e95cbc09d2beaace013d7e5a"}
+{"fn": "_hash_public_operation_id", "args": ["é"], "ok": "op_bf12767b0f2a56b2190075ba"}
+{"fn": "_hash_public_operation_id", "args": ["line1\nline2a..b"], "ok": "op_8906f49fd7f4fa6bbf322a88"}
+{"fn": "_hash_public_operation_id", "args": ["HELLO"], "ok": "op_3733cd977ff8eb18b987357e"}
+{"fn": "_hash_public_operation_id", "args": [".leading"], "ok": "op_9c74491a21e8fc7a9b48d53d"}
+{"fn": "_hash_public_operation_id", "args": ["./x/**/*.json"], "ok": "op_018071a777fc8b5655cf853a"}
+{"fn": "_hash_public_operation_id", "args": ["tab\tseparated"], "ok": "op_737304a727e038b1b7006995"}
+{"fn": "_hash_public_operation_id", "args": ["﻿bomİstanbul"], "ok": "op_6ba9edab16b3bc453e90bc68"}
+{"fn": "_hash_public_operation_id", "args": ["😀{name} has {count} items"], "ok": "op_1fc875fd669727e5c601f2b7"}
+{"fn": "_hash_public_operation_id", "args": ["trailing.hello world"], "ok": "op_2c9722f9075b7fa201e24b06"}
+{"fn": "_hash_public_operation_id", "args": ["Hello Worldİstanbul"], "ok": "op_308fd0e0e105f7138ef7c09c"}
+{"fn": "_hash_public_operation_id", "args": ["line1\nline2"], "ok": "op_683376e290829b482c265574"}
+{"fn": "_hash_public_operation_id", "args": ["ab"], "ok": "op_fb8e20fc2e4c3f248c60c39b"}
+{"fn": "_hash_public_operation_id", "args": ["a😀b😀c./x/**/*.json"], "ok": "op_6d2f1585b11e78159f885a22"}
+{"fn": "_hash_public_operation_id", "args": ["key_name-1"], "ok": "op_4184db5447df2761afdd05c9"}
+{"fn": "_hash_public_operation_id", "args": ["ΣΊΣΥΦΟΣ./x/**/*.json"], "ok": "op_e39e2fd09790d5547c32b28e"}
+{"fn": "_hash_public_operation_id", "args": ["a:b:c"], "ok": "op_b0ee04f880c4ff4261479e2e"}
+{"fn": "_hash_public_operation_id", "args": ["😀"], "ok": "op_f0443a342c5ef54783a111b5"}
+{"fn": "_hash_public_operation_id", "args": ["hello"], "ok": "op_2cf24dba5fb0a30e26e83b2a"}
+{"fn": "_hash_public_operation_id", "args": ["  padded  "], "ok": "op_c7f9b538b93ce513f654b8d1"}
+{"fn": "_hash_public_operation_id", "args": ["Hello World  padded  "], "ok": "op_b6798e2faa73ed18da721d17"}
+{"fn": "_hash_public_operation_id", "args": ["line1\nline2  padded  "], "ok": "op_ed9cb92a767d4b9e5b682ab4"}
+{"fn": "_hash_public_operation_id", "args": ["trailing.HELLO"], "ok": "op_60b00f6110b16c3e250f2d10"}
+{"fn": "_hash_public_operation_id", "args": ["ns:key.path"], "ok": "op_090ed4bc851381c01fc77d9d"}
+{"fn": "_hash_public_operation_id", "args": ["Hello Worldtab\tseparated"], "ok": "op_60cf65e68333c7f861ac2064"}
+{"fn": "_hash_public_operation_id", "args": ["ns:key.pathab"], "ok": "op_10f0e1a99ea095c5067ea5da"}
+{"fn": "_hash_public_operation_id", "args": ["HELLOΣΊΣΥΦΟΣ"], "ok": "op_2221e833e55c1bb7e540eddb"}
+{"fn": "_hash_public_operation_id", "args": [":{name} has {count} items"], "ok": "op_dc8c8697f599156eaec3ce46"}
+{"fn": "_hash_public_operation_id", "args": [":.leading"], "ok": "op_03942d354f49d7a4e8ecee48"}
+{"fn": "_hash_public_operation_id", "args": ["ans:key.path"], "ok": "op_b00e51e382c1567ae1480e50"}
+{"fn": "_hash_public_operation_id", "args": ["./x/**/*.jsonab"], "ok": "op_fdd055dde4df57cb289c255d"}
+{"fn": "_hash_public_operation_id", "args": ["😀﻿bom"], "ok": "op_1e902d91b6e9fcfd25aa9b9d"}
+{"fn": "_hash_public_operation_id", "args": ["😀trailing."], "ok": "op_7153f37c5f0b819bd90837be"}
+{"fn": "_hash_public_operation_id", "args": ["😀hello"], "ok": "op_7d872fbf1dffb41adb8e957e"}
+{"fn": "_hash_public_operation_id", "args": ["a:b:c  padded  "], "ok": "op_bfaacffc919cf2af79b95f83"}
+{"fn": "_hash_public_operation_id", "args": ["src/a/b.tsa..b"], "ok": "op_216eb29dc2678c6d14c83cec"}
+{"fn": "_hash_public_operation_id", "args": ["éa😀b😀c"], "ok": "op_21e33e90ee3b67d3b8da6e46"}
+{"fn": "_hash_public_operation_id", "args": ["a:b:cünïcödé"], "ok": "op_d98ac6da66c1502b748c3c33"}
+{"fn": "_hash_public_operation_id", "args": ["a😀b😀cHELLO"], "ok": "op_ecf9c4486b273c1dc8e75cdf"}
+{"fn": "_hash_public_operation_id", "args": ["hellostraße"], "ok": "op_77b47a19dc837341a04f8dd9"}
+{"fn": "_hash_public_operation_id", "args": ["emoji 👍🏽 mixhello world"], "ok": "op_25926874147d7d51d8f89876"}
+{"fn": "_hash_public_operation_id", "args": ["{name} has {count} items./x/**/*.json"], "ok": "op_e576d934116b4667386a6251"}
+{"fn": "_hash_public_operation_id", "args": ["line1\nline2hello world"], "ok": "op_847cdfebeb0c4b39f671d86e"}
+{"fn": "_hash_public_operation_id", "args": ["a😀b😀ca"], "ok": "op_68074b9a0fcd94519da80a73"}
+{"fn": "_hash_public_operation_id", "args": ["emoji 👍🏽 mixa.b.c"], "ok": "op_054b79a4e2f3f74cc29e5399"}
+{"fn": "_hash_public_operation_id", "args": ["aba.b.c"], "ok": "op_d45a0f8e93a56759192ae16c"}
+{"fn": "_hash_public_operation_id", "args": ["aabc"], "ok": "op_223189358b15aac5609ec6d3"}
+{"fn": "_hash_public_operation_id", "args": ["tab\tseparatedΣΊΣΥΦΟΣ"], "ok": "op_f88d41fef45f52a04d172991"}
+{"fn": "_hash_public_operation_id", "args": ["Hello Worldkey_name-1"], "ok": "op_ca7ed9a0a6a64c7151fd7736"}
+{"fn": "_hash_public_operation_id", "args": ["key_name-1  padded  "], "ok": "op_8b52fc9fecf4525d1e502528"}
+{"fn": "_hash_public_operation_id", "args": ["Hello Worldab"], "ok": "op_b9ab1a839324fb885a743a30"}
+{"fn": "_hash_public_operation_id", "args": ["  padded  😀"], "ok": "op_f2f5bc52f5cf1ecf04184c2c"}
+{"fn": "_hash_public_operation_id", "args": ["a.b.ca.b.c"], "ok": "op_50b5b1980605e3d183457188"}
+{"fn": "_hash_public_operation_id", "args": ["line1\nline2ΣΊΣΥΦΟΣ"], "ok": "op_3a6933b75ddaf6fe59d22d5d"}
+{"fn": "_hash_public_operation_id", "args": ["src/a/b.tsa:b:c"], "ok": "op_2a7fc5449eb1322111d9bab9"}
+{"fn": "_hash_public_operation_id", "args": ["./x/**/*.jsonstraße"], "ok": "op_e3fc6893b938aa0b17e66fad"}
+{"fn": "_hash_public_operation_id", "args": ["hello worldünïcödé"], "ok": "op_c153407c700f9fd14542edd9"}
+{"fn": "_hash_public_operation_id", "args": ["Hello Worldsrc/a/b.ts"], "ok": "op_ddf2a43c32bbe44e982e35cd"}
+{"fn": "_hash_public_operation_id", "args": [":key_name-1"], "ok": "op_e3a31baa8a0c0ec90c7be827"}
+{"fn": "_hash_public_operation_id", "args": ["😀a"], "ok": "op_2594c489f92f9dab0d549664"}
+{"fn": "_hash_public_operation_id", "args": ["a:b:cline1\nline2"], "ok": "op_48d9903ef3fe7036cbd934f1"}
+{"fn": "_hash_public_operation_id", "args": ["helloİstanbul"], "ok": "op_5773e5d88c3789057cdc4730"}
+{"fn": "_hash_public_operation_id", "args": ["éhello world"], "ok": "op_8c03deafc20565bb62847700"}
+{"fn": "_hash_public_operation_id", "args": ["ns:key.pathtab\tseparated"], "ok": "op_e9fe20b1d25e82428399c26a"}
+{"fn": "_hash_public_operation_id", "args": ["Hello Worldé"], "ok": "op_391e153c160535dfa890f242"}
+{"fn": "_hash_public_operation_id", "args": ["a.b.cünïcödé"], "ok": "op_a3e7df80956dc6a17bbf8ce6"}
+{"fn": "_hash_public_operation_id", "args": ["straße:"], "ok": "op_7ab1d98af03c3525e6abdac7"}
+{"fn": "_hash_public_operation_id", "args": ["İstanbula😀b😀c"], "ok": "op_44d5db9bfdc44bee7e7a7071"}
+{"fn": "_hash_public_operation_id", "args": ["./x/**/*.jsontrailing."], "ok": "op_673dac1c2f2dd1dcb6988362"}
+{"fn": "_hash_public_operation_id", "args": ["key_name-1a"], "ok": "op_8bde45d1a3318e5f22f24b9a"}
+{"fn": "_hash_public_operation_id", "args": ["key_name-1é"], "ok": "op_05409b6f97fa7cf3bcfde40f"}
+{"fn": "_hash_public_operation_id", "args": ["İstanbulkey_name-1"], "ok": "op_c652568373784ebcfb518695"}
+{"fn": "_hash_public_operation_id", "args": ["a😀b😀c﻿bom"], "ok": "op_440e3820ca1b7f36503b374e"}
+{"fn": "_hash_public_operation_id", "args": ["ünïcödéabc"], "ok": "op_8fce8192db7fd1a21e44400b"}
+{"fn": "_hash_public_operation_id", "args": ["{name} has {count} itemsa.b.c"], "ok": "op_8a82376661c417a2dd31f213"}
+{"fn": "_hash_public_operation_id", "args": ["hello﻿bom"], "ok": "op_7cdb48c57588915f2035473f"}
+{"fn": "_hash_public_operation_id", "args": ["éHELLO"], "ok": "op_2eb8307b01a6ad8715cbc714"}
+{"fn": "_hash_public_operation_id", "args": ["key_name-1straße"], "ok": "op_10f67803d7d3a6fe42ede8c4"}
+{"fn": "_hash_public_operation_id", "args": ["abHello World"], "ok": "op_83a7687a125ed10400bbe6d5"}
+{"fn": "_hash_public_operation_id", "args": ["ΣΊΣΥΦΟΣa..b"], "ok": "op_80fcd58cce38ffb2aace75fa"}
+{"fn": "_hash_public_operation_id", "args": [".leadingHello World"], "ok": "op_fb71ff37958728bf17a01e64"}
+{"fn": "_hash_public_operation_id", "args": ["aΣΊΣΥΦΟΣ"], "ok": "op_16cb41fbdd74c0e569a69ada"}
+{"fn": "_hash_public_operation_id", "args": ["日本語のテキストa:b:c"], "ok": "op_c0b68a5276c471c6a9d7f690"}
+{"fn": "_hash_public_operation_id", "args": [":日本語のテキスト"], "ok": "op_8969dcc07886d5162efa69c1"}
+{"fn": "_hash_public_operation_id", "args": ["ab日本語のテキスト"], "ok": "op_6c1375c1c0de3f3d11364491"}
+{"fn": "_hash_public_operation_id", "args": ["aa😀b😀c"], "ok": "op_918b8c15235da8a72a808e37"}
+{"fn": "_hash_public_operation_id", "args": ["hello worldabc"], "ok": "op_1dc7221c0bf926f1d9977a62"}
+{"fn": "_hash_public_operation_id", "args": ["./x/**/*.json  padded  "], "ok": "op_088c8e0bb35b01d7a7269c7b"}
+{"fn": "_hash_public_operation_id", "args": ["tab\tseparatedhello"], "ok": "op_bb2314ef821ec9d94d479f39"}
+{"fn": "_hash_public_operation_id", "args": ["日本語のテキストé"], "ok": "op_c5f0a509c62cb7c0cf23586a"}
+{"fn": "_hash_public_operation_id", "args": ["a:"], "ok": "op_bfc622d4a6d410f26be3d72d"}
+{"fn": "_hash_public_operation_id", "args": ["  padded  src/a/b.ts"], "ok": "op_0cf2c9234c92b5904a00c26b"}
+{"fn": "_hash_public_operation_id", "args": ["abckey_name-1"], "ok": "op_c022f35b6d83984043851eb0"}
+{"fn": "_hash_public_operation_id", "args": ["ΣΊΣΥΦΟΣa.b.c"], "ok": "op_b8503957fc3f6e6edabd018c"}
+{"fn": "_hash_public_operation_id", "args": ["key_name-1a..b"], "ok": "op_eb5fcab0ddb53b1d63d0efe3"}
+{"fn": "_hash_public_operation_id", "args": ["key_name-1ns:key.path"], "ok": "op_86f308f6d5d57fce337dbc72"}
+{"fn": "_hash_public_operation_id", "args": ["Hello WorldΣΊΣΥΦΟΣ"], "ok": "op_f057f9d4a6a17a119fc9458a"}
+{"fn": "_hash_public_operation_id", "args": ["HELLO{name} has {count} items"], "ok": "op_8e56114c1f1ac822c1cd557a"}
+{"fn": "_hash_public_operation_id", "args": [":ünïcödé"], "ok": "op_c58e6d11a484177eeef24de7"}
+{"fn": "_hash_public_operation_id", "args": ["{name} has {count} items.leading"], "ok": "op_5a0c739b8b8f5b3cbd489676"}
+{"fn": "_hash_public_operation_id", "args": ["﻿bom😀"], "ok": "op_8cbba273cba6782dc0168bb3"}
+{"fn": "_hash_public_operation_id", "args": ["﻿bom:"], "ok": "op_ccea20a097309e63ba25fb35"}
+{"fn": "_hash_public_operation_id", "args": ["  padded  ns:key.path"], "ok": "op_69253359fd33fc2567155ede"}
+{"fn": "_hash_public_operation_id", "args": ["helloline1\nline2"], "ok": "op_aaa1e621b6f8717beba4d9c4"}
+{"fn": "_hash_public_operation_id", "args": ["key_name-1a😀b😀c"], "ok": "op_7d42b7d1319c56e613affda6"}
+{"fn": "_hash_public_operation_id", "args": ["line1\nline2Hello World"], "ok": "op_4a9eed7cc0274fe9f7fe901f"}
+{"fn": "_hash_public_operation_id", "args": ["ünïcödéa:b:c"], "ok": "op_50700e5001254a5ed363471f"}
+{"fn": "_hash_public_operation_id", "args": ["Hello Worlda..b"], "ok": "op_56192748500d0a22a4344238"}
+{"fn": "_hash_public_operation_id", "args": ["a..bHELLO"], "ok": "op_e54816bd1321cb63ecdb071d"}
+{"fn": "_hash_public_operation_id", "args": [".leadingabc"], "ok": "op_be1588f0e7023b0f950cb287"}
+{"fn": "_hash_public_operation_id", "args": ["emoji 👍🏽 mixa:b:c"], "ok": "op_2dbe2378db99ed90a1bc16ce"}
+{"fn": "_hash_public_operation_id", "args": ["é.leading"], "ok": "op_85f3b5950c641d8e5f96a996"}
+{"fn": "_hash_public_operation_id", "args": ["./x/**/*.jsona:b:c"], "ok": "op_7fad00c171c1c87fe0e02769"}
+{"fn": "_hash_public_operation_id", "args": ["emoji 👍🏽 mixünïcödé"], "ok": "op_5019a9b9e93878e9c1c77625"}
+{"fn": "_hash_public_operation_id", "args": ["helloHELLO"], "ok": "op_e658ab82c025b91acde0c84d"}
+{"fn": "_hash_public_operation_id", "args": ["ns:key.path﻿bom"], "ok": "op_8974bb7f648c6a17a582a1b3"}
+{"fn": "_hash_public_operation_id", "args": ["abc日本語のテキスト"], "ok": "op_64236f4a0e284c2bfc0587fe"}
+{"fn": "_hash_public_operation_id", "args": [".leadingline1\nline2"], "ok": "op_8986111cf28ba64394be85f2"}
+{"fn": "_hash_public_operation_id", "args": ["straßea"], "ok": "op_1f850ac2decb5d4ceb1c1364"}
+{"fn": "_hash_public_operation_id", "args": ["a..bstraße"], "ok": "op_96a265c9f9b195c7d4d2f3d3"}
+{"fn": "_hash_public_operation_id", "args": ["Hello Worldünïcödé"], "ok": "op_0a16a7495c6da85b4c825e51"}
+{"fn": "_hash_public_operation_id", "args": ["abc./x/**/*.json"], "ok": "op_6123103b9b570951096f6d40"}
+{"fn": "_hash_public_operation_id", "args": ["./x/**/*.jsonhello world"], "ok": "op_70fd61a8af54d0d78e82fd44"}
+{"fn": "_hash_public_operation_id", "args": ["İstanbul./x/**/*.json"], "ok": "op_0f0e8a256f7abc7cab20df16"}
+{"fn": "_hash_public_operation_id", "args": ["日本語のテキストHELLO"], "ok": "op_5d9dc27bdb6c81a9f86f4308"}
+{"fn": "_hash_public_operation_id", "args": ["absrc/a/b.ts"], "ok": "op_3cc3f41ed640cbaa5202f36b"}
+{"fn": "_hash_public_operation_id", "args": ["straßea:b:c"], "ok": "op_6df43e250eda9ec2e99be295"}
+{"fn": "_hash_public_operation_id", "args": ["hellohello world"], "ok": "op_7fcbdf8f193f3dde3877f518"}
+{"fn": "_hash_public_operation_id", "args": ["a.b.ca😀b😀c"], "ok": "op_1fd63dab5c42ea66ae2f4390"}
+{"fn": "_hash_public_operation_id", "args": ["./x/**/*.jsonns:key.path"], "ok": "op_78eed559f40678f4cb448052"}
+{"fn": "_hash_public_operation_id", "args": [":İstanbul"], "ok": "op_d0b4bab590a47720922d55d6"}
+{"fn": "_hash_public_operation_id", "args": ["tab\tseparatedtab\tseparated"], "ok": "op_5df42ebd767778ed3afdf9d0"}
+{"fn": "_hash_public_operation_id", "args": ["Hello Worldtrailing."], "ok": "op_091133cca763afd5ad7db6c3"}
+{"fn": "_hash_public_operation_id", "args": ["{name} has {count} itemstab\tseparated"], "ok": "op_262067f784e2e4abe7d8deeb"}
+{"fn": "_hash_public_operation_id", "args": ["éé"], "ok": "op_ef4d3ff1dcdf3186b6226120"}
+{"fn": "_hash_public_operation_id", "args": ["İstanbul:"], "ok": "op_47698e145b39c2094869ebd1"}
+{"fn": "_hash_public_operation_id", "args": ["{name} has {count} itemstrailing."], "ok": "op_c9c8256db897194dc7ad358d"}
+{"fn": "_hash_public_operation_id", "args": ["abca:b:c"], "ok": "op_6a28d414963efa8f9db26ec2"}
+{"fn": "_hash_public_operation_id", "args": ["a.b.cHello World"], "ok": "op_65338280a58f4c86d953fc10"}
+{"fn": "_hash_public_operation_id", "args": ["hello world日本語のテキスト"], "ok": "op_3ed05c5d43c3be9795abc810"}
+{"fn": "_hash_public_operation_id", "args": ["abctab\tseparated"], "ok": "op_6308f6904e0b89120dff1504"}
+{"fn": "_hash_public_operation_id", "args": [":tab\tseparated"], "ok": "op_f4d03d634e6f251b973d1151"}
+{"fn": "_hash_public_operation_id", "args": ["HELLOtrailing."], "ok": "op_58b4012643cde7fb80181457"}
+{"fn": "_hash_public_operation_id", "args": ["日本語のテキストa😀b😀c"], "ok": "op_6cb344ddcb9ca517f3d6ed82"}
+{"fn": "_hash_public_operation_id", "args": ["﻿bomhello world"], "ok": "op_37df646d4cf5cdf05a353baf"}
+{"fn": "_hash_public_operation_id", "args": ["key_name-1﻿bom"], "ok": "op_78f6270b1d1284fd76bcccc2"}
+{"fn": "_hash_public_operation_id", "args": ["  padded  a..b"], "ok": "op_05f31356ac1a3c7b6ffad77e"}
+{"fn": "_hash_public_operation_id", "args": ["ünïcödésrc/a/b.ts"], "ok": "op_b74c2dfc544713d988979f96"}
+{"fn": "_hash_public_operation_id", "args": ["Hello World.leading"], "ok": "op_d130ed9e68b00084ee1b05f9"}
+{"fn": "_hash_public_operation_id", "args": ["{name} has {count} itemsabc"], "ok": "op_fc804b63b5c1dc5c087bce78"}
+{"fn": "_hash_public_operation_id", "args": [":a..b"], "ok": "op_3f1f359def6d21341d8cddbc"}
+{"fn": "_hash_public_operation_id", "args": ["emoji 👍🏽 mixhello"], "ok": "op_832376bf0f32a1210c6c489e"}
+{"fn": "_hash_public_operation_id", "args": ["abca.b.c"], "ok": "op_eba6dbe4fcb7bafdc526fc9b"}
+{"fn": "_hash_public_operation_id", "args": [":emoji 👍🏽 mix"], "ok": "op_0670a81a268e621c67d39164"}
+{"fn": "_hash_public_operation_id", "args": ["ab:"], "ok": "op_a6459d8c45d728aa7d76a1c1"}
+{"fn": "_hash_public_operation_id", "args": ["abkey_name-1"], "ok": "op_15a840aa771a56390f3b0aa4"}
+{"fn": "_hash_public_operation_id", "args": ["ünïcödéhello world"], "ok": "op_aa699099b5f438475407d09d"}
+{"fn": "_hash_public_operation_id", "args": ["  padded  line1\nline2"], "ok": "op_6db9d610fe190721b95f22ec"}
+{"fn": "_hash_public_operation_id", "args": ["tab\tseparateda😀b😀c"], "ok": "op_2f277fd6053788732df26389"}
+{"fn": "_hash_public_operation_id", "args": ["😀.leading"], "ok": "op_ba9a236413f82a10f7686d4d"}
+{"fn": "_hash_public_operation_id", "args": ["ünïcödékey_name-1"], "ok": "op_b7d1ad6b6cc40ecdea7abfd4"}
+{"fn": "_hash_public_operation_id", "args": [":😀"], "ok": "op_24b962dedf3b58a654a9eb0d"}
+{"fn": "_hash_public_operation_id", "args": ["Hello Worldhello"], "ok": "op_dd70e44a8e8f1c00b0845f52"}
+{"fn": "_hash_public_operation_id", "args": ["hello worldhello world"], "ok": "op_524857d0148721c24e3e7795"}
+{"fn": "_hash_public_operation_id", "args": ["src/a/b.tsns:key.path"], "ok": "op_283e0b28e7f6c897edd5fc58"}
+{"fn": "_hash_public_operation_id", "args": ["a😀b😀c.leading"], "ok": "op_51cc50dddb84e120febd5dc8"}
+{"fn": "_hash_public_operation_id", "args": ["tab\tseparated.leading"], "ok": "op_b167cb74d42773033398fa41"}
+{"fn": "_hash_public_operation_id", "args": ["a.b.c日本語のテキスト"], "ok": "op_4e0a700951b2dd2b1b9feccb"}
+{"fn": "_hash_public_operation_id", "args": ["src/a/b.ts😀"], "ok": "op_03fa1f8c68af067c25571ede"}
+{"fn": "_hash_public_operation_id", "args": ["﻿bomns:key.path"], "ok": "op_857073b913c1fdb661e87deb"}
+{"fn": "_hash_public_operation_id", "args": ["key_name-1HELLO"], "ok": "op_d5b6269f0f02d443cba14789"}
+{"fn": "_hash_public_operation_id", "args": ["日本語のテキストtab\tseparated"], "ok": "op_398fb66995d69c6bfdb13120"}
+{"fn": "_hash_public_operation_id", "args": ["ns:key.patha"], "ok": "op_063a24cb624128ca6896f843"}
+{"fn": "_hash_public_operation_id", "args": ["abca..b"], "ok": "op_688834220db7ee227f03daa4"}
+{"fn": "_hash_public_operation_id", "args": ["ΣΊΣΥΦΟΣtrailing."], "ok": "op_97d1ac8ac48ab30757c5acff"}
+{"fn": "_hash_public_operation_id", "args": ["a.b.c.leading"], "ok": "op_6d33d950ca95148331bba472"}
+{"fn": "_hash_public_operation_id", "args": ["a😀b😀c😀"], "ok": "op_2dce5c030f9a52f075c55132"}
+{"fn": "_hash_public_operation_id", "args": ["trailing.a"], "ok": "op_ae4a8da9a1eb6045545b10f1"}
+{"fn": "_hash_public_operation_id", "args": ["héllo wörld"], "ok": "op_a1003f7d04a4115711d0b48a"}
+{"fn": "_hash_public_operation_id", "args": ["👍🏽 thumbs"], "ok": "op_2752e65dacf50732034519d1"}
+{"fn": "_hash_public_operation_id", "args": ["日本語"], "ok": "op_77710aedc74ecfa33685e33a"}
+{"fn": "_hash_public_operation_id", "args": ["ılık ırmak"], "ok": "op_60dc09d56c2ba920b1ecc799"}
+{"fn": "_hash_public_operation_id", "args": ["👨‍👩‍👧 family"], "ok": "op_bb5f3770a5817fd95570670d"}
+{"fn": "_hash_public_operation_id", "args": ["a b"], "ok": "op_9507017c6d887511a5a6ac28"}
+{"fn": "_hash_public_operation_id", "args": ["a😀b"], "ok": "op_6fba5b2ea783ded096fc2444"}
+{"fn": "_hash_public_operation_id", "args": ["a²b x½ y①"], "ok": "op_a950cdbd5ee7163254f5361d"}
+{"fn": "_hash_public_operation_id", "args": ["aⅠb Ⅻ"], "ok": "op_da9cf8ae08a9054643c590fa"}
+{"fn": "_hash_public_operation_id", "args": ["a𐐀b 𝐀bc"], "ok": "op_abf46dba5dae8b506447b220"}
+{"fn": "_hash_public_operation_id", "args": ["कि ٣٤"], "ok": "op_9dc1759d14c77f7412fba6d5"}
+{"fn": "_hash_public_operation_id", "args": ["Iı İi"], "ok": "op_3de140f8595826857c8ab406"}
+{"fn": "_hash_public_operation_id", "args": ["K K k"], "ok": "op_dcda7a5326eedb435df97e68"}
+{"fn": "_hash_public_operation_id", "args": ["ſ s S"], "ok": "op_56f470c329b2eadd3a93e399"}
+{"fn": "_hash_public_operation_id", "args": ["x‍y 👨‍👩‍👧"], "ok": "op_c7928a54bec381d87d2c4fcb"}
+{"fn": "_hash_public_operation_id", "args": ["a b c　d"], "ok": "op_256164abe23ff0180daa3146"}
+{"fn": "_hash_public_operation_id", "args": ["١٢٣ ٤٥"], "ok": "op_35315cd5ab81b9cadecb15f1"}
+{"fn": "_hash_public_operation_id", "args": ["𝟘𝟙 ²³"], "ok": "op_46afe9729d82fb099892e79c"}
+{"fn": "_hash_public_operation_id", "args": ["snake_case foo-bar o'neil"], "ok": "op_0598d49c834526c6486e52ae"}
+{"fn": "_hash_public_operation_id", "args": ["ǅungla Ǆ"], "ok": "op_16efdceea18dd59556a36e1b"}
+{"fn": "_hash_public_operation_id", "args": ["one\r\ntwo threefour"], "ok": "op_fced7d1dddd848c1033a1ccc"}
+{"fn": "_hash_public_operation_id", "args": ["café café"], "ok": "op_886a02e53758efe926094e98"}
+{"fn": "_hash_public_operation_id", "args": ["ΣΑΣ σας ς"], "ok": "op_930710ee7dd71764b28b4ee0"}
+{"fn": "_hash_public_operation_id", "args": ["0123456789abcdef0123456789abcdef"], "ok": "0123456789abcdef0123456789abcdef"}
+{"fn": "_hash_public_operation_id", "args": ["  ABCDEF0123456789ABCDEF0123456789  "], "ok": "abcdef0123456789abcdef0123456789"}
+{"fn": "_hash_public_operation_id", "args": ["protocol_card_pay:cs_live_test_12345"], "ok": "op_233797e62b3848437cbd6c09"}
+{"fn": "_hash_public_operation_id", "args": ["alice@example.com"], "ok": "op_ff8d9819fc0e12bf0d24892e"}
+{"fn": "_hash_public_operation_id", "args": [""], "ok": "op_e3b0c44298fc1c149afbf4c8"}
+{"fn": "_hash_public_operation_id", "args": [null], "ok": "op_e3b0c44298fc1c149afbf4c8"}
+{"fn": "_hash_public_operation_id", "args": ["0123456789abcdef0123456789abcdeg"], "ok": "op_ebe845f6f7fc8ba9abe8cc6b"}
+{"fn": "_hash_public_operation_id", "args": ["中文订单-2026"], "ok": "op_194bf2a19e1d78eaa9c704bc"}

@@ -49,10 +49,13 @@ namespace SmsWorkbench.Models
         public const string Info = "info";
         public const string Neutral = "neutral";
 
-        // ── registration_status vocabulary (sms_tool registration_state) ─────────
+        // ── registration_status vocabulary (sms_tool accounts.status & registration_state) ──
         public const string Registered = "registered";
+        public const string Active = "active";
+        public const string Unknown = "unknown";
         public const string PartialRegistered = "partial_registered";
         public const string AtProbePending = "at_probe_pending";
+        public const string AtProbeTransportUnknown = "at_probe_transport_unknown";
         public const string Pending = "pending";
         public const string RetryPending = "retry_pending";
         public const string Failed = "failed";
@@ -60,6 +63,20 @@ namespace SmsWorkbench.Models
         public const string Quarantined = "quarantined";
         public const string Cancelled = "cancelled";
         public const string BatchPaused = "batch_paused";
+        public const string Terminal = "terminal";
+        public const string AccountDeactivated = "account_deactivated";
+        public const string AtInvalid = "at_invalid";
+        public const string NetworkFailed = "network_failed";
+        public const string MailboxFailed = "mailbox_failed";
+        public const string AuthStateFailed = "auth_state_failed";
+        public const string RateLimited = "rate_limited";
+        public const string PaypalPmCreated = "paypal_pm_created";
+        public const string PaypalReady = "paypal_ready";
+        public const string PaypalFailed = "paypal_failed";
+        public const string K12Joined = "k12_joined";
+        public const string K12Requested = "k12_requested";
+        public const string K12Left = "k12_left";
+        public const string K12VerifyFailed = "k12_verify_failed";
 
         // ── refresh_token_status vocabulary ──────────────────────────────────────
         public const string OAuthPresent = "oauth_present";
@@ -87,21 +104,41 @@ namespace SmsWorkbench.Models
             switch (RegistrationState(row))
             {
                 case Registered:
+                case PaypalPmCreated:
+                case K12Joined:
                     return Success;
+                case Active:
+                    {
+                        string labelSeverity = StatusSeverityConverter.SeverityFor(row.Status);
+                        return labelSeverity is Danger or Warn ? labelSeverity : Success;
+                    }
                 case PartialRegistered:
-                    return Warn;
                 case AtProbePending:
+                case AtProbeTransportUnknown:
                 case Pending:
                 case RetryPending:
+                case PaypalReady:
+                case K12Requested:
+                case RateLimited:
                     return Warn;
                 case Failed:
                 case DeadEnd:
                 case Quarantined:
                 case Cancelled:
                 case BatchPaused:
+                case Terminal:
+                case AccountDeactivated:
+                case AtInvalid:
+                case NetworkFailed:
+                case MailboxFailed:
+                case AuthStateFailed:
+                case PaypalFailed:
+                case K12Left:
+                case K12VerifyFailed:
                     return Danger;
+                case Unknown:
                 case "":
-                    // Legacy row: fall back to the composed label.
+                    // Unregistered mailbox pool row or legacy row: fall back to the composed label.
                     return StatusSeverityConverter.SeverityFor(row.Status);
                 default:
                     return StatusSeverityConverter.SeverityFor(row.Status);
@@ -189,9 +226,19 @@ namespace SmsWorkbench.Models
             switch (RegistrationState(row))
             {
                 case Registered:
+                case Active:
+                case PaypalPmCreated:
+                case PaypalReady:
+                case PaypalFailed:
+                case K12Joined:
+                case K12Requested:
+                case K12Left:
+                case K12VerifyFailed:
                     return true;
+                case Unknown:
                 case PartialRegistered:
                 case AtProbePending:
+                case AtProbeTransportUnknown:
                 case Pending:
                 case RetryPending:
                 case Failed:
@@ -199,6 +246,7 @@ namespace SmsWorkbench.Models
                 case Quarantined:
                 case Cancelled:
                 case BatchPaused:
+                case Terminal:
                     return false;
             }
             return LegacyLabelSaysRegistered(row);
@@ -216,6 +264,7 @@ namespace SmsWorkbench.Models
             {
                 case PartialRegistered:
                 case AtProbePending:
+                case AtProbeTransportUnknown:
                 case Pending:
                 case RetryPending:
                 case Failed:
@@ -223,21 +272,42 @@ namespace SmsWorkbench.Models
                 case Quarantined:
                 case Cancelled:
                 case BatchPaused:
+                case Terminal:
+                case AccountDeactivated:
+                case AtInvalid:
+                case NetworkFailed:
+                case MailboxFailed:
+                case AuthStateFailed:
+                case RateLimited:
+                case PaypalReady:
+                case PaypalFailed:
+                case K12Left:
+                case K12VerifyFailed:
                     return true;
                 case Registered:
-                    // A machine "registered" row can still need attention when its
-                    // token is gone; the badge already shows danger for that.
-                    return RefreshTokenSeverity(row) == Danger;
+                case PaypalPmCreated:
+                case K12Joined:
+                    // Missing RT ("no_rt" / "missing") is normal for email AT-only
+                    // registrations and must not inflate the Overview attention count.
+                    return false;
+                case Active:
+                    // Raw historical `registration_state="active"` without a live
+                    // account status: healthy unless the rendered label says dropped/failed/pending.
+                    return Loc.DisplayContains(row.Status, "掉号")
+                        || Loc.DisplayContains(row.Status, "待")
+                        || Loc.DisplayContains(row.Status, "缺")
+                        || Loc.DisplayContains(row.Status, "失败");
+                case Unknown:
                 case "":
                     break;
                 default:
                     return true;
             }
-            // Legacy rows: the former display-text rule, unchanged.
+            // Legacy rows and fresh mailbox-pool rows ("unknown"): only status-level
+            // failures/pending flags need attention; a missing refresh token alone does not.
             return Loc.DisplayContains(row.Status, "待")
                 || Loc.DisplayContains(row.Status, "缺")
-                || Loc.DisplayContains(row.Status, "失败")
-                || RefreshTokenSeverity(row) == Danger;
+                || Loc.DisplayContains(row.Status, "失败");
         }
 
         /// <summary>True when the row carries an account an importer can consume.</summary>

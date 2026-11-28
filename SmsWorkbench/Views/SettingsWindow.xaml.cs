@@ -1,6 +1,6 @@
 namespace SmsWorkbench.Views
 {
-    public partial class SettingsWindow : Window
+    public partial class SettingsWindow : FluentWindow
     {
         public SettingsWindow(SettingsViewModel viewModel)
         {

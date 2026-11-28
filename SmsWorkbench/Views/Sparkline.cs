@@ -66,23 +66,72 @@ namespace SmsWorkbench.Views
             if (values is null || values.Length < 2 || width <= 0 || height <= 0) return;
 
             double max = values.Max();
-            if (max <= 0) max = 1;
-
-            var geometry = new StreamGeometry();
-            using (StreamGeometryContext context = geometry.Open())
+            if (max <= 0)
             {
-                double step = width / (values.Length - 1);
-                context.BeginFigure(new Point(0, height - values[0] / max * height), isFilled: false, isClosed: false);
-                for (int index = 1; index < values.Length; index++)
-                {
-                    context.LineTo(new Point(index * step, height - values[index] / max * height), true, false);
-                }
+                Brush muted = TryFindResource("Divider") as Brush ?? Brushes.Gray;
+                var quietPen = new Pen(muted, 1.0) { DashStyle = DashStyles.Dot };
+                quietPen.Freeze();
+                double midY = Math.Round(height * 0.5) + 0.5;
+                drawingContext.DrawLine(quietPen, new Point(0, midY), new Point(width, midY));
+                return;
             }
 
-            geometry.Freeze();
-            var pen = new Pen(Stroke, StrokeThickness) { LineJoin = PenLineJoin.Round };
+            const double padY = 1.5;
+            double plotHeight = Math.Max(1.0, height - padY * 2.0);
+            double step = width / (values.Length - 1);
+
+            Point PointAt(int i) => new(i * step, padY + (1.0 - values[i] / max) * plotHeight);
+
+            var strokeGeometry = new StreamGeometry();
+            var areaGeometry = new StreamGeometry();
+            Point first = PointAt(0);
+            Point last = PointAt(values.Length - 1);
+
+            using (StreamGeometryContext strokeCtx = strokeGeometry.Open())
+            using (StreamGeometryContext areaCtx = areaGeometry.Open())
+            {
+                strokeCtx.BeginFigure(first, isFilled: false, isClosed: false);
+                areaCtx.BeginFigure(new Point(0, height), isFilled: true, isClosed: true);
+                areaCtx.LineTo(first, isStroked: false, isSmoothJoin: false);
+
+                for (int index = 1; index < values.Length; index++)
+                {
+                    Point pt = PointAt(index);
+                    strokeCtx.LineTo(pt, isStroked: true, isSmoothJoin: true);
+                    areaCtx.LineTo(pt, isStroked: false, isSmoothJoin: false);
+                }
+
+                areaCtx.LineTo(new Point(width, height), isStroked: false, isSmoothJoin: false);
+            }
+
+            strokeGeometry.Freeze();
+            areaGeometry.Freeze();
+
+            Color strokeColor = (Stroke as SolidColorBrush)?.Color ?? Colors.Gray;
+            var fillBrush = new LinearGradientBrush(
+                Color.FromArgb(0x36, strokeColor.R, strokeColor.G, strokeColor.B),
+                Color.FromArgb(0x00, strokeColor.R, strokeColor.G, strokeColor.B),
+                new Point(0, 0),
+                new Point(0, 1));
+            fillBrush.Freeze();
+            drawingContext.DrawGeometry(fillBrush, null, areaGeometry);
+
+            var pen = new Pen(Stroke, StrokeThickness)
+            {
+                LineJoin = PenLineJoin.Round,
+                StartLineCap = PenLineCap.Round,
+                EndLineCap = PenLineCap.Round,
+            };
             pen.Freeze();
-            drawingContext.DrawGeometry(null, pen, geometry);
+            drawingContext.DrawGeometry(null, pen, strokeGeometry);
+
+            if (values[^1] > 0)
+            {
+                var halo = new SolidColorBrush(Color.FromArgb(0x38, strokeColor.R, strokeColor.G, strokeColor.B));
+                halo.Freeze();
+                drawingContext.DrawEllipse(halo, null, last, 3.6, 3.6);
+                drawingContext.DrawEllipse(Stroke, null, last, 1.8, 1.8);
+            }
         }
     }
 }

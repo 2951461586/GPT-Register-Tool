@@ -699,6 +699,8 @@ namespace SmsWorkbench.Localization
             ["任务队列"] = "Tasks",
             ["复制"] = "Copy",
             ["复制日志"] = "Copy log",
+            ["跳至底部"] = "Bottom",
+            ["跳转到日志最低行"] = "Jump to latest log line",
             ["折叠控制台"] = "Collapse console",
             ["展开控制台"] = "Expand console",
             ["点击筛选全部"] = "Filter: all records",
@@ -765,6 +767,9 @@ namespace SmsWorkbench.Localization
             ["银行卡被拒"] = "Card declined",
             ["确认失败"] = "Confirmation failed",
             ["处理中"] = "Processing",
+            ["结果未知（需核账）"] = "Outcome unknown (reconcile)",
+            ["oaics_ 自定义结账不支持复用已有 pm_，请直接填写卡号、有效期与 CVC。"]
+                = "oaics_ custom checkout does not support reusing an existing pm_; enter card number, expiry, and CVC directly.",
             ["遇到 3DS / 人机挑战，请在浏览器打开结账页面手动完成验证。"]
                 = "3DS or human-verification challenge detected. Open the checkout URL in your browser to finish manually.",
             ["协议卡付未完成，请查看返回详情。"] = "Protocol card payment did not complete. Check the response details.",
@@ -793,6 +798,49 @@ namespace SmsWorkbench.Localization
             ["安全码 (CVC) 必须是 3-4 位数字。"] = "Security code (CVC) must be 3–4 digits.",
             ["已有后端任务正在运行，请先等待其完成或取消后再发起协议卡付。"]
                 = "A backend task is already running. Wait for it to finish or cancel it before starting protocol card payment.",
+
+            // ── Appearance presets & tweakcn CSS theme engine ───────────────
+            ["外观与主题"] = "Appearance & themes",
+            ["右键快速切换明暗"] = "Right-click Theme to quick-cycle mode",
+            ["明暗模式"] = "Color mode",
+            ["跟随系统"] = "System",
+            ["浅色"] = "Light",
+            ["深色"] = "Dark",
+            ["主题预设"] = "Theme presets",
+            ["圆角风格"] = "Corner radius",
+            ["锐利"] = "Sharp",
+            ["标准"] = "Default",
+            ["圆润"] = "Soft",
+            ["导入 tweakcn CSS"] = "Import tweakcn CSS",
+            ["粘贴 tweakcn.com 导出的 :root / .dark CSS 变量..."] = "Paste :root / .dark CSS variables exported from tweakcn.com...",
+            ["应用 CSS"] = "Apply CSS",
+            ["恢复默认"] = "Reset default",
+            ["已应用 tweakcn 自定义主题"] = "Applied custom tweakcn theme",
+            ["已恢复默认外观"] = "Restored default appearance",
+            ["请先粘贴 tweakcn 导出的 CSS 变量代码。"] = "Paste tweakcn CSS variable code first.",
+            ["未识别到有效的 CSS 变量（如 --background / --primary）。"] = "No valid CSS variables found (e.g. --background / --primary).",
+            ["自定义 (tweakcn)"] = "Custom (tweakcn)",
+            ["来自导入的 tweakcn CSS 变量"] = "Imported from tweakcn CSS variables",
+            ["曜石紫罗兰（默认）"] = "Obsidian Violet",
+            ["冷静石墨表面与紫罗兰焦点"] = "Calm graphite surfaces with violet focus",
+            ["Vercel 极简"] = "Vercel Minimal",
+            ["高对比纯粹黑白与利落微灰"] = "High-contrast monochrome with crisp neutral grays",
+            ["Claude 暖陶"] = "Claude Warm",
+            ["柔和羊皮纸与赤陶暖色系"] = "Warm parchment surfaces with terracotta accent",
+            ["Catppuccin 柔彩"] = "Catppuccin",
+            ["护眼低疲劳蓝灰与柔紫强调"] = "Soothing low-glare slate with soft lavender accent",
+            ["Supabase 翡翠"] = "Supabase Emerald",
+            ["深炭工程表面与翡翠绿焦点"] = "Deep charcoal surfaces with emerald focus",
+            ["对比度 AA {0:F1}:1"] = "Contrast AA {0:F1}:1",
+            ["对比度偏低 {0:F1}:1"] = "Low contrast {0:F1}:1",
+
+            // ── Phase 3: WorkflowStepper & placeholders ──────────────────────
+            ["配置与报价"] = "Configure & quote",
+            ["核账 / 提交"] = "Verify / submit",
+            ["完成 / 交还"] = "Done / handoff",
+            ["输入 pk_live_... 或 pk_test_..."] = "Enter pk_live_... or pk_test_...",
+            ["http:// 或 socks5://（可选）"] = "http:// or socks5:// (optional)",
+            ["查询报价或执行支付后，此处将显示脱敏结构化 JSON 结果…"] = "Redacted structured JSON output will appear here after quoting or paying…",
         };
     }
 }

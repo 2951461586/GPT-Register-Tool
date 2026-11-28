@@ -1,0 +1,43 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/registration/progress.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "registration-quality-rs",
+  "exports": [
+    {
+      "name": "_aggregate_progress_jsonl",
+      "file": "sms_tool/registration/progress.py",
+      "line": 311,
+      "params": [
+        {
+          "name": "raw_jsonl",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "registration_quality_metrics",
+      "file": "sms_tool/registration/progress.py",
+      "line": 335,
+      "reason": "stays in Python (filesystem reads and in-memory record list handling)"
+    },
+    {
+      "name": "track_registration",
+      "file": "sms_tool/registration/progress.py",
+      "line": 395,
+      "reason": "stays in Python (contextvar and callable decorator)"
+    }
+  ]
+}

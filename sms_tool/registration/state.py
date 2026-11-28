@@ -11,6 +11,14 @@ from typing import TYPE_CHECKING, Any, Callable, Mapping, Protocol
 
 from ..config import current_config_data
 from ..kernel.sanitizer import sanitize_text
+from .batch_helpers import load_native_module
+
+_NATIVE_DEVICE_SEED = load_native_module(
+    "registration-device-seed-rs",
+    "registration_device_seed_rs",
+    "RUST_ANYTHING_UNIT_REGISTRATION_DEVICE_SEED",
+)
+_NATIVE_DERIVE_SEEDED_DEVICE_IDS = getattr(_NATIVE_DEVICE_SEED, "_derive_seeded_device_ids", None)
 
 if TYPE_CHECKING:  # pragma: no cover - type-only, never executed
     from .operations import RegistrationOperations
@@ -276,6 +284,20 @@ class RegistrationContext:
 _DEVICE_SEED_SALT = "gpt-register-tool:registration:"
 
 
+def _derive_seeded_device_ids(key: str) -> tuple[str, str]:
+    """Derive deterministic ``(device_id, auth_session_logging_id)`` from a normalized key."""
+    if _NATIVE_DERIVE_SEEDED_DEVICE_IDS is not None and isinstance(key, str):
+        derived = _NATIVE_DERIVE_SEEDED_DEVICE_IDS(key)
+        return (str(derived[0]), str(derived[1]))
+    if not key:
+        return ("", "")
+    base = f"{_DEVICE_SEED_SALT}{key}"
+    return (
+        str(uuid.uuid5(uuid.NAMESPACE_URL, f"device_id:{base}")),
+        uuid.uuid5(uuid.NAMESPACE_URL, f"auth_session_logging_id:{base}").hex,
+    )
+
+
 def seeded_device_identity(email: str | None) -> dict[str, str]:
     """``oai-did`` and ``auth_session_logging_id`` as a pure function of the address.
 
@@ -287,10 +309,10 @@ def seeded_device_identity(email: str | None) -> dict[str, str]:
     key = str(email or "").strip().casefold()
     if not key:
         return {}
-    base = f"{_DEVICE_SEED_SALT}{key}"
+    device_id, logging_id = _derive_seeded_device_ids(key)
     return {
-        "device_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"device_id:{base}")),
-        "auth_session_logging_id": uuid.uuid5(uuid.NAMESPACE_URL, f"auth_session_logging_id:{base}").hex,
+        "device_id": device_id,
+        "auth_session_logging_id": logging_id,
     }
 
 

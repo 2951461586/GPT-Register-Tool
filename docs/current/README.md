@@ -42,7 +42,7 @@ below so existing links do not break:
 - [`configuration.md`](configuration.md) - 配置分片优先级与迁移约定
 - [`telemetry-and-runtime.md`](telemetry-and-runtime.md) - 日志关联、测试隔离与只读清理清单
 - [`runtime-packaging.md`](runtime-packaging.md) - 自包含安装包里的 CPython 固定版本、校验与解释器优先级
-- [`rust-acceleration.md`](rust-acceleration.md) - 原生 Rust Sentinel FFI（零 Node.js 依赖）与 71 个 `rust-anything` PyO3 热点扩展的实测收益、回退开关与验证命令
+- [`rust-acceleration.md`](rust-acceleration.md) - 原生 Rust Sentinel FFI（零 Node.js 依赖）与 78 个 `rust-anything` PyO3 热点扩展的实测收益、回退开关与验证命令
 - [`typing.md`](typing.md) - pyright 类型门禁（逐文件 ratchet）的安装、运行与修复约定
 - [`dotnet-gates.md`](dotnet-gates.md) - C# 构建告警门禁：为什么是零基线、为什么解析控制台而不是 SARIF、如何退债
 - [`ui-architecture.md`](ui-architecture.md) - WPF 桌面端的层次、资源字典（`Themes/` 的 `Tokens` / `Glyphs` / `Colors.Light|Dark` / `Controls`）、`MainWindow` 分部类、命令→后端路径、外壳能力（主题三态 / 托盘与热键 / 指标条 / 工作区备份）与 UI 门禁

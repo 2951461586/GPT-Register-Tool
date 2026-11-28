@@ -108,6 +108,48 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         self.assertEqual(stages, [])
         sleep.assert_not_called()  # type: ignore[attr-defined]
 
+    def test_probe_retries_once_on_transient_transport_drop(self):
+        with (
+            patch.object(
+                registration,
+                "current_config_data",
+                return_value={"registration": {"at_stability_probe_count": 1}},
+            ),
+            patch(
+                "sms_tool.accounts.account_liveness.probe_account_liveness",
+                side_effect=[
+                    {"status_code": 0, "status": "unknown", "error": "curl: (56) Proxy CONNECT aborted"},
+                    {"status_code": 200, "status": "active"},
+                ],
+            ) as probe,
+            patch.object(registration.time, "sleep") as sleep,
+        ):
+            result = _probe_registration_access_token("at", {}, proxy="http://proxy.example:8080")
+
+        self.assertEqual(result["status_code"], 200)
+        self.assertEqual(result["stability_status_codes"], [200])
+        self.assertEqual(probe.call_count, 2)  # type: ignore[attr-defined]
+        sleep.assert_called_once_with(1.5)  # type: ignore[attr-defined]
+
+    def test_probe_does_not_retry_http_401_verdict(self):
+        with (
+            patch.object(
+                registration,
+                "current_config_data",
+                return_value={"registration": {"at_stability_probe_count": 1}},
+            ),
+            patch(
+                "sms_tool.accounts.account_liveness.probe_account_liveness",
+                return_value={"status_code": 401, "status": "token_invalid"},
+            ) as probe,
+            patch.object(registration.time, "sleep") as sleep,
+        ):
+            result = _probe_registration_access_token("at", {}, proxy="http://proxy.example:8080")
+
+        self.assertEqual(result["status_code"], 401)
+        self.assertEqual(probe.call_count, 1)  # type: ignore[attr-defined]
+        sleep.assert_not_called()  # type: ignore[attr-defined]
+
     def test_http_200_access_token_is_registration_success_even_when_create_step_warned(self):
         success, error, warning = _registration_outcome(
             False,

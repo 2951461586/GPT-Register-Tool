@@ -13,6 +13,8 @@ namespace SmsWorkbench.Services
 
         public DesktopThemeMode CurrentMode { get; private set; } = DesktopThemeMode.System;
 
+        public DesktopAppearancePreferences CurrentAppearance { get; private set; } = new();
+
         public string CurrentModeLabel => FormatModeLabel(CurrentMode);
 
         public static string FormatModeLabel(DesktopThemeMode mode) => mode switch
@@ -26,6 +28,12 @@ namespace SmsWorkbench.Services
         {
             CurrentMode = mode;
             return CurrentMode;
+        }
+
+        public DesktopAppearancePreferences SetAppearance(DesktopAppearancePreferences appearance)
+        {
+            CurrentAppearance = appearance ?? new DesktopAppearancePreferences();
+            return CurrentAppearance;
         }
 
         public DesktopThemeMode NextMode() => CurrentMode.Next();
@@ -58,6 +66,18 @@ namespace SmsWorkbench.Services
             catch (Exception ex)
             {
                 log($"保存主题偏好失败: {ex.Message}");
+            }
+        }
+
+        public void PersistAppearance(string rootDir, DesktopAppearancePreferences appearance, Action<string> log)
+        {
+            try
+            {
+                DesktopAppearancePreference.Save(rootDir, appearance);
+            }
+            catch (Exception ex)
+            {
+                log($"保存外观预设失败: {ex.Message}");
             }
         }
     }

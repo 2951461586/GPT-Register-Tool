@@ -1,9 +1,18 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <!-- Button and action control styles for the workbench shell.
-       Each template overrides the app-level implicit TextBlock style so string
-       Content always renders in the button's own Foreground (OnPrimary, Danger,
-       TextSub, ...) instead of being forced back to TextMain. -->
+       Shared ButtonContentTextStyle ensures string Content always renders in
+       the button's own Foreground (OnPrimary, Danger, TextSub, ...) with
+       crisp ClearType, while layered HoverFill/PressedFill overlays provide
+       unified smooth desktop motion across every button variant. -->
+  <Style x:Key="ButtonContentTextStyle" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+    <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+    <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
+    <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+    <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
+  </Style>
+
   <Style TargetType="Button">
     <Setter Property="Height" Value="32"/>
     <Setter Property="Padding" Value="12,0"/>
@@ -22,34 +31,78 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="ButtonChrome"
-                  Background="{TemplateBinding Background}"
-                  BorderBrush="{TemplateBinding BorderBrush}"
-                  BorderThickness="{TemplateBinding BorderThickness}"
-                  CornerRadius="{StaticResource Corner.Md}">
+          <Grid x:Name="ButtonRoot" RenderTransformOrigin="0.5,0.5">
+            <Grid.RenderTransform>
+              <ScaleTransform ScaleX="1" ScaleY="1"/>
+            </Grid.RenderTransform>
+            <Border x:Name="ButtonChrome"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{DynamicResource Corner.Md}"/>
+            <Border x:Name="HoverFill"
+                    Background="{DynamicResource PanelHover}"
+                    BorderBrush="{DynamicResource LineStrong}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{DynamicResource Corner.Md}"
+                    Opacity="0"
+                    IsHitTestVisible="False"/>
+            <Border x:Name="PressedFill"
+                    Background="{DynamicResource Surface.Inset}"
+                    BorderBrush="{DynamicResource LineStrong}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{DynamicResource Corner.Md}"
+                    Opacity="0"
+                    IsHitTestVisible="False"/>
             <ContentPresenter Margin="{TemplateBinding Padding}"
                               TextElement.Foreground="{TemplateBinding Foreground}"
                               HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
               <ContentPresenter.Resources>
-                <Style TargetType="TextBlock">
-                  <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-                  <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
-                  <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
-                  <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
-                  <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
-                </Style>
+                <Style TargetType="TextBlock" BasedOn="{StaticResource ButtonContentTextStyle}"/>
               </ContentPresenter.Resources>
             </ContentPresenter>
-          </Border>
+          </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource PanelHover}"/>
-              <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Fast}">
+                      <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource Motion.Normal}">
+                      <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource Surface.Inset}"/>
-              <Setter TargetName="ButtonChrome" Property="Opacity" Value="0.92"/>
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="PressedFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Press}"/>
+                    <DoubleAnimation Storyboard.TargetName="ButtonRoot" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="0.985" Duration="{StaticResource Motion.Press}"/>
+                    <DoubleAnimation Storyboard.TargetName="ButtonRoot" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="0.985" Duration="{StaticResource Motion.Press}"/>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="PressedFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource Motion.Normal}"/>
+                    <DoubleAnimation Storyboard.TargetName="ButtonRoot" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1" Duration="{StaticResource Motion.Fast}"/>
+                    <DoubleAnimation Storyboard.TargetName="ButtonRoot" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1" Duration="{StaticResource Motion.Fast}"/>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter Property="Opacity" Value="0.45"/>
@@ -68,34 +121,78 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="ButtonChrome"
-                  Background="{TemplateBinding Background}"
-                  BorderBrush="{TemplateBinding BorderBrush}"
-                  BorderThickness="{TemplateBinding BorderThickness}"
-                  CornerRadius="{StaticResource Corner.Md}">
+          <Grid x:Name="ButtonRoot" RenderTransformOrigin="0.5,0.5">
+            <Grid.RenderTransform>
+              <ScaleTransform ScaleX="1" ScaleY="1"/>
+            </Grid.RenderTransform>
+            <Border x:Name="ButtonChrome"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{DynamicResource Corner.Md}"/>
+            <Border x:Name="HoverFill"
+                    Background="{DynamicResource PrimaryHover}"
+                    BorderBrush="{DynamicResource PrimaryHover}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{DynamicResource Corner.Md}"
+                    Opacity="0"
+                    IsHitTestVisible="False"/>
+            <Border x:Name="PressedFill"
+                    Background="{DynamicResource PrimaryPressed}"
+                    BorderBrush="{DynamicResource PrimaryPressed}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{DynamicResource Corner.Md}"
+                    Opacity="0"
+                    IsHitTestVisible="False"/>
             <ContentPresenter Margin="{TemplateBinding Padding}"
                               TextElement.Foreground="{TemplateBinding Foreground}"
                               HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
               <ContentPresenter.Resources>
-                <Style TargetType="TextBlock">
-                  <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-                  <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
-                  <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
-                  <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
-                  <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
-                </Style>
+                <Style TargetType="TextBlock" BasedOn="{StaticResource ButtonContentTextStyle}"/>
               </ContentPresenter.Resources>
             </ContentPresenter>
-          </Border>
+          </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource PrimaryHover}"/>
-              <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="{DynamicResource PrimaryHover}"/>
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Fast}">
+                      <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource Motion.Normal}">
+                      <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource PrimaryPressed}"/>
-              <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="{DynamicResource PrimaryPressed}"/>
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="PressedFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Press}"/>
+                    <DoubleAnimation Storyboard.TargetName="ButtonRoot" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="0.985" Duration="{StaticResource Motion.Press}"/>
+                    <DoubleAnimation Storyboard.TargetName="ButtonRoot" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="0.985" Duration="{StaticResource Motion.Press}"/>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="PressedFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource Motion.Normal}"/>
+                    <DoubleAnimation Storyboard.TargetName="ButtonRoot" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1" Duration="{StaticResource Motion.Fast}"/>
+                    <DoubleAnimation Storyboard.TargetName="ButtonRoot" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1" Duration="{StaticResource Motion.Fast}"/>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter Property="Opacity" Value="0.45"/>
@@ -119,34 +216,69 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="ButtonChrome"
-                  Background="{TemplateBinding Background}"
-                  BorderBrush="{TemplateBinding BorderBrush}"
-                  BorderThickness="{TemplateBinding BorderThickness}"
-                  CornerRadius="{StaticResource Corner.Md}">
+          <Grid x:Name="ButtonRoot" RenderTransformOrigin="0.5,0.5">
+            <Grid.RenderTransform>
+              <ScaleTransform ScaleX="1" ScaleY="1"/>
+            </Grid.RenderTransform>
+            <Border x:Name="ButtonChrome"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{DynamicResource Corner.Md}"/>
+            <Border x:Name="HoverFill"
+                    Background="{DynamicResource DangerSoft}"
+                    BorderBrush="{DynamicResource Danger}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{DynamicResource Corner.Md}"
+                    Opacity="0"
+                    IsHitTestVisible="False"/>
             <ContentPresenter Margin="{TemplateBinding Padding}"
                               TextElement.Foreground="{TemplateBinding Foreground}"
                               HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
               <ContentPresenter.Resources>
-                <Style TargetType="TextBlock">
-                  <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-                  <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
-                  <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
-                  <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
-                  <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
-                </Style>
+                <Style TargetType="TextBlock" BasedOn="{StaticResource ButtonContentTextStyle}"/>
               </ContentPresenter.Resources>
             </ContentPresenter>
-          </Border>
+          </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource DangerSoft}"/>
-              <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="{DynamicResource Danger}"/>
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Fast}">
+                      <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource Motion.Normal}">
+                      <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource DangerSoft}"/>
-              <Setter TargetName="ButtonChrome" Property="Opacity" Value="0.86"/>
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="ButtonRoot" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="0.985" Duration="{StaticResource Motion.Press}"/>
+                    <DoubleAnimation Storyboard.TargetName="ButtonRoot" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="0.985" Duration="{StaticResource Motion.Press}"/>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="ButtonRoot" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1" Duration="{StaticResource Motion.Fast}"/>
+                    <DoubleAnimation Storyboard.TargetName="ButtonRoot" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1" Duration="{StaticResource Motion.Fast}"/>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter Property="Opacity" Value="0.45"/>
@@ -155,19 +287,6 @@
         </ControlTemplate>
       </Setter.Value>
     </Setter>
-  </Style>
-
-  <Style x:Key="SidebarButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-    <Setter Property="Height" Value="32"/>
-    <Setter Property="Margin" Value="0,0,0,5"/>
-    <Setter Property="Padding" Value="12,0"/>
-    <Setter Property="HorizontalContentAlignment" Value="Left"/>
-  </Style>
-
-  <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-    <Setter Property="Height" Value="30"/>
-    <Setter Property="Padding" Value="8,0"/>
-    <Setter Property="Margin" Value="2,0"/>
   </Style>
 
   <!-- Borderless ghost button for dense toolbar & console drawer headers (DeepAI style) -->
@@ -183,31 +302,70 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="ButtonChrome"
-                  Background="{TemplateBinding Background}"
-                  CornerRadius="{StaticResource Corner.Sm}">
+          <Grid x:Name="ButtonRoot" RenderTransformOrigin="0.5,0.5">
+            <Grid.RenderTransform>
+              <ScaleTransform ScaleX="1" ScaleY="1"/>
+            </Grid.RenderTransform>
+            <Border x:Name="HoverFill"
+                    Background="{DynamicResource PanelHover}"
+                    CornerRadius="{DynamicResource Corner.Sm}"
+                    Opacity="0"
+                    IsHitTestVisible="False"/>
+            <Border x:Name="PressedFill"
+                    Background="{DynamicResource Surface.Inset}"
+                    CornerRadius="{DynamicResource Corner.Sm}"
+                    Opacity="0"
+                    IsHitTestVisible="False"/>
             <ContentPresenter Margin="{TemplateBinding Padding}"
                               TextElement.Foreground="{TemplateBinding Foreground}"
                               HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
               <ContentPresenter.Resources>
-                <Style TargetType="TextBlock">
-                  <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-                  <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
-                  <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
-                  <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
-                  <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
-                </Style>
+                <Style TargetType="TextBlock" BasedOn="{StaticResource ButtonContentTextStyle}"/>
               </ContentPresenter.Resources>
             </ContentPresenter>
-          </Border>
+          </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource PanelHover}"/>
               <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Fast}">
+                      <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource Motion.Normal}">
+                      <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource Surface.Inset}"/>
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="PressedFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Press}"/>
+                    <DoubleAnimation Storyboard.TargetName="ButtonRoot" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="0.97" Duration="{StaticResource Motion.Press}"/>
+                    <DoubleAnimation Storyboard.TargetName="ButtonRoot" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="0.97" Duration="{StaticResource Motion.Press}"/>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="PressedFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource Motion.Normal}"/>
+                    <DoubleAnimation Storyboard.TargetName="ButtonRoot" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1" Duration="{StaticResource Motion.Fast}"/>
+                    <DoubleAnimation Storyboard.TargetName="ButtonRoot" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1" Duration="{StaticResource Motion.Fast}"/>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter Property="Opacity" Value="0.4"/>

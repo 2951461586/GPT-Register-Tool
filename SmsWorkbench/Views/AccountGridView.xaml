@@ -30,10 +30,10 @@
                     Background="{TemplateBinding Background}"
                     BorderBrush="{TemplateBinding BorderBrush}"
                     BorderThickness="{TemplateBinding BorderThickness}"
-                    CornerRadius="{StaticResource Corner.Lg}"
+                    CornerRadius="{DynamicResource Corner.Lg}"
                     SnapsToDevicePixels="True">
               <Border.Effect>
-                <DropShadowEffect Color="{DynamicResource ShadowColor}" BlurRadius="16" ShadowDepth="3" Direction="270"/>
+                <DropShadowEffect Color="{DynamicResource ShadowColor}" BlurRadius="{StaticResource Shadow.Md.Blur}" ShadowDepth="{StaticResource Shadow.Md.Depth}" Direction="270"/>
               </Border.Effect>
               <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle"/>
             </Border>
@@ -99,9 +99,16 @@
         </Setter.Value>
       </Setter>
     </Style>
+    <Style x:Key="GridRowCheckBoxStyle" TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+      <Setter Property="HorizontalAlignment" Value="Center"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style x:Key="CenteredColumnHeaderStyle" TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    </Style>
   </UserControl.Resources>
 
-  <Border Margin="0,0,0,4" Padding="0" CornerRadius="{StaticResource Corner.Xl}" Background="{DynamicResource Surface.Card}" BorderThickness="0">
+  <Border Margin="0,0,0,4" Padding="0" CornerRadius="{DynamicResource Corner.Xl}" Background="{DynamicResource Surface.Card}" BorderThickness="0">
     <Grid>
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto"/>
@@ -214,13 +221,18 @@
           </ContextMenu>
         </DataGrid.ContextMenu>
         <DataGrid.Columns>
-          <DataGridCheckBoxColumn Header="{loc:Tr Key='选中'}" Binding="{Binding IsChecked}" Width="60"/>
-          <DataGridTextColumn Header="{loc:Tr Key='创建时间'}" Binding="{Binding CreatedAt}" Width="176" IsReadOnly="True"/>
-          <DataGridTextColumn Header="{loc:Tr Key='更新时间'}" Binding="{Binding CompletedAt}" Width="176" IsReadOnly="True"/>
-          <DataGridTextColumn Header="{loc:Tr Key='邮箱'}" Binding="{Binding Identifier}" Width="260" IsReadOnly="True"/>
-          <DataGridTextColumn Header="{loc:Tr Key='账号类型'}" Binding="{Binding AccountPlanType}" Width="92" IsReadOnly="True"/>
-          <DataGridTextColumn Header="{loc:Tr Key='注册区'}" Binding="{Binding RegistrationCountry}" Width="64" IsReadOnly="True"/>
-          <DataGridTextColumn Header="{loc:Tr Key='类型'}" Binding="{Binding AccountType}" Width="120" IsReadOnly="True"/>
+          <DataGridCheckBoxColumn Header="{loc:Tr Key='选中'}"
+                                  Binding="{Binding IsChecked, UpdateSourceTrigger=PropertyChanged}"
+                                  Width="54"
+                                  HeaderStyle="{StaticResource CenteredColumnHeaderStyle}"
+                                  ElementStyle="{StaticResource GridRowCheckBoxStyle}"
+                                  EditingElementStyle="{StaticResource GridRowCheckBoxStyle}"/>
+          <DataGridTextColumn Header="{loc:Tr Key='创建时间'}" Binding="{Binding CreatedAt}" Width="142" IsReadOnly="True"/>
+          <DataGridTextColumn Header="{loc:Tr Key='更新时间'}" Binding="{Binding CompletedAt}" Width="142" IsReadOnly="True"/>
+          <DataGridTextColumn Header="{loc:Tr Key='邮箱'}" Binding="{Binding Identifier}" Width="222" IsReadOnly="True"/>
+          <DataGridTextColumn Header="{loc:Tr Key='账号类型'}" Binding="{Binding AccountPlanType}" Width="78" IsReadOnly="True"/>
+          <DataGridTextColumn Header="{loc:Tr Key='注册区'}" Binding="{Binding RegistrationCountry}" Width="56" IsReadOnly="True"/>
+          <DataGridTextColumn Header="{loc:Tr Key='类型'}" Binding="{Binding AccountType}" Width="126" IsReadOnly="True"/>
           <DataGridTemplateColumn Header="{loc:Tr Key='状态'}" Width="96" IsReadOnly="True" SortMemberPath="Status" CanUserSort="True">
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate>
@@ -333,7 +345,7 @@
             <Setter Property="Template">
               <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
-                  <Border x:Name="CardChrome" Background="Transparent" CornerRadius="{StaticResource Corner.Lg}">
+                  <Border x:Name="CardChrome" Background="Transparent" CornerRadius="{DynamicResource Corner.Lg}">
                     <ContentPresenter/>
                   </Border>
                   <ControlTemplate.Triggers>
@@ -351,7 +363,7 @@
         </ListBox.ItemContainerStyle>
         <ListBox.ItemTemplate>
           <DataTemplate>
-            <Border Background="{DynamicResource Surface.Card}" CornerRadius="{StaticResource Corner.Lg}" Padding="12,10">
+            <Border Background="{DynamicResource Surface.Card}" CornerRadius="{DynamicResource Corner.Lg}" Padding="12,10">
               <Grid>
                 <Grid.RowDefinitions>
                   <RowDefinition Height="Auto"/>

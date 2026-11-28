@@ -27,7 +27,7 @@
 
 - **Registration & OTP**: Dual-lane registration (built-in protocol + browser drivers), unified multi-provider email OTP and SMS verification, resumable checkpoints, and HTTP 200 AT verification.
 - **Account & Payment Workflows**: Liveness probing, layered 401 recovery, offline JWT inspection, Plus & GPT Team 5-seat trial detection, native Team hosted checkout extraction, protocol card payment, unified external paylink-server integration, and Codex / CPA / SUB2API import-export.
-- **Native Performance & Local-First Data**: In-process Rust Sentinel VM (zero Node.js dependency) paired with [71 PyO3 hot-path extensions](docs/current/rust-acceleration.md); sharded configs, sessions, and runtime state stay local and Git-ignored.
+- **Native Performance & Local-First Data**: In-process Rust Sentinel VM (zero Node.js dependency) paired with [78 PyO3 hot-path extensions](docs/current/rust-acceleration.md); sharded configs, sessions, and runtime state stay local and Git-ignored.
 
 Current release notes: [v2026.11.28](./docs/releases/release-v2026.11.28.md)
 
@@ -63,7 +63,7 @@ Chinese interface, USDT payments supported, and 30% off your first purchase with
 | **Protocol consistency & isolation** | Per-account sticky proxy binding, GeoIP-aligned locale & timezone headers, in-process Sentinel token minting, three-hop network preflight, and 403/429 circuit protection before consuming mailboxes or OTPs |
 | **Account health & governance** | Session JSON + SQLite dual index; concurrent liveness probing, offline JWT lightweight inspection (`--inspect-accounts`), layered 401 relogin recovery, auto 2FA enrollment, Plus & GPT Team 5-seat trial detection, and Codex / CPA / SUB2API import-export |
 | **16 payment methods & card engine** | 15 Plus methods routed via `sms_tool/pay_link/extract_server.py` to an external Paylink Extraction Server, plus native in-process GPT Team 5-seat trial checkout (`team_trial`) and non-CAPTCHA Stripe `cs_` / ChatGPT `oaics_` protocol card payment (stopping safely on 3DS challenges) |
-| **Native Rust acceleration** | `native/sentinel_vm/` compiles to an in-process `sentinel_vm.dll` FFI with **zero Node.js dependency**; 71 `rust-anything` PyO3 extensions accelerate 132 hot CPU functions with 0 `unsafe` and 0 MinGW runtime DLLs; see [Rust acceleration](docs/current/rust-acceleration.md) |
+| **Native Rust acceleration** | `native/sentinel_vm/` compiles to an in-process `sentinel_vm.dll` FFI with **zero Node.js dependency**; 78 `rust-anything` PyO3 extensions accelerate 139 hot CPU functions with 0 `unsafe` and 0 MinGW runtime DLLs; see [Rust acceleration](docs/current/rust-acceleration.md) |
 | **Modern desktop workbench** | Light / Dark / System theme modes and Chinese / English UI switching; live throughput & failure-class metrics bar, collapsible log/task drawer, inline proxy-pool speed testing, system tray & `Ctrl+Alt+R` hotkey, and one-click workspace backup/restore |
 
 ## Architecture Overview
@@ -74,7 +74,7 @@ Chinese interface, USDT payments supported, and 30% off your first purchase with
 
 - **Five inward-only layers**: Surface → CLI / Command Adapters → Application Workflows → Provider / Driver / Persistence Adapters → Stdlib-only Foundation Kernel (`sms_tool/kernel/`), governed by `scripts/layer_manifest.json`.
 - **Dual read/write IPC**: `PythonBackendClient` runs write workflows over versioned `@@SMSWORKBENCH_V2@@` envelopes (passing proxy credentials via environment variables rather than `argv`), while `DesktopReadClient` queries a resident side-effect-free JSONL snapshot server.
-- **Native Rust core & CI gates**: `native/sentinel_vm/` provides the in-process Sentinel VM FFI; 71 `rust-anything`-managed PyO3 crates under `rust/` accelerate 132 hot functions (23,952 recorded cases 100% matched, 0 `unsafe`), guarded end-to-end by pre-commit and GitHub Actions CI ratchets.
+- **Native Rust core & CI gates**: `native/sentinel_vm/` provides the in-process Sentinel VM FFI; 78 `rust-anything`-managed PyO3 crates under `rust/` accelerate 139 hot functions (26,308 recorded cases 100% matched, 0 `unsafe`), guarded end-to-end by pre-commit and GitHub Actions CI ratchets.
 
 See [architecture and boundaries](docs/architecture.md), [desktop UI architecture](docs/current/ui-architecture.md), [Rust acceleration](docs/current/rust-acceleration.md), and [directory map](docs/directory-map.md).
 

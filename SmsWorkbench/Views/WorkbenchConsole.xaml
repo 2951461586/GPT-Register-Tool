@@ -21,7 +21,7 @@
           <ControlTemplate TargetType="RadioButton">
             <Border x:Name="TabChrome"
                     Background="{TemplateBinding Background}"
-                    CornerRadius="{StaticResource Corner.Xs}"
+                    CornerRadius="{DynamicResource Corner.Xs}"
                     Padding="{TemplateBinding Padding}">
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
@@ -30,7 +30,6 @@
                 <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
               </Trigger>
               <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="TabChrome" Property="Background" Value="{DynamicResource Surface.Card}"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
               </Trigger>
@@ -41,7 +40,7 @@
     </Style>
   </UserControl.Resources>
 
-  <Border CornerRadius="{StaticResource Corner.Lg}"
+  <Border CornerRadius="{DynamicResource Corner.Lg}"
           Background="{DynamicResource Surface.Card}"
           BorderBrush="{DynamicResource Divider}"
           BorderThickness="1"
@@ -59,68 +58,91 @@
           <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
 
-        <!-- Segmented Switcher: Live Log | Task Queue -->
+        <!-- Segmented Switcher: Live Log | Task Queue (with sliding active pill) -->
         <Border Grid.Column="0"
                 HorizontalAlignment="Left"
                 VerticalAlignment="Center"
                 Margin="6,0,0,0"
                 Padding="2"
-                CornerRadius="{StaticResource Corner.Sm}"
+                CornerRadius="{DynamicResource Corner.Sm}"
                 Background="{DynamicResource Surface.Block}">
-          <StackPanel Orientation="Horizontal">
-            <RadioButton x:Name="LogTabButton"
-                         GroupName="WorkbenchConsoleTabs"
-                         Style="{StaticResource ConsoleSegmentTabStyle}"
-                         IsChecked="True"
-                         Click="LogTab_Click">
-              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <Path Style="{StaticResource CompactIconPath}"
-                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
-                      Data="{StaticResource Glyph.Terminal}"/>
-                <TextBlock Text="{loc:Tr Key='实时日志'}"
-                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
-                           FontSize="{StaticResource Type.Caption.Size}"
-                           FontWeight="{Binding FontWeight, RelativeSource={RelativeSource AncestorType=RadioButton}}"
-                           Margin="5,0,0,0"
-                           VerticalAlignment="Center"/>
-              </StackPanel>
-            </RadioButton>
-
-            <RadioButton x:Name="TasksTabButton"
-                         GroupName="WorkbenchConsoleTabs"
-                         Style="{StaticResource ConsoleSegmentTabStyle}"
-                         Margin="2,0,0,0"
-                         Click="TasksTab_Click">
-              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <Path Style="{StaticResource CompactIconPath}"
-                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
-                      Data="{StaticResource Glyph.ListTasks}"/>
-                <TextBlock Text="{loc:Tr Key='任务队列'}"
-                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
-                           FontSize="{StaticResource Type.Caption.Size}"
-                           FontWeight="{Binding FontWeight, RelativeSource={RelativeSource AncestorType=RadioButton}}"
-                           Margin="5,0,0,0"
-                           VerticalAlignment="Center"/>
-                <Border Margin="5,0,0,0"
-                        Padding="5,0"
-                        MinWidth="16"
-                        Height="16"
-                        CornerRadius="{StaticResource Corner.Xs}"
-                        Background="{DynamicResource PrimarySoft}"
-                        VerticalAlignment="Center">
-                  <TextBlock Text="{Binding TaskList.Tasks.Count}"
-                             Style="{StaticResource Text.Micro}"
-                             Foreground="{DynamicResource AccentIndicator}"
-                             HorizontalAlignment="Center"
+          <Grid x:Name="ConsoleTabsTrack" SizeChanged="ConsoleTabsTrack_SizeChanged">
+            <Border x:Name="ActiveTabIndicator"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Stretch"
+                    CornerRadius="{DynamicResource Corner.Xs}"
+                    Background="{DynamicResource Surface.Card}"
+                    BorderBrush="{DynamicResource Divider}"
+                    BorderThickness="1"
+                    IsHitTestVisible="False">
+              <Border.RenderTransform>
+                <TranslateTransform x:Name="ActiveTabSlide" X="0"/>
+              </Border.RenderTransform>
+            </Border>
+            <StackPanel Orientation="Horizontal">
+              <RadioButton x:Name="LogTabButton"
+                           GroupName="WorkbenchConsoleTabs"
+                           Style="{StaticResource ConsoleSegmentTabStyle}"
+                           IsChecked="True"
+                           Click="LogTab_Click">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                  <Path Style="{StaticResource CompactIconPath}"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="{StaticResource Glyph.Terminal}"/>
+                  <TextBlock Text="{loc:Tr Key='实时日志'}"
+                             Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                             FontSize="{StaticResource Type.Caption.Size}"
+                             FontWeight="{Binding FontWeight, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                             Margin="5,0,0,0"
                              VerticalAlignment="Center"/>
-                </Border>
-              </StackPanel>
-            </RadioButton>
-          </StackPanel>
+                </StackPanel>
+              </RadioButton>
+
+              <RadioButton x:Name="TasksTabButton"
+                           GroupName="WorkbenchConsoleTabs"
+                           Style="{StaticResource ConsoleSegmentTabStyle}"
+                           Margin="2,0,0,0"
+                           Click="TasksTab_Click">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                  <Path Style="{StaticResource CompactIconPath}"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="{StaticResource Glyph.ListTasks}"/>
+                  <TextBlock Text="{loc:Tr Key='任务队列'}"
+                             Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                             FontSize="{StaticResource Type.Caption.Size}"
+                             FontWeight="{Binding FontWeight, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                             Margin="5,0,0,0"
+                             VerticalAlignment="Center"/>
+                  <Border Margin="5,0,0,0"
+                          Padding="5,0"
+                          MinWidth="16"
+                          Height="16"
+                          CornerRadius="{DynamicResource Corner.Xs}"
+                          Background="{DynamicResource PrimarySoft}"
+                          VerticalAlignment="Center">
+                    <TextBlock Text="{Binding TaskList.Tasks.Count}"
+                               Style="{StaticResource Text.Micro}"
+                               Foreground="{DynamicResource AccentIndicator}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+                  </Border>
+                </StackPanel>
+              </RadioButton>
+            </StackPanel>
+          </Grid>
         </Border>
 
-        <!-- Drawer Right Actions: Copy Log / Clear Log / Collapse-Expand -->
+        <!-- Drawer Right Actions: Jump to Bottom / Copy Log / Clear Log / Collapse-Expand -->
         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,6,0">
+          <Button x:Name="JumpToBottomButton"
+                  Style="{StaticResource GhostToolbarButton}"
+                  Click="JumpToBottom_Click"
+                  ToolTip="{loc:Tr Key='跳转到日志最低行'}">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <Path Style="{StaticResource CompactIconPath}" Data="{StaticResource Glyph.ScrollToBottom}"/>
+              <TextBlock Text="{loc:Tr Key='跳至底部'}" Margin="5,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource Type.Caption.Size}"/>
+            </StackPanel>
+          </Button>
           <Button x:Name="CopyLogButton"
                   Style="{StaticResource GhostToolbarButton}"
                   Click="CopyLog_Click"
@@ -208,7 +230,8 @@
                    TextWrapping="Wrap"
                    VerticalAlignment="Stretch"
                    HorizontalAlignment="Stretch"
-                   Padding="12,8,12,10"/>
+                   Padding="12,8,12,10"
+                   Loaded="LogTextBox_Loaded"/>
         </Border>
 
         <!-- Task Queue Panel -->

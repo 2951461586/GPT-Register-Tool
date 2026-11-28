@@ -1,0 +1,43 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/payment/capability.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "payment-capability-parse-rs",
+  "exports": [
+    {
+      "name": "_redact_capability_error",
+      "file": "sms_tool/payment/capability.py",
+      "line": 926,
+      "params": [
+        {
+          "name": "text",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "payment_method_capability_probe",
+      "file": "sms_tool/payment/capability.py",
+      "line": 384,
+      "reason": "stays in Python (network HTTP probe orchestration)"
+    },
+    {
+      "name": "_safe_error",
+      "file": "sms_tool/payment/capability.py",
+      "line": 933,
+      "reason": "stays in Python (BaseException wrapper delegating to _redact_capability_error)"
+    }
+  ]
+}

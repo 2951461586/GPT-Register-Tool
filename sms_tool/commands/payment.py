@@ -963,6 +963,9 @@ def protocol_card_payment(args: Any, context: PaymentCommandContext) -> None:
     cookie_header = str(auth_ctx.get("cookie_header") or "") if isinstance(auth_ctx, Mapping) else ""
     account_id = str(auth_ctx.get("account_id") or "") if isinstance(auth_ctx, Mapping) else ""
     device_id = str(getattr(args, "device_id", None) or "")
+    runtime_cfg = (
+        None if read_only else (context.runtime_config if context.runtime_config is not None else lm._config_data())
+    )
     try:
         result = lm.execute_protocol_card_payment(
             checkout_url,
@@ -978,6 +981,7 @@ def protocol_card_payment(args: Any, context: PaymentCommandContext) -> None:
             timeout=timeout,
             read_only=read_only,
             quote_only=quote_only,
+            runtime_config=runtime_cfg,
         )
     except lm.ProtocolPaymentError as exc:
         result = {

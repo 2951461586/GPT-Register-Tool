@@ -75,10 +75,10 @@
   <SolidColorBrush x:Key="BadgeSuccessFg" Color="#79A88E"/>
   <SolidColorBrush x:Key="BadgeSuccessBd" Color="Transparent"/>
   <SolidColorBrush x:Key="BadgeWarnBg" Color="#26221A"/>
-  <SolidColorBrush x:Key="BadgeWarnFg" Color="#B8A06E"/>
+  <SolidColorBrush x:Key="BadgeWarnFg" Color="#D4BA82"/>
   <SolidColorBrush x:Key="BadgeWarnBd" Color="Transparent"/>
   <SolidColorBrush x:Key="BadgeDangerBg" Color="#291D1E"/>
-  <SolidColorBrush x:Key="BadgeDangerFg" Color="#C28282"/>
+  <SolidColorBrush x:Key="BadgeDangerFg" Color="#E09696"/>
   <SolidColorBrush x:Key="BadgeDangerBd" Color="Transparent"/>
   <SolidColorBrush x:Key="BadgeInfoBg" Color="#1C222D"/>
   <SolidColorBrush x:Key="BadgeInfoFg" Color="#84A0C6"/>

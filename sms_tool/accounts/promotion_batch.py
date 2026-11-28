@@ -29,6 +29,7 @@ from typing import Any
 from .account_identity import account_identity
 from .account_liveness import browser_fetch_for_account
 from .account_promotion import check_account_promotion, promotion_status_code
+from .recovery_state import is_transient_transport_error
 from ..kernel.circuit_breaker import BatchCircuitBreaker
 from ..config import CFG
 from ..payment.promotion_states import PROMOTION_STATE_PROBE_FAILED
@@ -279,7 +280,9 @@ def _retryable_promotion_transport(probe: dict[str, Any] | None) -> bool:
     if probe.get("status_code"):
         return False
     error = str(probe.get("error") or "").lower()
-    return any(marker in error for marker in ("curl: (5)", "curl: (7)", "curl: (28)", "timed out", "timeout"))
+    if not error or error == "no_promotion_proxy_available":
+        return False
+    return is_transient_transport_error(error) or "curl: (5)" in error
 
 
 def _promotion_throttle_backoff(probe: dict[str, Any] | None) -> float | None:

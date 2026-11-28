@@ -1,6 +1,6 @@
 namespace SmsWorkbench.Views
 {
-    public partial class PaymentBatchWindow : Window
+    public partial class PaymentBatchWindow : FluentWindow
     {
         public PaymentBatchWindow(PaymentBatchViewModel viewModel)
         {

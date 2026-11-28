@@ -28,6 +28,14 @@ _NATIVE_SENTINEL_TOKENS = load_native_module(
     "sentinel-tokens-rs", "sentinel_tokens_rs", "RUST_ANYTHING_UNIT_SENTINEL_TOKENS"
 )
 _NATIVE_SOLVE_POW = getattr(_NATIVE_SENTINEL_TOKENS, "_solve_pow", None)
+_NATIVE_SENTINEL_DEVICE_CHECK = load_native_module(
+    "sentinel-device-check-rs",
+    "sentinel_device_check_rs",
+    "RUST_ANYTHING_UNIT_SENTINEL_DEVICE_CHECK",
+)
+_NATIVE_VALIDATE_SENTINEL_DEVICE_PAYLOAD = getattr(
+    _NATIVE_SENTINEL_DEVICE_CHECK, "_validate_sentinel_device_payload", None
+)
 
 SENTINEL_CACHE_FILE = runtime_file(CFG, "sentinel_cache.json")
 
@@ -152,33 +160,64 @@ def sentinel_device_id(sentinel_data):
         return ""
 
 
+def _validate_sentinel_device_payload(
+    expected: str,
+    actual: str,
+    sentinel_token: str,
+    sentinel_oauth_token: str,
+    cookie_header: str,
+) -> str:
+    """Validate Sentinel token JSON IDs and cookie ``oai-did`` against ``expected``."""
+    if _NATIVE_VALIDATE_SENTINEL_DEVICE_PAYLOAD is not None and all(
+        isinstance(value, str) for value in (expected, actual, sentinel_token, sentinel_oauth_token, cookie_header)
+    ):
+        return str(
+            _NATIVE_VALIDATE_SENTINEL_DEVICE_PAYLOAD(
+                expected, actual, sentinel_token, sentinel_oauth_token, cookie_header
+            )
+        )
+    if expected and actual and expected != actual:
+        return "sentinel_extract_failed: oai-did does not match Sentinel device id"
+    resolved_actual = expected if (expected and not actual) else actual
+    for key, raw in (("sentinel_token", sentinel_token), ("sentinel_oauth_token", sentinel_oauth_token)):
+        if not raw:
+            continue
+        try:
+            parsed = json.loads(raw)
+            token_id = str(parsed.get("id") or "").strip()
+        except (json.JSONDecodeError, ValueError, TypeError, AttributeError):
+            return f"sentinel_extract_failed: invalid {key}"
+        if expected and token_id != expected:
+            return f"sentinel_extract_failed: {key} id does not match oai-did"
+    if expected and resolved_actual != expected:
+        return "sentinel_extract_failed: missing Sentinel device id"
+    if expected and cookie_header:
+        cookie_match = re.search(r"(?:^|[;\s])oai-did=([^;\s]+)", cookie_header, re.I)
+        if cookie_match and cookie_match.group(1).strip() != expected:
+            return "sentinel_extract_failed: cookie oai-did does not match Sentinel device id"
+    return ""
+
+
 def assert_sentinel_device_id(sentinel_data, device_id: str) -> str:
     """Validate every Sentinel token and cookie identity before auth requests."""
     expected = str(device_id or "").strip()
     _raw_data: object = sentinel_data
     data: dict = _raw_data if isinstance(_raw_data, dict) else {}
     actual = str(data.get("oai_did") or "").strip()
-    if expected and actual and expected != actual:
-        raise ValueError("sentinel_extract_failed: oai-did does not match Sentinel device id")
+    sentinel_token = str(data.get("sentinel_token") or "").strip()
+    sentinel_oauth_token = str(data.get("sentinel_oauth_token") or "").strip()
+    cookie_header = str(data.get("cookie_str") or data.get("cookie_header") or "")
+    error = _validate_sentinel_device_payload(
+        expected,
+        actual,
+        sentinel_token,
+        sentinel_oauth_token,
+        cookie_header,
+    )
+    if error:
+        raise ValueError(error)
     if expected and not actual:
         actual = expected
-    for key in ("sentinel_token", "sentinel_oauth_token"):
-        raw = str(data.get(key) or "").strip()
-        if not raw:
-            continue
-        try:
-            token_id = str(json.loads(raw).get("id") or "").strip()
-        except Exception as exc:
-            raise ValueError(f"sentinel_extract_failed: invalid {key}") from exc
-        if expected and token_id != expected:
-            raise ValueError(f"sentinel_extract_failed: {key} id does not match oai-did")
-    if expected and actual != expected:
-        raise ValueError("sentinel_extract_failed: missing Sentinel device id")
-    cookie_header = str(data.get("cookie_str") or data.get("cookie_header") or "")
-    if expected and cookie_header:
-        cookie_match = re.search(r"(?:^|[;\s])oai-did=([^;\s]+)", cookie_header, re.I)
-        if cookie_match and cookie_match.group(1).strip() != expected:
-            raise ValueError("sentinel_extract_failed: cookie oai-did does not match Sentinel device id")
     for header_key in ("headers", "auth_headers"):
         headers = data.get(header_key)
         if isinstance(headers, dict):

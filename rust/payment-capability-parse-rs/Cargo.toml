@@ -1,0 +1,22 @@
+[package]
+name = "payment-capability-parse-rs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+description = "Rust port of `_redact_capability_error` from `sms_tool/payment/capability.py`, managed by rust-anything"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.30", features = ["extension-module", "abi3-py39"] }
+regex = "1"
+
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[lints.rust]
+unused_lifetimes = "warn"
+trivial_numeric_casts = "warn"

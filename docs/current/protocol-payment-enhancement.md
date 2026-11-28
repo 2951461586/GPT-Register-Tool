@@ -29,10 +29,15 @@ for read-only capability and payment-qualification checks.
 
 ## 3. Native Protocol Card Payment
 
-Offline codecs and protocol card-payment workflows live in two focused modules under `sms_tool/payment/`:
+Offline codecs and protocol card-payment workflows live in focused modules under `sms_tool/payment/`:
 
-- `payment/protocol_codec.py` owns Hosted Checkout `rv_timestamp` encode/decode, Stripe.js build-field extraction, deep quote parsing, billing catalog lookups, card secret scrubbing, and Stripe outcome classification (with optional PyO3 acceleration via `rust/protocol-payment-rs/`, **9.4×** geometric mean, pure-Python fallback preserved, zero network I/O, zero CAPTCHA solving).
-- `payment/protocol_pay.py` owns the protocol card-payment execution flow and result assembly, dispatched via CLI (`--protocol-pay`, `sms_tool/commands/payment.py`) and the desktop `ProtocolCardPaymentWindow` (`SmsWorkbench/Views/ProtocolCardPaymentWindow.xaml` + `ProtocolCardPaymentViewModel`).
+- `payment/protocol_codec.py` owns Hosted Checkout `rv_timestamp` encode/decode, Stripe.js build-field extraction, deep quote parsing, billing catalog lookups (`BILLING_REGIONS` — also the single source for shared markets in `checkout_contract.COUNTRY_BROWSER_PROFILES`), card secret scrubbing, and Stripe outcome classification (with optional PyO3 acceleration via `rust/protocol-payment-rs/`, **9.4×** geometric mean, pure-Python fallback preserved, zero network I/O, zero CAPTCHA solving). Transport interruptions (`payment_outcome_unknown`) and HTTP 408/5xx gateway errors during `/confirm` classify as `unknown` (requiring reconciliation), while HTTP 429 classifies as `confirm_error` rather than `card_declined`.
+- `payment/protocol_pay.py` (with sibling `protocol_pay_common.py`, `protocol_pay_hosted.py`, and `protocol_pay_custom.py`) owns the protocol card-payment execution flow and result assembly, dispatched via CLI (`--protocol-card-pay` / `--protocol-card-quote` / `--protocol-read-only`, `sms_tool/commands/payment.py`) and the desktop `ProtocolCardPaymentWindow` (`SmsWorkbench/Views/ProtocolCardPaymentWindow.xaml` + `ProtocolCardPaymentViewModel`).
+- Key safety and contract guarantees:
+  - **Durable idempotency (`PaymentOperationStore`)**: non-read-only runs record `side_effect_started` before `/confirm` leaves the process; completed or `unknown` runs block blind replay until reconciled, while conclusive non-paid outcomes (`card_declined`, `challenge_required`, `request_rejected`) remain retryable with a replacement card.
+  - **Hosted amount-mismatch recovery**: on `checkout_amount_mismatch`, Hosted Checkout re-quotes, refreshes `amount_minor`, `eid`, and `checkout_config_id`, and classifies any secondary confirmation error through the same structured formatter.
+  - **`oaics_` Custom Checkout parity**: `execute_protocol_card_payment` forwards billing `country` cleanly into `/checkout/taxes`, fails fast if an existing `pm_` ID is supplied without card details, returns structured read-only quotes (`ok=True`, `status="read_only"`, `amount_minor`, `currency`), polls settlement briefly after Stripe intent confirmation, and recognizes any active non-free paid plan.
+  - **Cross-language contract locks**: `tests/governance/test_protocol_payment_contracts_parity.py` locks Stripe zero-decimal currencies across Python, Rust (`protocol-payment-rs`), and C# (`ProtocolCardPaymentModels.cs`, 16 currencies excluding 2-decimal `IDR`), as well as the 25-region billing catalog and shared Python country/currency/locale tables.
 
 ## 4. 支付资格查询（read-only）
 

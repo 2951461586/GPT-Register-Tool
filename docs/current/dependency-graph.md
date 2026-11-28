@@ -18,7 +18,7 @@ the *gate* (per-pair, only-down); this file is the *view*.
 | Measure | Value |
 | --- | ---: |
 | Modules | 309 |
-| Module-level import edges | 992 |
+| Module-level import edges | 999 |
 | Delayed (function-local) edges | 308 |
 | Type-only (`if TYPE_CHECKING`) edges | 66 |
 | Strongly connected components (size > 1) | 0 |

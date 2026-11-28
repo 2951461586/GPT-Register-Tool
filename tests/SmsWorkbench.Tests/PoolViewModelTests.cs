@@ -183,7 +183,7 @@ namespace SmsWorkbench.Tests
         public void UpdateOverview_CountsTotalTrialRegisteredAndAttention()
         {
             var pool = new PoolViewModel();
-            pool.AllRows.Add(new PoolRow { Identifier = "a", Status = "已注册" });
+            pool.AllRows.Add(new PoolRow { Identifier = "a", Status = "已注册", RegistrationStatus = "registered", RefreshTokenStatus = "no_rt" });
             pool.AllRows.Add(new PoolRow { Identifier = "b", Status = "待支付", PromotionState = "trial_eligible" });
             pool.AllRows.Add(new PoolRow { Identifier = "c", Status = "邮箱可用" });
             var changed = new System.Collections.Generic.List<string?>();

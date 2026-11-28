@@ -1,0 +1,228 @@
+{"fn": "_safe_paypal_session_stem", "args": ["src/a/b.ts"], "ok": "src_a_b.ts"}
+{"fn": "_safe_paypal_session_stem", "args": ["😀"], "ok": "_"}
+{"fn": "_safe_paypal_session_stem", "args": [":"], "ok": "_"}
+{"fn": "_safe_paypal_session_stem", "args": ["HELLO"], "ok": "HELLO"}
+{"fn": "_safe_paypal_session_stem", "args": ["./x/**/*.json"], "ok": "._x_.json"}
+{"fn": "_safe_paypal_session_stem", "args": ["﻿bom"], "ok": "_bom"}
+{"fn": "_safe_paypal_session_stem", "args": ["İstanbul"], "ok": "_stanbul"}
+{"fn": "_safe_paypal_session_stem", "args": ["a..b"], "ok": "a..b"}
+{"fn": "_safe_paypal_session_stem", "args": ["日本語のテキスト"], "ok": "_"}
+{"fn": "_safe_paypal_session_stem", "args": ["é"], "ok": "e_"}
+{"fn": "_safe_paypal_session_stem", "args": ["ünïcödé"], "ok": "_n_c_d_"}
+{"fn": "_safe_paypal_session_stem", "args": ["a"], "ok": "a"}
+{"fn": "_safe_paypal_session_stem", "args": ["ΣΊΣΥΦΟΣ"], "ok": "_"}
+{"fn": "_safe_paypal_session_stem", "args": ["Hello World.leading"], "ok": "Hello_World.leading"}
+{"fn": "_safe_paypal_session_stem", "args": ["a.b.chello"], "ok": "a.b.chello"}
+{"fn": "_safe_paypal_session_stem", "args": ["abc"], "ok": "abc"}
+{"fn": "_safe_paypal_session_stem", "args": ["a:b:c"], "ok": "a_b_c"}
+{"fn": "_safe_paypal_session_stem", "args": ["emoji 👍🏽 mix"], "ok": "emoji_mix"}
+{"fn": "_safe_paypal_session_stem", "args": [".leading"], "ok": ".leading"}
+{"fn": "_safe_paypal_session_stem", "args": ["abcé"], "ok": "abce_"}
+{"fn": "_safe_paypal_session_stem", "args": ["ab"], "ok": "ab"}
+{"fn": "_safe_paypal_session_stem", "args": ["aünïcödé"], "ok": "a_n_c_d_"}
+{"fn": "_safe_paypal_session_stem", "args": ["{name} has {count} items"], "ok": "_name_has_count_items"}
+{"fn": "_safe_paypal_session_stem", "args": ["  padded  "], "ok": "_padded_"}
+{"fn": "_safe_paypal_session_stem", "args": ["key_name-1"], "ok": "key_name-1"}
+{"fn": "_safe_paypal_session_stem", "args": ["a😀b😀c"], "ok": "a_b_c"}
+{"fn": "_safe_paypal_session_stem", "args": ["ns:key.path"], "ok": "ns_key.path"}
+{"fn": "_safe_paypal_session_stem", "args": ["a.b.c"], "ok": "a.b.c"}
+{"fn": "_safe_paypal_session_stem", "args": ["trailing."], "ok": "trailing."}
+{"fn": "_safe_paypal_session_stem", "args": ["./x/**/*.json😀"], "ok": "._x_.json_"}
+{"fn": "_safe_paypal_session_stem", "args": ["tab\tseparated"], "ok": "tab_separated"}
+{"fn": "_safe_paypal_session_stem", "args": ["line1\nline2"], "ok": "line1_line2"}
+{"fn": "_safe_paypal_session_stem", "args": ["ΣΊΣΥΦΟΣstraße"], "ok": "_stra_e"}
+{"fn": "_safe_paypal_session_stem", "args": [""], "ok": "unknown"}
+{"fn": "_safe_paypal_session_stem", "args": ["ünïcödéemoji 👍🏽 mix"], "ok": "_n_c_d_emoji_mix"}
+{"fn": "_safe_paypal_session_stem", "args": ["hello"], "ok": "hello"}
+{"fn": "_safe_paypal_session_stem", "args": ["a😀b😀ckey_name-1"], "ok": "a_b_ckey_name-1"}
+{"fn": "_safe_paypal_session_stem", "args": ["a😀b😀ca.b.c"], "ok": "a_b_ca.b.c"}
+{"fn": "_safe_paypal_session_stem", "args": ["trailing.trailing."], "ok": "trailing.trailing."}
+{"fn": "_safe_paypal_session_stem", "args": ["straße"], "ok": "stra_e"}
+{"fn": "_safe_paypal_session_stem", "args": ["tab\tseparatedhello world"], "ok": "tab_separatedhello_world"}
+{"fn": "_safe_paypal_session_stem", "args": ["İstanbula..b"], "ok": "_stanbula..b"}
+{"fn": "_safe_paypal_session_stem", "args": ["trailing.İstanbul"], "ok": "trailing._stanbul"}
+{"fn": "_safe_paypal_session_stem", "args": ["hellosrc/a/b.ts"], "ok": "hellosrc_a_b.ts"}
+{"fn": "_safe_paypal_session_stem", "args": ["a😀b😀cab"], "ok": "a_b_cab"}
+{"fn": "_safe_paypal_session_stem", "args": ["Hello World"], "ok": "Hello_World"}
+{"fn": "_safe_paypal_session_stem", "args": ["helloHELLO"], "ok": "helloHELLO"}
+{"fn": "_safe_paypal_session_stem", "args": ["hello world.leading"], "ok": "hello_world.leading"}
+{"fn": "_safe_paypal_session_stem", "args": ["ans:key.path"], "ok": "ans_key.path"}
+{"fn": "_safe_paypal_session_stem", "args": [":a:b:c"], "ok": "_a_b_c"}
+{"fn": "_safe_paypal_session_stem", "args": ["hello world﻿bom"], "ok": "hello_world_bom"}
+{"fn": "_safe_paypal_session_stem", "args": ["a😀"], "ok": "a_"}
+{"fn": "_safe_paypal_session_stem", "args": ["a﻿bom"], "ok": "a_bom"}
+{"fn": "_safe_paypal_session_stem", "args": ["a:b:cab"], "ok": "a_b_cab"}
+{"fn": "_safe_paypal_session_stem", "args": ["a.b.cİstanbul"], "ok": "a.b.c_stanbul"}
+{"fn": "_safe_paypal_session_stem", "args": ["hello world"], "ok": "hello_world"}
+{"fn": "_safe_paypal_session_stem", "args": ["  padded    padded  "], "ok": "_padded_padded_"}
+{"fn": "_safe_paypal_session_stem", "args": ["aİstanbul"], "ok": "a_stanbul"}
+{"fn": "_safe_paypal_session_stem", "args": ["ab﻿bom"], "ok": "ab_bom"}
+{"fn": "_safe_paypal_session_stem", "args": ["tab\tseparated  padded  "], "ok": "tab_separated_padded_"}
+{"fn": "_safe_paypal_session_stem", "args": ["absrc/a/b.ts"], "ok": "absrc_a_b.ts"}
+{"fn": "_safe_paypal_session_stem", "args": ["éa..b"], "ok": "e_a..b"}
+{"fn": "_safe_paypal_session_stem", "args": ["straße.leading"], "ok": "stra_e.leading"}
+{"fn": "_safe_paypal_session_stem", "args": ["😀straße"], "ok": "_stra_e"}
+{"fn": "_safe_paypal_session_stem", "args": ["{name} has {count} itemsa"], "ok": "_name_has_count_itemsa"}
+{"fn": "_safe_paypal_session_stem", "args": ["Hello World😀"], "ok": "Hello_World_"}
+{"fn": "_safe_paypal_session_stem", "args": ["a.b.c﻿bom"], "ok": "a.b.c_bom"}
+{"fn": "_safe_paypal_session_stem", "args": ["a😀b😀cİstanbul"], "ok": "a_b_c_stanbul"}
+{"fn": "_safe_paypal_session_stem", "args": ["HELLOns:key.path"], "ok": "HELLOns_key.path"}
+{"fn": "_safe_paypal_session_stem", "args": ["tab\tseparatedtrailing."], "ok": "tab_separatedtrailing."}
+{"fn": "_safe_paypal_session_stem", "args": ["tab\tseparatedtab\tseparated"], "ok": "tab_separatedtab_separated"}
+{"fn": "_safe_paypal_session_stem", "args": ["ünïcödéhello world"], "ok": "_n_c_d_hello_world"}
+{"fn": "_safe_paypal_session_stem", "args": ["aba..b"], "ok": "aba..b"}
+{"fn": "_safe_paypal_session_stem", "args": ["helloa"], "ok": "helloa"}
+{"fn": "_safe_paypal_session_stem", "args": ["ΣΊΣΥΦΟΣ😀"], "ok": "_"}
+{"fn": "_safe_paypal_session_stem", "args": ["tab\tseparated.leading"], "ok": "tab_separated.leading"}
+{"fn": "_safe_paypal_session_stem", "args": ["éΣΊΣΥΦΟΣ"], "ok": "e_"}
+{"fn": "_safe_paypal_session_stem", "args": ["a.b.c日本語のテキスト"], "ok": "a.b.c_"}
+{"fn": "_safe_paypal_session_stem", "args": [":ab"], "ok": "_ab"}
+{"fn": "_safe_paypal_session_stem", "args": ["{name} has {count} itemsstraße"], "ok": "_name_has_count_itemsstra_e"}
+{"fn": "_safe_paypal_session_stem", "args": [":trailing."], "ok": "_trailing."}
+{"fn": "_safe_paypal_session_stem", "args": ["İstanbula:b:c"], "ok": "_stanbula_b_c"}
+{"fn": "_safe_paypal_session_stem", "args": ["./x/**/*.json  padded  "], "ok": "._x_.json_padded_"}
+{"fn": "_safe_paypal_session_stem", "args": ["a.b.c.leading"], "ok": "a.b.c.leading"}
+{"fn": "_safe_paypal_session_stem", "args": ["  padded  :"], "ok": "_padded_"}
+{"fn": "_safe_paypal_session_stem", "args": ["a😀b😀chello"], "ok": "a_b_chello"}
+{"fn": "_safe_paypal_session_stem", "args": ["abHELLO"], "ok": "abHELLO"}
+{"fn": "_safe_paypal_session_stem", "args": ["aa.b.c"], "ok": "aa.b.c"}
+{"fn": "_safe_paypal_session_stem", "args": [".leadinga.b.c"], "ok": ".leadinga.b.c"}
+{"fn": "_safe_paypal_session_stem", "args": ["﻿bom{name} has {count} items"], "ok": "_bom_name_has_count_items"}
+{"fn": "_safe_paypal_session_stem", "args": ["a..b😀"], "ok": "a..b_"}
+{"fn": "_safe_paypal_session_stem", "args": ["😀a:b:c"], "ok": "_a_b_c"}
+{"fn": "_safe_paypal_session_stem", "args": ["src/a/b.ts  padded  "], "ok": "src_a_b.ts_padded_"}
+{"fn": "_safe_paypal_session_stem", "args": ["HELLO.leading"], "ok": "HELLO.leading"}
+{"fn": "_safe_paypal_session_stem", "args": ["ünïcödéabc"], "ok": "_n_c_d_abc"}
+{"fn": "_safe_paypal_session_stem", "args": ["a😀b😀c{name} has {count} items"], "ok": "a_b_c_name_has_count_items"}
+{"fn": "_safe_paypal_session_stem", "args": ["HELLOtrailing."], "ok": "HELLOtrailing."}
+{"fn": "_safe_paypal_session_stem", "args": ["abHello World"], "ok": "abHello_World"}
+{"fn": "_safe_paypal_session_stem", "args": ["Hello Worldemoji 👍🏽 mix"], "ok": "Hello_Worldemoji_mix"}
+{"fn": "_safe_paypal_session_stem", "args": [":key_name-1"], "ok": "_key_name-1"}
+{"fn": "_safe_paypal_session_stem", "args": ["ns:key.patha:b:c"], "ok": "ns_key.patha_b_c"}
+{"fn": "_safe_paypal_session_stem", "args": ["HELLOline1\nline2"], "ok": "HELLOline1_line2"}
+{"fn": "_safe_paypal_session_stem", "args": ["straßesrc/a/b.ts"], "ok": "stra_esrc_a_b.ts"}
+{"fn": "_safe_paypal_session_stem", "args": ["日本語のテキストa"], "ok": "_a"}
+{"fn": "_safe_paypal_session_stem", "args": ["hello:"], "ok": "hello_"}
+{"fn": "_safe_paypal_session_stem", "args": ["a😀b😀c.leading"], "ok": "a_b_c.leading"}
+{"fn": "_safe_paypal_session_stem", "args": ["  padded  Hello World"], "ok": "_padded_Hello_World"}
+{"fn": "_safe_paypal_session_stem", "args": ["ΣΊΣΥΦΟΣa..b"], "ok": "_a..b"}
+{"fn": "_safe_paypal_session_stem", "args": [".leadingé"], "ok": ".leadinge_"}
+{"fn": "_safe_paypal_session_stem", "args": ["aHELLO"], "ok": "aHELLO"}
+{"fn": "_safe_paypal_session_stem", "args": ["tab\tseparated😀"], "ok": "tab_separated_"}
+{"fn": "_safe_paypal_session_stem", "args": ["ns:key.pathtab\tseparated"], "ok": "ns_key.pathtab_separated"}
+{"fn": "_safe_paypal_session_stem", "args": ["  padded  😀"], "ok": "_padded_"}
+{"fn": "_safe_paypal_session_stem", "args": ["tab\tseparatedé"], "ok": "tab_separatede_"}
+{"fn": "_safe_paypal_session_stem", "args": ["İstanbula.b.c"], "ok": "_stanbula.b.c"}
+{"fn": "_safe_paypal_session_stem", "args": ["aba"], "ok": "aba"}
+{"fn": "_safe_paypal_session_stem", "args": ["﻿bomİstanbul"], "ok": "_bom_stanbul"}
+{"fn": "_safe_paypal_session_stem", "args": ["a..ba"], "ok": "a..ba"}
+{"fn": "_safe_paypal_session_stem", "args": ["éns:key.path"], "ok": "e_ns_key.path"}
+{"fn": "_safe_paypal_session_stem", "args": ["emoji 👍🏽 mix:"], "ok": "emoji_mix_"}
+{"fn": "_safe_paypal_session_stem", "args": ["aHello World"], "ok": "aHello_World"}
+{"fn": "_safe_paypal_session_stem", "args": ["hello worldhello world"], "ok": "hello_worldhello_world"}
+{"fn": "_safe_paypal_session_stem", "args": ["a😀b😀c﻿bom"], "ok": "a_b_c_bom"}
+{"fn": "_safe_paypal_session_stem", "args": ["a.b.csrc/a/b.ts"], "ok": "a.b.csrc_a_b.ts"}
+{"fn": "_safe_paypal_session_stem", "args": ["tab\tseparatedstraße"], "ok": "tab_separatedstra_e"}
+{"fn": "_safe_paypal_session_stem", "args": ["ababc"], "ok": "ababc"}
+{"fn": "_safe_paypal_session_stem", "args": ["aa:b:c"], "ok": "aa_b_c"}
+{"fn": "_safe_paypal_session_stem", "args": ["src/a/b.tstrailing."], "ok": "src_a_b.tstrailing."}
+{"fn": "_safe_paypal_session_stem", "args": ["hello worldline1\nline2"], "ok": "hello_worldline1_line2"}
+{"fn": "_safe_paypal_session_stem", "args": ["﻿bomHello World"], "ok": "_bomHello_World"}
+{"fn": "_safe_paypal_session_stem", "args": ["ns:key.path﻿bom"], "ok": "ns_key.path_bom"}
+{"fn": "_safe_paypal_session_stem", "args": ["a:b:cHELLO"], "ok": "a_b_cHELLO"}
+{"fn": "_safe_paypal_session_stem", "args": ["日本語のテキストé"], "ok": "_e_"}
+{"fn": "_safe_paypal_session_stem", "args": ["a..btrailing."], "ok": "a..btrailing."}
+{"fn": "_safe_paypal_session_stem", "args": ["straßeünïcödé"], "ok": "stra_e_n_c_d_"}
+{"fn": "_safe_paypal_session_stem", "args": ["emoji 👍🏽 mixkey_name-1"], "ok": "emoji_mixkey_name-1"}
+{"fn": "_safe_paypal_session_stem", "args": ["﻿bomtrailing."], "ok": "_bomtrailing."}
+{"fn": "_safe_paypal_session_stem", "args": ["a:b:cİstanbul"], "ok": "a_b_c_stanbul"}
+{"fn": "_safe_paypal_session_stem", "args": ["aline1\nline2"], "ok": "aline1_line2"}
+{"fn": "_safe_paypal_session_stem", "args": ["a.b.ca"], "ok": "a.b.ca"}
+{"fn": "_safe_paypal_session_stem", "args": ["tab\tseparatedhello"], "ok": "tab_separatedhello"}
+{"fn": "_safe_paypal_session_stem", "args": ["Hello Worldns:key.path"], "ok": "Hello_Worldns_key.path"}
+{"fn": "_safe_paypal_session_stem", "args": ["hellohello"], "ok": "hellohello"}
+{"fn": "_safe_paypal_session_stem", "args": [":a😀b😀c"], "ok": "_a_b_c"}
+{"fn": "_safe_paypal_session_stem", "args": ["helloΣΊΣΥΦΟΣ"], "ok": "hello_"}
+{"fn": "_safe_paypal_session_stem", "args": ["abcemoji 👍🏽 mix"], "ok": "abcemoji_mix"}
+{"fn": "_safe_paypal_session_stem", "args": ["trailing.ünïcödé"], "ok": "trailing._n_c_d_"}
+{"fn": "_safe_paypal_session_stem", "args": ["aa..b"], "ok": "aa..b"}
+{"fn": "_safe_paypal_session_stem", "args": ["a..bab"], "ok": "a..bab"}
+{"fn": "_safe_paypal_session_stem", "args": ["  padded  é"], "ok": "_padded_e_"}
+{"fn": "_safe_paypal_session_stem", "args": ["hello.leading"], "ok": "hello.leading"}
+{"fn": "_safe_paypal_session_stem", "args": ["a😀b😀chello world"], "ok": "a_b_chello_world"}
+{"fn": "_safe_paypal_session_stem", "args": ["a.b.ca..b"], "ok": "a.b.ca..b"}
+{"fn": "_safe_paypal_session_stem", "args": ["ΣΊΣΥΦΟΣab"], "ok": "_ab"}
+{"fn": "_safe_paypal_session_stem", "args": ["hello worldé"], "ok": "hello_worlde_"}
+{"fn": "_safe_paypal_session_stem", "args": ["abcline1\nline2"], "ok": "abcline1_line2"}
+{"fn": "_safe_paypal_session_stem", "args": [".leadingHello World"], "ok": ".leadingHello_World"}
+{"fn": "_safe_paypal_session_stem", "args": ["﻿boma:b:c"], "ok": "_boma_b_c"}
+{"fn": "_safe_paypal_session_stem", "args": ["hello worlda😀b😀c"], "ok": "hello_worlda_b_c"}
+{"fn": "_safe_paypal_session_stem", "args": ["./x/**/*.jsonΣΊΣΥΦΟΣ"], "ok": "._x_.json_"}
+{"fn": "_safe_paypal_session_stem", "args": ["Hello World日本語のテキスト"], "ok": "Hello_World_"}
+{"fn": "_safe_paypal_session_stem", "args": ["ns:key.pathemoji 👍🏽 mix"], "ok": "ns_key.pathemoji_mix"}
+{"fn": "_safe_paypal_session_stem", "args": ["{name} has {count} itemsa:b:c"], "ok": "_name_has_count_itemsa_b_c"}
+{"fn": "_safe_paypal_session_stem", "args": [".leadinga..b"], "ok": ".leadinga..b"}
+{"fn": "_safe_paypal_session_stem", "args": ["  padded  emoji 👍🏽 mix"], "ok": "_padded_emoji_mix"}
+{"fn": "_safe_paypal_session_stem", "args": ["tab\tseparatedünïcödé"], "ok": "tab_separated_n_c_d_"}
+{"fn": "_safe_paypal_session_stem", "args": ["İstanbul.leading"], "ok": "_stanbul.leading"}
+{"fn": "_safe_paypal_session_stem", "args": ["{name} has {count} itemstrailing."], "ok": "_name_has_count_itemstrailing."}
+{"fn": "_safe_paypal_session_stem", "args": ["straßea"], "ok": "stra_ea"}
+{"fn": "_safe_paypal_session_stem", "args": ["HELLOa.b.c"], "ok": "HELLOa.b.c"}
+{"fn": "_safe_paypal_session_stem", "args": ["a:b:ca..b"], "ok": "a_b_ca..b"}
+{"fn": "_safe_paypal_session_stem", "args": ["helloa:b:c"], "ok": "helloa_b_c"}
+{"fn": "_safe_paypal_session_stem", "args": ["key_name-1HELLO"], "ok": "key_name-1HELLO"}
+{"fn": "_safe_paypal_session_stem", "args": ["ns:key.pathHello World"], "ok": "ns_key.pathHello_World"}
+{"fn": "_safe_paypal_session_stem", "args": ["{name} has {count} itemsline1\nline2"], "ok": "_name_has_count_itemsline1_line2"}
+{"fn": "_safe_paypal_session_stem", "args": ["key_name-1hello world"], "ok": "key_name-1hello_world"}
+{"fn": "_safe_paypal_session_stem", "args": ["😀key_name-1"], "ok": "_key_name-1"}
+{"fn": "_safe_paypal_session_stem", "args": [":ns:key.path"], "ok": "_ns_key.path"}
+{"fn": "_safe_paypal_session_stem", "args": [".leadinghello world"], "ok": ".leadinghello_world"}
+{"fn": "_safe_paypal_session_stem", "args": ["emoji 👍🏽 mixa.b.c"], "ok": "emoji_mixa.b.c"}
+{"fn": "_safe_paypal_session_stem", "args": ["HELLOtab\tseparated"], "ok": "HELLOtab_separated"}
+{"fn": "_safe_paypal_session_stem", "args": ["./x/**/*.jsonİstanbul"], "ok": "._x_.json_stanbul"}
+{"fn": "_safe_paypal_session_stem", "args": ["a..b:"], "ok": "a..b_"}
+{"fn": "_safe_paypal_session_stem", "args": ["Hello Worldhello world"], "ok": "Hello_Worldhello_world"}
+{"fn": "_safe_paypal_session_stem", "args": [":tab\tseparated"], "ok": "_tab_separated"}
+{"fn": "_safe_paypal_session_stem", "args": ["a..bkey_name-1"], "ok": "a..bkey_name-1"}
+{"fn": "_safe_paypal_session_stem", "args": ["./x/**/*.json{name} has {count} items"], "ok": "._x_.json_name_has_count_items"}
+{"fn": "_safe_paypal_session_stem", "args": ["ékey_name-1"], "ok": "e_key_name-1"}
+{"fn": "_safe_paypal_session_stem", "args": ["src/a/b.tshello world"], "ok": "src_a_b.tshello_world"}
+{"fn": "_safe_paypal_session_stem", "args": ["😀./x/**/*.json"], "ok": "_._x_.json"}
+{"fn": "_safe_paypal_session_stem", "args": ["a日本語のテキスト"], "ok": "a_"}
+{"fn": "_safe_paypal_session_stem", "args": [".leading日本語のテキスト"], "ok": ".leading_"}
+{"fn": "_safe_paypal_session_stem", "args": ["{name} has {count} items.leading"], "ok": "_name_has_count_items.leading"}
+{"fn": "_safe_paypal_session_stem", "args": ["hello worldns:key.path"], "ok": "hello_worldns_key.path"}
+{"fn": "_safe_paypal_session_stem", "args": ["  padded  a..b"], "ok": "_padded_a..b"}
+{"fn": "_safe_paypal_session_stem", "args": ["hellons:key.path"], "ok": "hellons_key.path"}
+{"fn": "_safe_paypal_session_stem", "args": ["straßetab\tseparated"], "ok": "stra_etab_separated"}
+{"fn": "_safe_paypal_session_stem", "args": ["éab"], "ok": "e_ab"}
+{"fn": "_safe_paypal_session_stem", "args": ["日本語のテキストa.b.c"], "ok": "_a.b.c"}
+{"fn": "_safe_paypal_session_stem", "args": ["./x/**/*.jsonemoji 👍🏽 mix"], "ok": "._x_.jsonemoji_mix"}
+{"fn": "_safe_paypal_session_stem", "args": ["héllo wörld"], "ok": "h_llo_w_rld"}
+{"fn": "_safe_paypal_session_stem", "args": ["👍🏽 thumbs"], "ok": "_thumbs"}
+{"fn": "_safe_paypal_session_stem", "args": ["日本語"], "ok": "_"}
+{"fn": "_safe_paypal_session_stem", "args": ["ılık ırmak"], "ok": "_l_k_rmak"}
+{"fn": "_safe_paypal_session_stem", "args": ["👨‍👩‍👧 family"], "ok": "_family"}
+{"fn": "_safe_paypal_session_stem", "args": ["a b"], "ok": "a_b"}
+{"fn": "_safe_paypal_session_stem", "args": ["a😀b"], "ok": "a_b"}
+{"fn": "_safe_paypal_session_stem", "args": ["a²b x½ y①"], "ok": "a_b_x_y_"}
+{"fn": "_safe_paypal_session_stem", "args": ["aⅠb Ⅻ"], "ok": "a_b_"}
+{"fn": "_safe_paypal_session_stem", "args": ["a𐐀b 𝐀bc"], "ok": "a_b_bc"}
+{"fn": "_safe_paypal_session_stem", "args": ["कि ٣٤"], "ok": "_"}
+{"fn": "_safe_paypal_session_stem", "args": ["Iı İi"], "ok": "I_i"}
+{"fn": "_safe_paypal_session_stem", "args": ["K K k"], "ok": "K_k"}
+{"fn": "_safe_paypal_session_stem", "args": ["ſ s S"], "ok": "_s_S"}
+{"fn": "_safe_paypal_session_stem", "args": ["x‍y 👨‍👩‍👧"], "ok": "x_y_"}
+{"fn": "_safe_paypal_session_stem", "args": ["a b c　d"], "ok": "a_b_c_d"}
+{"fn": "_safe_paypal_session_stem", "args": ["١٢٣ ٤٥"], "ok": "_"}
+{"fn": "_safe_paypal_session_stem", "args": ["𝟘𝟙 ²³"], "ok": "_"}
+{"fn": "_safe_paypal_session_stem", "args": ["snake_case foo-bar o'neil"], "ok": "snake_case_foo-bar_o_neil"}
+{"fn": "_safe_paypal_session_stem", "args": ["ǅungla Ǆ"], "ok": "_ungla_"}
+{"fn": "_safe_paypal_session_stem", "args": ["one\r\ntwo threefour"], "ok": "one_two_three_four"}
+{"fn": "_safe_paypal_session_stem", "args": ["café café"], "ok": "cafe_caf_"}
+{"fn": "_safe_paypal_session_stem", "args": ["ΣΑΣ σας ς"], "ok": "_"}
+{"fn": "_safe_paypal_session_stem", "args": ["alice+tag@example.com"], "ok": "alicetag@example.com"}
+{"fn": "_safe_paypal_session_stem", "args": ["bad/path:name space@example.com"], "ok": "bad_path_name_space@example.com"}
+{"fn": "_safe_paypal_session_stem", "args": ["中文用户+1@example.com"], "ok": "_1@example.com"}
+{"fn": "_safe_paypal_session_stem", "args": [""], "ok": "unknown"}
+{"fn": "_safe_paypal_session_stem", "args": [null], "ok": "unknown"}

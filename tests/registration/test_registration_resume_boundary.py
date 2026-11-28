@@ -233,3 +233,37 @@ def test_first_post_create_checkpoint_excludes_an_unowned_password(monkeypatch):
     w.create_account()
     assert w.persistence.row["state"] == "auth_session_pending"
     assert w.persistence.row["payload"]["password"] == ""
+
+
+def test_checkpoint_and_resume_preserve_fingerprint_country_and_device_identity(monkeypatch):
+    from sms_tool.registration import resume as registration_resume
+
+    w = workflow(monkeypatch)
+    w.runtime.username = "resume@example.test"
+    w.runtime.device_id = "device-resume-1234"
+    w.fingerprint_country = "JP"
+    w.device_identity = {"oai_did": "device-resume-1234", "reused": False, "seeded": "none"}
+
+    payload = registration_resume.checkpoint_payload(w)
+    assert payload["fingerprint_country"] == "JP"
+    assert payload["device_identity"] == {"oai_did": "device-resume-1234", "reused": False, "seeded": "none"}
+
+    resumed = workflow(
+        monkeypatch,
+        {
+            **payload,
+            "registration_state": "at_probe_transport_unknown",
+            "access_token": "synthetic-at",
+        },
+    )
+    resumed.fingerprint_country = ""
+    resumed.device_identity = {}
+    resumed._bootstrap()
+    resumed._set_outcome = Mock()
+    resumed.post_signup_warmup = Mock()
+    resumed.obtain_oauth_refresh_token = Mock()
+    resumed._run_stage = Mock(side_effect=lambda state, label, handler: None)
+
+    resumed._resume_post_create()
+    assert resumed.fingerprint_country == "JP"
+    assert resumed.device_identity == {"oai_did": "device-resume-1234", "reused": False, "seeded": "none"}

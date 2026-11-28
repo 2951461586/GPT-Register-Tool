@@ -234,19 +234,16 @@ def _no_real_egress_probe(request, monkeypatch):
     """Block the payment egress gate's real proxy probe.
 
     ``payment_egress.assert_egress_countries`` dials every routed stage proxy and
-    compares the observed exit country.  Since the in-process adapters
-    (``native_paypal`` / ``wallet`` / ``gcash_custom`` / ``regional_wallet``, and
-    ``native_upi`` through the pipeline) assert the same contract the subprocess
-    extractors always did, any test that drives a function adapter through the
-    router *with both a proxy and an expected country* would reach the network --
-    and the assertion under test is about routing, not exit geography.
+    compares the observed exit country. Any test that drives a payment adapter
+    through the router *with both a proxy and an expected country* would reach
+    the network -- and the assertion under test is about routing, not exit
+    geography.
 
     Same shape as :func:`_no_real_promotion_preflight`: stub the probe the
     production code actually binds, and let a test that means to exercise the gate
-    opt out with ``@pytest.mark.allow_egress_probe``.  The gate's own tests
-    (``test_payment_egress_gate``, ``test_upi_egress_gate``) patch
-    ``payment_egress._default_probe`` directly; their patch is applied after this
-    fixture, so it wins.
+    opt out with ``@pytest.mark.allow_egress_probe``. The gate's own test
+    (``test_payment_egress_gate``) patches ``payment_egress._default_probe``
+    directly; its patch is applied after this fixture, so it wins.
     """
     if "allow_egress_probe" in request.keywords:
         yield
@@ -263,46 +260,6 @@ def _no_real_egress_probe(request, monkeypatch):
     monkeypatch.setattr(payment_egress, "_default_probe", _stub)
     yield
     payment_egress.clear_cache()
-
-
-@pytest.fixture(autouse=True)
-def _offline_payment_methods_online(request, monkeypatch):
-    """Run the subprocess-extractor plumbing tests as if the methods were online.
-
-    The catalog marks ideal / pix / kakao / blik / twint / momo ``offline`` and the
-    router refuses to execute them, because the Checkout create no longer issues
-    the ``cs_*`` sessions their extractors need.  The adapter, contract and batch
-    machinery those tests cover is still live code and still needs a concrete
-    method to drive, so each test sees the pre-offline definition by default.
-
-    A test that means to exercise the refusal opts in with
-    ``@pytest.mark.enforce_offline_methods``.
-    """
-    if "enforce_offline_methods" in request.keywords:
-        yield
-        return
-
-    import dataclasses
-
-    from sms_tool.payment import batch as payment_batch
-    from sms_tool.payment import catalog as payment_catalog
-
-    restored = {
-        key: (
-            dataclasses.replace(
-                definition,
-                release_tier="production",
-                batch_enabled=key != "blik",
-                registration_enabled=True,
-            )
-            if definition.release_tier == "offline"
-            else definition
-        )
-        for key, definition in payment_catalog.PAYMENT_METHODS.items()
-    }
-    monkeypatch.setattr(payment_catalog, "PAYMENT_METHODS", restored)
-    monkeypatch.setattr(payment_batch, "PAYMENT_METHODS", restored)
-    yield
 
 
 @pytest.fixture(scope="session")

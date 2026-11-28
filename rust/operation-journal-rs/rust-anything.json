@@ -1,0 +1,43 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/operation_journal.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "operation-journal-rs",
+  "exports": [
+    {
+      "name": "_hash_public_operation_id",
+      "file": "sms_tool/operation_journal.py",
+      "line": 250,
+      "params": [
+        {
+          "name": "raw",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_public_operation_id",
+      "file": "sms_tool/operation_journal.py",
+      "line": 257,
+      "reason": "stays in Python (uuid fallback when input is empty)"
+    },
+    {
+      "name": "conflict_result",
+      "file": "sms_tool/operation_journal.py",
+      "line": 218,
+      "reason": "stays in Python (exception record formatting)"
+    }
+  ]
+}

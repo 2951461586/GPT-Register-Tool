@@ -8,12 +8,8 @@ modules, some as request URLs, some as ``Referer``/``Origin`` values, some as
 per-flow page URLs. A host move (an OpenAI domain migration, a staging canary)
 meant finding every one, and nothing measured the complement.
 
-This module is the ``sms_tool`` side of that authority. It is deliberately a
-**parallel** module, not a shared one:
-``services/protocol-payment/common/endpoints.py`` is the authority *inside the
-extractor process*, and Boundary Rule 10 forbids the two processes importing
-each other. The two therefore own the hosts independently and drift is policed
-by a ratchet (``scripts/endpoints_literal_ratchet.py``), not by a shared import.
+This module is the single authority for ``sms_tool`` hosts; drift is policed by
+a ratchet (``scripts/endpoints_literal_ratchet.py``).
 
 Scope decision, copied from the services authority: only the **hosts** and the
 small set of path templates used from more than one place live here. A

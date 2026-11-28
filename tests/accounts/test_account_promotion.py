@@ -198,6 +198,74 @@ def test_refresh_promotion_statuses_rotates_stateless_proxy_after_timeout(monkey
     assert set(calls) == {"http://dead.example:8080", "http://healthy.example:8080"}
 
 
+def test_refresh_promotion_statuses_rotates_on_curl_56_and_counts_transport_failure(monkeypatch):
+    monkeypatch.setattr(
+        "sms_tool.storage.get_account_record",
+        lambda email: {
+            "email": email,
+            "access_token": "at",
+            "raw_json": json.dumps({"access_token": "at"}),
+        },
+    )
+    monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
+
+    # 1. Transient curl: (56) rotates to the next proxy and recovers.
+    calls = []
+
+    def recover_probe(account, **kwargs):
+        calls.append(kwargs["proxy"])
+        if len(calls) == 1:
+            return {
+                "ok": False,
+                "promotion_status": "检测失败",
+                "error": "Failed to perform, curl: (56) Proxy CONNECT aborted.",
+            }
+        return {"ok": True, "promotion_status": "Free·无优惠"}
+
+    monkeypatch.setattr(promotion_batch, "check_account_promotion", recover_probe)
+    recovered = promotion_batch.refresh_promotion_statuses(
+        ["rotate56@example.com"],
+        workers=1,
+        proxy="http://dead.example:8080",
+        proxy_pool="http://dead.example:8080\nhttp://healthy.example:8080",
+        timeout=5,
+    )
+    assert recovered["success"] == 1
+    assert recovered["transport_failed"] == 0
+    assert len(calls) == 2
+
+    # 2. When every candidate drops with curl: (56), it is classified as transport_failed.
+    monkeypatch.setattr(
+        promotion_batch,
+        "check_account_promotion",
+        lambda account, **kwargs: {
+            "ok": False,
+            "promotion_status": "检测失败",
+            "error": "Failed to perform, curl: (56) Proxy CONNECT aborted.",
+        },
+    )
+    failed = promotion_batch.refresh_promotion_statuses(
+        ["drop56@example.com"],
+        workers=1,
+        proxy="http://dead.example:8080",
+        proxy_pool="http://dead.example:8080\nhttp://also-dead.example:8080",
+        timeout=5,
+    )
+    assert failed["success"] == 0
+    assert failed["transport_failed"] == 1
+
+    # 3. Direct helper coverage: curl 5/35/52/56 are retryable; HTTP status or empty/non-transport errors are not.
+    assert promotion_batch._retryable_promotion_transport({"ok": False, "error": "curl: (5) Could not resolve proxy"})
+    assert promotion_batch._retryable_promotion_transport({"ok": False, "error": "curl: (35) TLS connect error"})
+    assert promotion_batch._retryable_promotion_transport({"ok": False, "error": "curl: (52) Empty reply from server"})
+    assert promotion_batch._retryable_promotion_transport({"ok": False, "error": "curl: (56) Proxy CONNECT aborted"})
+    assert not promotion_batch._retryable_promotion_transport(
+        {"ok": False, "status_code": 403, "error": "proxy_blocked"}
+    )
+    assert not promotion_batch._retryable_promotion_transport({"ok": False, "error": "no_promotion_proxy_available"})
+    assert not promotion_batch._retryable_promotion_transport({"ok": False, "error": "invalid_json"})
+
+
 def test_parse_missing_accounts():
     assert parse_accounts_check({})["ok"] is False
 

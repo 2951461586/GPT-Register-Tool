@@ -534,7 +534,13 @@ def test_summary_facts_are_pinned():
         # +1 paypal/proxy -> proxy/stage_health, offset by removing registration/orchestrator
         # -> registration_drivers/base), ordered_pairs=133, mutual_pairs 14 -> 13 (-1,
         # eliminating registration <-> registration_drivers), minority_edges 26 -> 25 (-1).
-        "total_module_edges": 538,
+        # 2026-11-28 (Protocol card payment hardening & Wave-17 Rust PyO3 ports):
+        # 538 -> 539 edges (+1 strictly inward Layer 4 -> Layer 5 leaf edge
+        # `payment/protocol_pay -> operation_journal` for durable idempotency &
+        # replay protection on card confirmation; Wave-17's four crates reused
+        # existing same-dir/existing `load_native_module` imports for 0 net edges;
+        # ordered_pairs=133, mutual_pairs=13, minority_edges=25 unchanged).
+        "total_module_edges": 539,
         "ordered_pairs": 133,
         "mutual_pairs": 13,
         "minority_edges": 25,

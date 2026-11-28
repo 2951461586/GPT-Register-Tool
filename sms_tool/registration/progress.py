@@ -20,8 +20,16 @@ from .concurrency import (
 from ..kernel.cross_process_gate import cross_process_write_lock
 from ..kernel.sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
 from ..kernel.sanitizer import account_reference
+from .batch_helpers import load_native_module
 from .policy import registration_retry_decision
 from ..observability.telemetry import correlation_fields, current_run_id
+
+_NATIVE_REGISTRATION_QUALITY = load_native_module(
+    "registration-quality-rs",
+    "registration_quality_rs",
+    "RUST_ANYTHING_UNIT_REGISTRATION_QUALITY",
+)
+_NATIVE_AGGREGATE_PROGRESS_JSONL = getattr(_NATIVE_REGISTRATION_QUALITY, "_aggregate_progress_jsonl", None)
 
 
 _current: contextvars.ContextVar["RegistrationProgress | None"] = contextvars.ContextVar(
@@ -308,28 +316,7 @@ def admit_registration_stage(name: str) -> float:
     return progress.enter_stage_gate(name)
 
 
-def registration_quality_metrics(records: list[dict[str, Any]] | None = None, *, path=None) -> dict[str, Any]:
-    """Aggregate token-free registration quality metrics from progress rows.
-
-    The helper is intentionally pure when ``records`` is supplied, making it
-    suitable for tests and dashboards.  When omitted it reads the bounded tail
-    of ``registration_progress.jsonl`` from the runtime directory.
-    """
-    if records is None:
-        target = path or runtime_file(CFG, "registration_progress.jsonl")
-        records = []
-        try:
-            candidates = [target.with_name(f"{target.name}.{index}") for index in range(_PROGRESS_BACKUPS, 0, -1)] + [
-                target
-            ]
-            lines: list[str] = []
-            for candidate in candidates:
-                if candidate.is_file():
-                    lines.extend(candidate.read_text(encoding="utf-8").splitlines())
-                    lines = lines[-2000:]
-            records = [json.loads(line) for line in lines if line.strip()]
-        except (OSError, ValueError, TypeError):
-            records = []
+def _aggregate_progress_rows(records: list[dict[str, Any]]) -> dict[str, Any]:
     rows = [row for row in records if isinstance(row, dict) and row.get("source") != "test"]
     durations: list[float] = []
     retry_count = 0
@@ -369,6 +356,42 @@ def registration_quality_metrics(records: list[dict[str, Any]] | None = None, *,
         "auth_session": stats(durations),
         "stages": {name: stats(values) for name, values in stage_samples.items()},
     }
+
+
+def _aggregate_progress_jsonl(raw_jsonl: str) -> str:
+    """Aggregate progress quality metrics from raw JSONL lines into compact JSON."""
+    if _NATIVE_AGGREGATE_PROGRESS_JSONL is not None and isinstance(raw_jsonl, str):
+        return str(_NATIVE_AGGREGATE_PROGRESS_JSONL(raw_jsonl))
+    try:
+        records = [json.loads(line) for line in raw_jsonl.split("\n") if line.strip()]
+        result = _aggregate_progress_rows(records)
+    except (ValueError, TypeError):
+        result = _aggregate_progress_rows([])
+    return json.dumps(result, ensure_ascii=True, separators=(",", ":"))
+
+
+def registration_quality_metrics(records: list[dict[str, Any]] | None = None, *, path=None) -> dict[str, Any]:
+    """Aggregate token-free registration quality metrics from progress rows.
+
+    The helper is intentionally pure when ``records`` is supplied, making it
+    suitable for tests and dashboards.  When omitted it reads the bounded tail
+    of ``registration_progress.jsonl`` from the runtime directory.
+    """
+    if records is None:
+        target = path or runtime_file(CFG, "registration_progress.jsonl")
+        try:
+            candidates = [target.with_name(f"{target.name}.{index}") for index in range(_PROGRESS_BACKUPS, 0, -1)] + [
+                target
+            ]
+            lines: list[str] = []
+            for candidate in candidates:
+                if candidate.is_file():
+                    lines.extend(candidate.read_text(encoding="utf-8").splitlines())
+                    lines = lines[-2000:]
+            return json.loads(_aggregate_progress_jsonl("\n".join(lines)))
+        except (OSError, ValueError, TypeError):
+            return _aggregate_progress_rows([])
+    return _aggregate_progress_rows(records)
 
 
 def _mailbox_email(kwargs: dict[str, Any]) -> str:

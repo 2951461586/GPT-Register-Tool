@@ -37,7 +37,14 @@ from typing import Any, Mapping
 from .kernel.cross_process_gate import CrossProcessSemaphore, GateTimeoutError
 from .kernel.paths import runtime_file
 from .payment.contracts import PaymentResult
-from .kernel.sanitizer import sanitize_text
+from .kernel.sanitizer import load_native_module, sanitize_text
+
+_NATIVE_OPERATION_JOURNAL = load_native_module(
+    "operation-journal-rs",
+    "operation_journal_rs",
+    "RUST_ANYTHING_UNIT_OPERATION_JOURNAL",
+)
+_NATIVE_HASH_PUBLIC_OPERATION_ID = getattr(_NATIVE_OPERATION_JOURNAL, "_hash_public_operation_id", None)
 
 
 SCHEMA_VERSION = 1
@@ -247,12 +254,19 @@ def _replay_allowed(record: Mapping[str, Any]) -> bool:
     return status in {"failed", "timed_out"} and record.get("retryable") is True
 
 
+def _hash_public_operation_id(raw: Any) -> str:
+    if _NATIVE_HASH_PUBLIC_OPERATION_ID is not None and isinstance(raw, (str, type(None))):
+        return str(_NATIVE_HASH_PUBLIC_OPERATION_ID(raw))
+    text = str(raw or "").strip()
+    if re.fullmatch(r"[0-9a-f]{32}", text, re.IGNORECASE):
+        return text.lower()
+    return "op_" + hashlib.sha256(text.encode("utf-8")).hexdigest()[:24]
+
+
 def _public_operation_id(value: Any) -> str:
     """Keep correlation IDs opaque even when callers derive them from emails or URLs."""
     raw = str(value or uuid.uuid4().hex).strip()
-    if re.fullmatch(r"[0-9a-f]{32}", raw, re.IGNORECASE):
-        return raw.lower()
-    return "op_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+    return _hash_public_operation_id(raw)
 
 
 def _read_record(path: Path) -> dict[str, Any]:

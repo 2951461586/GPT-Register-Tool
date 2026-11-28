@@ -514,12 +514,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
+name = "operation-journal-rs"
+version = "0.1.0"
+dependencies = [
+ "pyo3",
+ "sha2",
+]
+
+[[package]]
 name = "pay-link-normalize-rs"
 version = "0.1.0"
 dependencies = [
  "pyo3",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "payment-capability-parse-rs"
+version = "0.1.0"
+dependencies = [
+ "pyo3",
+ "regex",
 ]
 
 [[package]]
@@ -538,6 +554,13 @@ version = "0.1.0"
 dependencies = [
  "pyo3",
  "sha2",
+]
+
+[[package]]
+name = "paypal-config-picker-rs"
+version = "0.1.0"
+dependencies = [
+ "pyo3",
 ]
 
 [[package]]
@@ -781,6 +804,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d902046e6a28a1e4c3cab97258a0ce11e994903f01c2d97a9447a0b3df85f4f6"
 
 [[package]]
+name = "registration-device-seed-rs"
+version = "0.1.0"
+dependencies = [
+ "pyo3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "registration-quality-rs"
+version = "0.1.0"
+dependencies = [
+ "pyo3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "sanitize-text-rs"
 version = "0.1.0"
 dependencies = [
@@ -796,6 +837,15 @@ version = "0.1.0"
 dependencies = [
  "pyo3",
  "sha2",
+]
+
+[[package]]
+name = "sentinel-device-check-rs"
+version = "0.1.0"
+dependencies = [
+ "pyo3",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -970,6 +1020,17 @@ name = "tls-fingerprint-rs"
 version = "0.1.0"
 dependencies = [
  "pyo3",
+]
+
+[[package]]
+name = "token-telemetry-rs"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "pyo3",
+ "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]

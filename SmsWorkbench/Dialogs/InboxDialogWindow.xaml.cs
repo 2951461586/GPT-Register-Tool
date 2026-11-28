@@ -64,6 +64,7 @@ namespace SmsWorkbench.Dialogs
 
             ListPanel.Visibility = Visibility.Collapsed;
             DetailPanel.Visibility = Visibility.Visible;
+            MotionBehaviors.PlaySoftEntrance(DetailPanel, offsetY: 4.0, durationMs: 140);
             BackToListButton.Focus();
         }
 
@@ -71,6 +72,7 @@ namespace SmsWorkbench.Dialogs
         {
             DetailPanel.Visibility = Visibility.Collapsed;
             ListPanel.Visibility = Visibility.Visible;
+            MotionBehaviors.PlaySoftEntrance(ListPanel, offsetY: 4.0, durationMs: 140);
             Title = Loc.F("收件箱 - {0}", identifier);
             MailDataGrid.Focus();
         }

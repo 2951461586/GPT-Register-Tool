@@ -113,12 +113,24 @@ def _probe_registration_access_token(
     except (TypeError, ValueError):
         delay = 10.0
     probes = []
+    transport_retried = False
     for index in range(count):
         probe = probe_fn(
             {"access_token": access_token, "auth_session": auth_session or {}},
             proxy=proxy,
             timeout=timeout,
         )
+        if int(probe.get("status_code") or 0) == 0 and not transport_retried:
+            # One bounded retry for transient proxy/socket drops (e.g. curl (56)
+            # Proxy CONNECT aborted) so a freshly created account keeps its live
+            # session and completes 2FA enrollment without a full batch retry.
+            transport_retried = True
+            sleep_fn(min(1.5, delay) if delay > 0 else 1.5)
+            probe = probe_fn(
+                {"access_token": access_token, "auth_session": auth_session or {}},
+                proxy=proxy,
+                timeout=timeout,
+            )
         probes.append(probe)
         if int(probe.get("status_code") or 0) != 200:
             break

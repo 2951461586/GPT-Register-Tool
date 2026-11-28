@@ -267,11 +267,20 @@ def _restore_session(base_proxy: str, affinity: Mapping[str, Any]) -> str:
 
 
 def _canonical_fingerprint_key(value: Any) -> str:
-    key = str(value or "").strip().lower().split("_", 1)[0]
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return ""
     try:
         from ..transport.auth_headers import AUTH_FINGERPRINT_PROFILES
 
-        return key if key in AUTH_FINGERPRINT_PROFILES else ""
+        if raw in AUTH_FINGERPRINT_PROFILES:
+            return raw
+        candidate = raw
+        while "_" in candidate:
+            candidate = candidate.rsplit("_", 1)[0]
+            if candidate in AUTH_FINGERPRINT_PROFILES:
+                return candidate
+        return ""
     except Exception:
         return ""
 

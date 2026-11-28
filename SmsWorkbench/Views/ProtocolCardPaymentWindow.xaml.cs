@@ -1,6 +1,6 @@
 namespace SmsWorkbench.Views
 {
-    public partial class ProtocolCardPaymentWindow : Window
+    public partial class ProtocolCardPaymentWindow : FluentWindow
     {
         public ProtocolCardPaymentWindow(ProtocolCardPaymentViewModel viewModel)
         {

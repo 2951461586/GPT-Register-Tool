@@ -7,7 +7,8 @@
        Surface.Chrome above the floating framed workspace sheet. Left carries a
        drag surface with TitleBarStatusPill (visible only while a batch is
        active); right carries three identical 46x38 OS caption buttons sharing
-       one parameterized ControlTemplate (Tag holds the Path Geometry). -->
+       one parameterized ControlTemplate (Background=hover fill, BorderBrush=
+       pressed fill, Foreground=hover glyph stroke, Tag=Path Geometry). -->
   <UserControl.Resources>
     <Style x:Key="CaptionWindowButtonStyle" TargetType="Button">
       <Setter Property="Width" Value="46"/>
@@ -15,7 +16,9 @@
       <Setter Property="Margin" Value="0"/>
       <Setter Property="Padding" Value="0"/>
       <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Background" Value="{DynamicResource WindowControlHover}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource WindowControlPressed}"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
       <Setter Property="Cursor" Value="Arrow"/>
       <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingStyle}"/>
       <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
@@ -24,11 +27,11 @@
           <ControlTemplate TargetType="Button">
             <Grid Background="Transparent">
               <Border x:Name="HoverFill"
-                      Background="{DynamicResource WindowControlHover}"
+                      Background="{TemplateBinding Background}"
                       Opacity="0"
                       IsHitTestVisible="False"/>
               <Border x:Name="PressedFill"
-                      Background="{DynamicResource WindowControlPressed}"
+                      Background="{TemplateBinding BorderBrush}"
                       Opacity="0"
                       IsHitTestVisible="False"/>
               <Path x:Name="GlyphPath"
@@ -52,14 +55,14 @@
             </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="GlyphPath" Property="Stroke" Value="{DynamicResource TextMain}"/>
+                <Setter TargetName="GlyphPath" Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
                 <Trigger.EnterActions>
                   <BeginStoryboard>
                     <Storyboard>
                       <DoubleAnimation Storyboard.TargetName="HoverFill"
                                        Storyboard.TargetProperty="Opacity"
                                        To="1"
-                                       Duration="0:0:0.11">
+                                       Duration="{StaticResource Motion.Fast}">
                         <DoubleAnimation.EasingFunction>
                           <CubicEase EasingMode="EaseOut"/>
                         </DoubleAnimation.EasingFunction>
@@ -73,7 +76,7 @@
                       <DoubleAnimation Storyboard.TargetName="HoverFill"
                                        Storyboard.TargetProperty="Opacity"
                                        To="0"
-                                       Duration="0:0:0.15">
+                                       Duration="{StaticResource Motion.Normal}">
                         <DoubleAnimation.EasingFunction>
                           <CubicEase EasingMode="EaseOut"/>
                         </DoubleAnimation.EasingFunction>
@@ -83,21 +86,22 @@
                 </Trigger.ExitActions>
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="GlyphPath" Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
                 <Trigger.EnterActions>
                   <BeginStoryboard>
                     <Storyboard>
                       <DoubleAnimation Storyboard.TargetName="PressedFill"
                                        Storyboard.TargetProperty="Opacity"
                                        To="1"
-                                       Duration="0:0:0.06"/>
+                                       Duration="{StaticResource Motion.Press}"/>
                       <DoubleAnimation Storyboard.TargetName="GlyphPath"
                                        Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
                                        To="0.9"
-                                       Duration="0:0:0.06"/>
+                                       Duration="{StaticResource Motion.Press}"/>
                       <DoubleAnimation Storyboard.TargetName="GlyphPath"
                                        Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
                                        To="0.9"
-                                       Duration="0:0:0.06"/>
+                                       Duration="{StaticResource Motion.Press}"/>
                     </Storyboard>
                   </BeginStoryboard>
                 </Trigger.EnterActions>
@@ -107,15 +111,15 @@
                       <DoubleAnimation Storyboard.TargetName="PressedFill"
                                        Storyboard.TargetProperty="Opacity"
                                        To="0"
-                                       Duration="0:0:0.12"/>
+                                       Duration="{StaticResource Motion.Normal}"/>
                       <DoubleAnimation Storyboard.TargetName="GlyphPath"
                                        Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
                                        To="1"
-                                       Duration="0:0:0.10"/>
+                                       Duration="{StaticResource Motion.Fast}"/>
                       <DoubleAnimation Storyboard.TargetName="GlyphPath"
                                        Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
                                        To="1"
-                                       Duration="0:0:0.10"/>
+                                       Duration="{StaticResource Motion.Fast}"/>
                     </Storyboard>
                   </BeginStoryboard>
                 </Trigger.ExitActions>
@@ -127,111 +131,9 @@
     </Style>
 
     <Style x:Key="DangerCaptionWindowButtonStyle" TargetType="Button" BasedOn="{StaticResource CaptionWindowButtonStyle}">
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Grid Background="Transparent">
-              <Border x:Name="HoverFill"
-                      Background="{DynamicResource Danger}"
-                      Opacity="0"
-                      IsHitTestVisible="False"/>
-              <Border x:Name="PressedFill"
-                      Background="{DynamicResource DangerPressed}"
-                      Opacity="0"
-                      IsHitTestVisible="False"/>
-              <Path x:Name="CloseIcon"
-                    Width="10"
-                    Height="10"
-                    Stretch="None"
-                    SnapsToDevicePixels="True"
-                    Data="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
-                    Stroke="{DynamicResource IconMuted}"
-                    StrokeThickness="{StaticResource Icon.Stroke.Chrome}"
-                    StrokeStartLineCap="Round"
-                    StrokeEndLineCap="Round"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    RenderTransformOrigin="0.5,0.5">
-                <Path.RenderTransform>
-                  <ScaleTransform ScaleX="1" ScaleY="1"/>
-                </Path.RenderTransform>
-              </Path>
-            </Grid>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="CloseIcon" Property="Stroke" Value="{DynamicResource OnDanger}"/>
-                <Trigger.EnterActions>
-                  <BeginStoryboard>
-                    <Storyboard>
-                      <DoubleAnimation Storyboard.TargetName="HoverFill"
-                                       Storyboard.TargetProperty="Opacity"
-                                       To="1"
-                                       Duration="0:0:0.11">
-                        <DoubleAnimation.EasingFunction>
-                          <CubicEase EasingMode="EaseOut"/>
-                        </DoubleAnimation.EasingFunction>
-                      </DoubleAnimation>
-                    </Storyboard>
-                  </BeginStoryboard>
-                </Trigger.EnterActions>
-                <Trigger.ExitActions>
-                  <BeginStoryboard>
-                    <Storyboard>
-                      <DoubleAnimation Storyboard.TargetName="HoverFill"
-                                       Storyboard.TargetProperty="Opacity"
-                                       To="0"
-                                       Duration="0:0:0.15">
-                        <DoubleAnimation.EasingFunction>
-                          <CubicEase EasingMode="EaseOut"/>
-                        </DoubleAnimation.EasingFunction>
-                      </DoubleAnimation>
-                    </Storyboard>
-                  </BeginStoryboard>
-                </Trigger.ExitActions>
-              </Trigger>
-              <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="CloseIcon" Property="Stroke" Value="{DynamicResource OnDanger}"/>
-                <Trigger.EnterActions>
-                  <BeginStoryboard>
-                    <Storyboard>
-                      <DoubleAnimation Storyboard.TargetName="PressedFill"
-                                       Storyboard.TargetProperty="Opacity"
-                                       To="1"
-                                       Duration="0:0:0.06"/>
-                      <DoubleAnimation Storyboard.TargetName="CloseIcon"
-                                       Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
-                                       To="0.9"
-                                       Duration="0:0:0.06"/>
-                      <DoubleAnimation Storyboard.TargetName="CloseIcon"
-                                       Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
-                                       To="0.9"
-                                       Duration="0:0:0.06"/>
-                    </Storyboard>
-                  </BeginStoryboard>
-                </Trigger.EnterActions>
-                <Trigger.ExitActions>
-                  <BeginStoryboard>
-                    <Storyboard>
-                      <DoubleAnimation Storyboard.TargetName="PressedFill"
-                                       Storyboard.TargetProperty="Opacity"
-                                       To="0"
-                                       Duration="0:0:0.12"/>
-                      <DoubleAnimation Storyboard.TargetName="CloseIcon"
-                                       Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
-                                       To="1"
-                                       Duration="0:0:0.10"/>
-                      <DoubleAnimation Storyboard.TargetName="CloseIcon"
-                                       Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
-                                       To="1"
-                                       Duration="0:0:0.10"/>
-                    </Storyboard>
-                  </BeginStoryboard>
-                </Trigger.ExitActions>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
+      <Setter Property="Background" Value="{DynamicResource Danger}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource DangerPressed}"/>
+      <Setter Property="Foreground" Value="{DynamicResource OnDanger}"/>
     </Style>
   </UserControl.Resources>
 

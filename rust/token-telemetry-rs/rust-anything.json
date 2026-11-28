@@ -1,0 +1,43 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/observability/token_telemetry.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "token-telemetry-rs",
+  "exports": [
+    {
+      "name": "_parse_token_claims_and_hash",
+      "file": "sms_tool/observability/token_telemetry.py",
+      "line": 12,
+      "params": [
+        {
+          "name": "token",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "[string, number, number]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "access_token_telemetry",
+      "file": "sms_tool/observability/token_telemetry.py",
+      "line": 30,
+      "reason": "stays in Python (reads wall-clock time.time())"
+    },
+    {
+      "name": "_as_int",
+      "file": "sms_tool/observability/token_telemetry.py",
+      "line": 48,
+      "reason": "stays in Python (tiny helper for acquired_at)"
+    }
+  ]
+}

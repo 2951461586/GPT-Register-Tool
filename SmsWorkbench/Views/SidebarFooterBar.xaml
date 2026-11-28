@@ -3,7 +3,46 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:SmsWorkbench.Localization"
              xmlns:local="clr-namespace:SmsWorkbench.Views">
-  <!-- Sticky Footer inside Sidebar: Cancel Batch + Settings + responsive 3-up Shell/Theme/Language dock -->
+  <!-- Sticky Footer inside Sidebar: Cancel Batch + Settings + responsive 3-up Shell/Theme/Language dock.
+       Clicking Theme opens a tweakcn-inspired Appearance Popover (mode, presets, corner density,
+       and tweakcn CSS variable import); right-clicking quick-cycles Light / Dark / System. -->
+  <UserControl.Resources>
+    <Style x:Key="AppearanceSegmentButtonStyle" TargetType="Button">
+      <Setter Property="Height" Value="26"/>
+      <Setter Property="Padding" Value="6,0"/>
+      <Setter Property="Margin" Value="0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="FontSize" Value="{StaticResource Type.Caption.Size}"/>
+      <Setter Property="FontWeight" Value="Medium"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingStyle}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Chrome"
+                    Background="{TemplateBinding Background}"
+                    CornerRadius="{DynamicResource Corner.Xs}"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+              </Trigger>
+              <Trigger Property="Tag" Value="active">
+                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Surface.Card}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </UserControl.Resources>
+
   <StackPanel Margin="0,4,0,0">
     <Border Height="1" Background="{DynamicResource Divider}" Margin="6,2,6,6" SnapsToDevicePixels="True"/>
     <local:IconNavButton Style="{StaticResource IconNavButtonStyle}"
@@ -38,12 +77,13 @@
                            ToolTip="{loc:Tr Key='外壳设置'}"
                            Command="{Binding NavCommand}"
                            CommandParameter="shell"/>
-      <local:IconNavButton Style="{StaticResource SidebarUtilityDockButtonStyle}"
+      <local:IconNavButton x:Name="ThemeDockButton"
+                           Style="{StaticResource SidebarUtilityDockButtonStyle}"
                            IconGeometry="{Binding ThemeIconGeometry}"
                            Text="{loc:Tr Key='主题'}"
                            ToolTip="{Binding ThemeModeLabel}"
-                           Command="{Binding NavCommand}"
-                           CommandParameter="theme"/>
+                           Click="ThemeDockButton_Click"
+                           MouseRightButtonUp="ThemeDockButton_RightClick"/>
       <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='切换语言'}"
                            Style="{StaticResource SidebarUtilityDockButtonStyle}"
                            IconGeometry="{StaticResource Glyph.Language}"
@@ -52,5 +92,153 @@
                            Command="{Binding NavCommand}"
                            CommandParameter="language"/>
     </UniformGrid>
+
+    <!-- tweakcn-inspired Appearance Popover -->
+    <Popup x:Name="AppearancePopup"
+           PlacementTarget="{Binding ElementName=ThemeDockButton}"
+           Placement="Top"
+           VerticalOffset="-8"
+           AllowsTransparency="True"
+           PopupAnimation="Fade"
+           StaysOpen="False"
+           Opened="AppearancePopup_Opened">
+      <Border Margin="8"
+              Width="312"
+              Padding="14"
+              Background="{DynamicResource Surface.Card}"
+              BorderBrush="{DynamicResource WorkspaceFrameOutline}"
+              BorderThickness="1"
+              CornerRadius="{DynamicResource Corner.Xl}">
+        <Border.Effect>
+          <DropShadowEffect Color="{DynamicResource ShadowColor}"
+                            BlurRadius="{StaticResource Shadow.Lg.Blur}"
+                            ShadowDepth="{StaticResource Shadow.Lg.Depth}"
+                            Direction="270"/>
+        </Border.Effect>
+        <StackPanel>
+          <!-- Header + live WCAG AA contrast badge -->
+          <Grid Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+              <TextBlock Text="{loc:Tr Key='外观与主题'}"
+                         Style="{StaticResource Text.Subtitle}"/>
+              <TextBlock Text="{loc:Tr Key='右键快速切换明暗'}"
+                         Style="{StaticResource Text.Micro}"
+                         Margin="0,2,0,0"/>
+            </StackPanel>
+            <Border x:Name="ContrastBadge"
+                    Grid.Column="1"
+                    Style="{StaticResource StatusBadge}"
+                    Tag="success"
+                    VerticalAlignment="Center">
+              <TextBlock x:Name="ContrastBadgeText"
+                         Style="{StaticResource StatusBadgeText}"/>
+            </Border>
+          </Grid>
+
+          <!-- Mode switcher: System | Light | Dark -->
+          <TextBlock Text="{loc:Tr Key='明暗模式'}"
+                     Style="{StaticResource Text.Micro}"
+                     Margin="0,0,0,5"/>
+          <Border Background="{DynamicResource Surface.Block}"
+                  CornerRadius="{DynamicResource Corner.Sm}"
+                  Padding="2"
+                  Margin="0,0,0,12">
+            <UniformGrid Rows="1" Columns="3">
+              <Button x:Name="ModeSystemBtn"
+                      Style="{StaticResource AppearanceSegmentButtonStyle}"
+                      Content="{loc:Tr Key='跟随系统'}"
+                      Click="ModeSystem_Click"/>
+              <Button x:Name="ModeLightBtn"
+                      Style="{StaticResource AppearanceSegmentButtonStyle}"
+                      Content="{loc:Tr Key='浅色'}"
+                      Click="ModeLight_Click"/>
+              <Button x:Name="ModeDarkBtn"
+                      Style="{StaticResource AppearanceSegmentButtonStyle}"
+                      Content="{loc:Tr Key='深色'}"
+                      Click="ModeDark_Click"/>
+            </UniformGrid>
+          </Border>
+
+          <!-- Built-in tweakcn-inspired presets -->
+          <TextBlock Text="{loc:Tr Key='主题预设'}"
+                     Style="{StaticResource Text.Micro}"
+                     Margin="0,0,0,5"/>
+          <UniformGrid x:Name="PresetGrid"
+                       Columns="2"
+                       Margin="0,0,-6,6"/>
+
+          <!-- Corner density: Sharp | Default | Soft -->
+          <TextBlock Text="{loc:Tr Key='圆角风格'}"
+                     Style="{StaticResource Text.Micro}"
+                     Margin="0,2,0,5"/>
+          <Border Background="{DynamicResource Surface.Block}"
+                  CornerRadius="{DynamicResource Corner.Sm}"
+                  Padding="2"
+                  Margin="0,0,0,10">
+            <UniformGrid Rows="1" Columns="3">
+              <Button x:Name="RadiusSharpBtn"
+                      Style="{StaticResource AppearanceSegmentButtonStyle}"
+                      Content="{loc:Tr Key='锐利'}"
+                      Click="RadiusSharp_Click"/>
+              <Button x:Name="RadiusDefaultBtn"
+                      Style="{StaticResource AppearanceSegmentButtonStyle}"
+                      Content="{loc:Tr Key='标准'}"
+                      Click="RadiusDefault_Click"/>
+              <Button x:Name="RadiusSoftBtn"
+                      Style="{StaticResource AppearanceSegmentButtonStyle}"
+                      Content="{loc:Tr Key='圆润'}"
+                      Click="RadiusSoft_Click"/>
+            </UniformGrid>
+          </Border>
+
+          <!-- Collapsible tweakcn CSS importer -->
+          <Expander Header="{loc:Tr Key='导入 tweakcn CSS'}"
+                    Foreground="{DynamicResource TextSub}"
+                    FontSize="{StaticResource Type.Caption.Size}"
+                    IsExpanded="False">
+            <StackPanel Margin="0,6,0,0">
+              <TextBox x:Name="TweakCnCssBox"
+                       Style="{StaticResource MultilineTextBox}"
+                       Height="76"
+                       Padding="8,6"
+                       FontFamily="{StaticResource Font.Mono}"
+                       FontSize="{StaticResource Type.Micro.Size}"
+                       TextWrapping="Wrap"
+                       VerticalScrollBarVisibility="Auto"
+                       local:MotionBehaviors.Placeholder="{loc:Tr Key='粘贴 tweakcn.com 导出的 :root / .dark CSS 变量...'}"
+                       ToolTip="{loc:Tr Key='粘贴 tweakcn.com 导出的 :root / .dark CSS 变量...'}"/>
+              <TextBlock x:Name="ImportStatusText"
+                         Style="{StaticResource Text.Micro}"
+                         Margin="0,4,0,6"
+                         TextWrapping="Wrap"
+                         Visibility="Collapsed"/>
+              <Grid Margin="0,4,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="8"/>
+                  <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0"
+                        Height="28"
+                        Margin="0"
+                        Style="{StaticResource SecondaryButton}"
+                        Content="{loc:Tr Key='恢复默认'}"
+                        Click="ResetAppearance_Click"/>
+                <Button Grid.Column="2"
+                        Height="28"
+                        Margin="0"
+                        Style="{StaticResource PrimaryButton}"
+                        Content="{loc:Tr Key='应用 CSS'}"
+                        Click="ApplyTweakCnCss_Click"/>
+              </Grid>
+            </StackPanel>
+          </Expander>
+        </StackPanel>
+      </Border>
+    </Popup>
   </StackPanel>
 </UserControl>

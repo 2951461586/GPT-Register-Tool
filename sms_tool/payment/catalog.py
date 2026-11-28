@@ -145,12 +145,7 @@ def load_payment_catalog(path: str | Path | None = None) -> PaymentMethodCatalog
             provider=str(item.get("provider") or "").strip(),
             redirect_hosts=tuple(str(host or "").strip().lower() for host in item.get("redirect_hosts") or ()),
             transport=str(item.get("transport") or "").strip(),
-            release_tier=str(
-                item.get("release_tier")
-                or ("offline" if str(item.get("adapter") or "").strip() == "regional_wallet" else "production")
-            )
-            .strip()
-            .lower(),
+            release_tier=str(item.get("release_tier") or "production").strip().lower(),
             script=str(item.get("script") or "").strip(),
             aliases=tuple(str(alias).strip().lower().replace(" ", "_") for alias in item.get("aliases") or ()),
             batch_enabled=bool(item.get("batch_enabled", True)),

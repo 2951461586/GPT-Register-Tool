@@ -45,6 +45,25 @@ namespace SmsWorkbench.Tests
             Assert.Equal("paid", usd.State);
             Assert.Equal("20.00 USD", usd.AmountDisplay);
             Assert.Equal("succeeded", usd.IntentStatus);
+
+            // Stripe treats IDR as a 2-decimal currency (aligned with Python & Rust ZERO_DECIMAL_CURRENCIES).
+            Assert.Equal("300000.00 IDR", ProtocolCardPaymentResult.FormatAmount(30_000_000, "idr"));
+
+            using var unknownDoc = JsonDocument.Parse("""
+                {
+                  "ok": false,
+                  "status": "unknown",
+                  "state": "unknown",
+                  "mode": "hosted_checkout",
+                  "code": "payment_outcome_unknown",
+                  "message": "Stripe confirm outcome unknown"
+                }
+                """);
+            ProtocolCardPaymentResult unknown = ProtocolCardPaymentResult.Parse(unknownDoc.RootElement, quoteOnly: false);
+            Assert.False(unknown.Ok);
+            Assert.Equal("unknown", unknown.State);
+            Assert.Equal("warn", unknown.BadgeSeverity);
+            Assert.Equal(SmsWorkbench.Localization.Loc.T("结果未知（需核账）"), unknown.BadgeLabel);
         }
 
         [Fact]
@@ -178,6 +197,53 @@ namespace SmsWorkbench.Tests
             ProtocolCardPaymentRequest recorded = Assert.Single(stub.Requests);
             Assert.True(recorded.ReadOnly);
             Assert.Equal("success", vm.ResultBadgeSeverity);
+        }
+
+        [Fact]
+        public async Task PayCommand_RejectsExistingPaymentMethodIdForOaicsCustomCheckout()
+        {
+            var stub = new StubProtocolCardPaymentService(_ => throw new InvalidOperationException("should not call backend"));
+            var vm = new ProtocolCardPaymentViewModel(stub)
+            {
+                CheckoutUrl = "https://chatgpt.com/checkout/openai_llc/oaics_test_999",
+                PublishableKey = "pk_test_123456",
+                PaymentMethodId = "pm_existing_123",
+            };
+
+            await vm.PayCommand.ExecuteAsync(null);
+            Assert.Empty(stub.Requests);
+            Assert.Contains("oaics_", vm.StatusText, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task QuoteCommand_OaicsReadOnlyResponseDisplaysQuotedAmount()
+        {
+            var stub = new StubProtocolCardPaymentService(req =>
+            {
+                using var doc = JsonDocument.Parse("""
+                    {
+                      "ok": true,
+                      "status": "read_only",
+                      "state": "read_only",
+                      "mode": "custom_checkout",
+                      "session_id": "oaics_test_quote",
+                      "amount_minor": 3000,
+                      "currency": "JPY"
+                    }
+                    """);
+                return ProtocolCardPaymentResult.Parse(doc.RootElement, quoteOnly: req.QuoteOnly, req.CheckoutUrl);
+            });
+
+            var vm = new ProtocolCardPaymentViewModel(stub)
+            {
+                CheckoutUrl = "https://chatgpt.com/checkout/openai_llc/oaics_test_quote",
+                PublishableKey = "pk_test_123456",
+            };
+
+            await vm.QuoteCommand.ExecuteAsync(null);
+            Assert.True(vm.HasResult);
+            Assert.Equal("success", vm.ResultBadgeSeverity);
+            Assert.Equal("3000 JPY", vm.AmountSummary);
         }
 
         [Fact]

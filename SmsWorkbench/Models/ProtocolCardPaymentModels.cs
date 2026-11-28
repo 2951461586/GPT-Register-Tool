@@ -47,14 +47,14 @@ namespace SmsWorkbench.Models
 
         private static readonly HashSet<string> ZeroDecimalCurrencies = new(StringComparer.OrdinalIgnoreCase)
         {
-            "BIF", "CLP", "DJF", "GNF", "IDR", "JPY", "KMF", "KRW",
+            "BIF", "CLP", "DJF", "GNF", "JPY", "KMF", "KRW",
             "MGA", "PYG", "RWF", "UGX", "VND", "VUV", "XAF", "XOF", "XPF",
         };
 
         public string BadgeSeverity => State switch
         {
             "paid" or "quoted" or "read_only" when Ok => "success",
-            "challenge_required" or "pending" => "warn",
+            "challenge_required" or "pending" or "unknown" => "warn",
             "card_declined" or "confirm_error" or "failed" => "danger",
             _ => Ok ? "success" : "danger",
         };
@@ -68,6 +68,7 @@ namespace SmsWorkbench.Models
             "card_declined" => Loc.T("银行卡被拒"),
             "confirm_error" => Loc.T("确认失败"),
             "pending" => Loc.T("处理中"),
+            "unknown" => Loc.T("结果未知（需核账）"),
             "failed" => Loc.T("执行失败"),
             _ => string.IsNullOrWhiteSpace(State) ? (Ok ? Loc.T("成功") : Loc.T("失败")) : State,
         };
@@ -229,7 +230,7 @@ namespace SmsWorkbench.Models
 
     /// <summary>
     /// 25-region billing country catalog aligned with
-    /// <c>sms_tool/payment/protocol_codec.py::COUNTRY_PROFILES</c>.
+    /// <c>sms_tool/payment/protocol_codec.py::BILLING_REGIONS</c>.
     /// </summary>
     public static class ProtocolCardPaymentCatalog
     {

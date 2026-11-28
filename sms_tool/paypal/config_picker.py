@@ -17,9 +17,18 @@ import random
 import re
 import time
 from pathlib import Path
+from typing import Any
 
 from ..config import CFG
 from ..storage import upsert_account
+from .proxy import load_native_module
+
+_NATIVE_PAYPAL_CONFIG_PICKER = load_native_module(
+    "paypal-config-picker-rs",
+    "paypal_config_picker_rs",
+    "RUST_ANYTHING_UNIT_PAYPAL_CONFIG_PICKER",
+)
+_NATIVE_SAFE_PAYPAL_SESSION_STEM = getattr(_NATIVE_PAYPAL_CONFIG_PICKER, "_safe_paypal_session_stem", None)
 
 _STATE_ABBREV = {
     "alabama": "AL",
@@ -76,6 +85,28 @@ _STATE_ABBREV = {
 }
 
 
+def _normalize_us_state(state: Any) -> str:
+    text = str(state or "")
+    if len(text) > 2:
+        return _STATE_ABBREV.get(text.lower(), text[:2].upper())
+    return text
+
+
+def _sanitize_paypal_alias_local(base_email: Any) -> str:
+    text = str(base_email or "")
+    if text and "@" in text:
+        local = text.rsplit("@", 1)[0]
+        return re.sub(r"[^a-zA-Z0-9.]", "", local)[:20]
+    return ""
+
+
+def _safe_paypal_session_stem(email: Any) -> str:
+    if _NATIVE_SAFE_PAYPAL_SESSION_STEM is not None and isinstance(email, (str, type(None))):
+        return str(_NATIVE_SAFE_PAYPAL_SESSION_STEM(email))
+    cleaned = str(email or "unknown").replace("+", "")
+    return re.sub(r"[^a-zA-Z0-9_.@-]+", "_", cleaned)
+
+
 def _pick_card_and_address(cfg: dict) -> tuple[dict, dict]:
     cards = cfg.get("cards") or []
     addresses = cfg.get("addresses") or []
@@ -88,9 +119,7 @@ def _pick_card_and_address(cfg: dict) -> tuple[dict, dict]:
     addr = addresses[idx % len(addresses)]
     _write_index(index_file, idx + 1)
 
-    state = addr.get("state", "")
-    if len(state) > 2:
-        state = _STATE_ABBREV.get(state.lower(), state[:2].upper())
+    state = _normalize_us_state(addr.get("state", ""))
 
     return card, {
         "line1": addr.get("line1", ""),
@@ -115,10 +144,7 @@ def _write_index(path: str, value: int):
 
 def _generate_alias_email(base_email: str) -> str:
     """Generate a PayPal alias email (always Gmail) from base mailbox email."""
-    gmail_local = ""
-    if base_email and "@" in base_email:
-        local = base_email.rsplit("@", 1)[0]
-        gmail_local = re.sub(r"[^a-zA-Z0-9.]", "", local)[:20]
+    gmail_local = _sanitize_paypal_alias_local(base_email)
     if not gmail_local:
         gmail_local = f"buyer{random.randint(1000, 9999)}"
     suffix = random.randint(100, 999)
@@ -128,8 +154,7 @@ def _generate_alias_email(base_email: str) -> str:
 def _save_paypal_result(data: dict, json_path: str) -> str:
     """Save payment result to session JSON and SQLite."""
     if not json_path:
-        email = (data.get("email") or "unknown").replace("+", "")
-        safe = re.sub(r"[^a-zA-Z0-9_.@-]+", "_", email)
+        safe = _safe_paypal_session_stem(data.get("email") or "unknown")
         output_dir = Path(CFG.get("output", {}).get("directory", "sessions"))
         output_dir.mkdir(parents=True, exist_ok=True)
         json_path = str(output_dir / f"session_{safe}_{int(time.time())}.json")

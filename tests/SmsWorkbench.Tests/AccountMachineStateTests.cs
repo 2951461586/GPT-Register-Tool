@@ -213,14 +213,73 @@ public sealed class AccountMachineStateTests
     {
         Assert.True(AccountMachineState.NeedsAttention(Row(registrationStatus: "failed")));
         Assert.True(AccountMachineState.NeedsAttention(Row(registrationStatus: "partial_registered")));
-        // A registered row whose token is gone still needs attention: the badge
-        // already shows danger, so the counter must agree with it.
-        Assert.True(AccountMachineState.NeedsAttention(Row(registrationStatus: "registered", refreshTokenStatus: "no_rt")));
+        Assert.True(AccountMachineState.NeedsAttention(Row(registrationStatus: "at_probe_transport_unknown")));
+        Assert.True(AccountMachineState.NeedsAttention(Row(registrationStatus: "account_deactivated")));
+        Assert.True(AccountMachineState.NeedsAttention(Row(registrationStatus: "at_invalid")));
+        // Missing RT ("no_rt" / "missing") is normal on AT-only email accounts and
+        // must not count toward Overview "异常/待处理".
+        Assert.False(AccountMachineState.NeedsAttention(Row(registrationStatus: "registered", refreshTokenStatus: "no_rt")));
+        Assert.False(AccountMachineState.NeedsAttention(Row(registrationStatus: "registered", refreshTokenStatus: "missing")));
+        Assert.False(AccountMachineState.NeedsAttention(Row(registrationStatus: "active", status: "已注册", refreshTokenStatus: "no_rt")));
+        Assert.True(AccountMachineState.NeedsAttention(Row(registrationStatus: "active", status: "账号掉号")));
+        // Fresh unregistered mailbox-pool rows emit registration_status="unknown"
+        // with Status="可收信" and must not inflate the attention counter.
+        Assert.False(AccountMachineState.NeedsAttention(Row(registrationStatus: "unknown", status: "可收信")));
         Assert.False(
             AccountMachineState.NeedsAttention(
                 Row(registrationStatus: "registered", refreshTokenStatus: "oauth_present")));
-        // Legacy label path.
+        // Legacy label path: missing RT alone is also excluded from attention.
+        Assert.False(AccountMachineState.NeedsAttention(new PoolRow { Status = "已注册", RefreshToken = "未获取" }));
         Assert.True(AccountMachineState.NeedsAttention(Row(status: "网络失败")));
+    }
+
+    [Fact]
+    public void Backend_account_rows_resolve_live_status_over_frozen_active_registration_state()
+    {
+        var healthy = AccountRowFactory.BuildBackendAccountRow(
+            new Dictionary<string, object>
+            {
+                ["id"] = "1",
+                ["email"] = "ok@example.com",
+                ["status"] = "registered",
+                ["registration_state"] = "active",
+                ["refresh_token_status"] = "no_rt",
+                ["has_access_token"] = "true",
+            },
+            "accounts.sqlite3",
+            "{}");
+        Assert.Equal("registered", healthy.RegistrationStatus);
+        Assert.False(AccountMachineState.NeedsAttention(healthy));
+
+        var deactivated = AccountRowFactory.BuildBackendAccountRow(
+            new Dictionary<string, object>
+            {
+                ["id"] = "2",
+                ["email"] = "dead@example.com",
+                ["status"] = "account_deactivated",
+                ["registration_state"] = "active",
+                ["refresh_token_status"] = "no_rt",
+                ["has_access_token"] = "true",
+            },
+            "accounts.sqlite3",
+            "{}");
+        Assert.Equal("account_deactivated", deactivated.RegistrationStatus);
+        Assert.True(AccountMachineState.NeedsAttention(deactivated));
+
+        var probeUnknown = AccountRowFactory.BuildBackendAccountRow(
+            new Dictionary<string, object>
+            {
+                ["id"] = "3",
+                ["email"] = "pending@example.com",
+                ["status"] = "pending",
+                ["registration_state"] = "at_probe_transport_unknown",
+                ["refresh_token_status"] = "no_rt",
+                ["has_access_token"] = "true",
+            },
+            "accounts.sqlite3",
+            "{}");
+        Assert.Equal("at_probe_transport_unknown", probeUnknown.RegistrationStatus);
+        Assert.True(AccountMachineState.NeedsAttention(probeUnknown));
     }
 
     [Fact]

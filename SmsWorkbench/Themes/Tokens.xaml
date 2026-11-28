@@ -88,4 +88,18 @@
        Monospace stack keeps logs, tokens, and proxy pools optically aligned. -->
   <FontFamily x:Key="Font.Ui">pack://application:,,,/SmsWorkbench;component/Assets/Fonts/#Atkinson Hyperlegible Next, Microsoft YaHei UI, Segoe UI</FontFamily>
   <FontFamily x:Key="Font.Mono">Cascadia Mono, JetBrains Mono, Consolas, Microsoft YaHei UI</FontFamily>
+
+  <!-- ═══ Elevation shadows (unified geometry; tint comes from ShadowColor) ═ -->
+  <sys:Double x:Key="Shadow.Sm.Blur">12</sys:Double>
+  <sys:Double x:Key="Shadow.Sm.Depth">2</sys:Double>
+  <sys:Double x:Key="Shadow.Md.Blur">16</sys:Double>
+  <sys:Double x:Key="Shadow.Md.Depth">3</sys:Double>
+  <sys:Double x:Key="Shadow.Lg.Blur">24</sys:Double>
+  <sys:Double x:Key="Shadow.Lg.Depth">6</sys:Double>
+
+  <!-- ═══ Motion timings (restrained Linear/macOS desktop cadence) ═════════ -->
+  <Duration x:Key="Motion.Press">0:0:0.06</Duration>
+  <Duration x:Key="Motion.Fast">0:0:0.10</Duration>
+  <Duration x:Key="Motion.Normal">0:0:0.15</Duration>
+  <Duration x:Key="Motion.Pulse">0:0:1.60</Duration>
 </ResourceDictionary>

@@ -494,7 +494,7 @@
       "silent": 0
     },
     "sms_tool/registration/sentinel_tokens.py": {
-      "broad": 13,
+      "broad": 12,
       "silent": 1
     },
     "sms_tool/registration/state.py": {
@@ -620,11 +620,11 @@
         "reason": "The protocol lane is where a swallowed exception is indistinguishable from a protocol failure: it lands in the funnel as 'unknown' while the batch keeps spending mailboxes. Silent handlers are 0 here and the broad count may only shrink."
       }
     },
-    "max_broad": 685,
+    "max_broad": 684,
     "max_silent": 77
   },
   "totals": {
-    "broad": 685,
+    "broad": 684,
     "silent": 77
   },
   "whitelist": {
@@ -689,7 +689,7 @@
       "silent": 1
     },
     "sms_tool/registration/sentinel_tokens.py": {
-      "broad": 13,
+      "broad": 12,
       "reason": "Sentinel token issuance and PoW fallback boundary: browser/SDK/request failures degrade to the next issuance strategy or a structured None token rather than crashing the caller.",
       "silent": 1
     }

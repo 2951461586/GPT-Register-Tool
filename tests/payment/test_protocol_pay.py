@@ -402,7 +402,13 @@ def test_custom_checkout_read_only_and_full_success_flow() -> None:
         "amount_minor": 2000,
     }
     ro_res = ro_client.run({}, spec, read_only=True)
-    assert ro_res["state"] == "pending"
+    assert ro_res["ok"] is True
+    assert ro_res["status"] == "read_only"
+    assert ro_res["state"] == "read_only"
+    assert ro_res["mode"] == "custom_checkout"
+    assert ro_res["session_id"] == SYNTHETIC_OAICS
+    assert ro_res["amount_minor"] == 2000
+    assert ro_res["currency"] == "USD"
     assert len(get_calls) == 1
     assert len(post_calls) == 0
 
@@ -498,3 +504,280 @@ def test_link_manager_lazy_exports_and_cli_flags() -> None:
     mock_exec.assert_called_once()
     assert mock_exec.call_args.kwargs["quote_only"] is True
     assert mock_exec.call_args.kwargs["country"] == "JP"
+
+
+def test_hosted_confirm_interrupted_and_gateway_errors_never_classify_as_card_declined() -> None:
+    unknown = classify_stripe_outcome(
+        {
+            "status": 0,
+            "body": {"error": {"code": "payment_outcome_unknown", "message": "transport dropped"}},
+        }
+    )
+    assert unknown["state"] == "unknown"
+
+    gateway = classify_stripe_outcome(
+        {
+            "status": 502,
+            "body": {"error": {"code": "stripe_http_502", "message": "bad gateway"}},
+        }
+    )
+    assert gateway["state"] == "unknown"
+
+    rate_limited = classify_stripe_outcome(
+        {
+            "status": 429,
+            "body": {"error": {"code": "stripe_http_429", "message": "rate limit"}},
+        }
+    )
+    assert rate_limited["state"] == "confirm_error"
+
+    session = MagicMock()
+    session.headers = {}
+    session.get.side_effect = [_FakeResp(200, {"session_id": "elements_1"}), _FakeResp(200, text="")]
+    session.post.side_effect = [
+        _FakeResp(200, {"eid": "eid_1", "currency": "usd", "config_id": "cfg_1", "total_summary": {"due": 2500}}),
+        _FakeResp(200, {"config_id": "cfg_1", "total_summary": {"due": 2500}}),
+        _FakeResp(200, {"config_id": "cfg_1", "total_summary": {"due": 2500}}),
+        _FakeResp(200, {"config_id": "cfg_1", "total_summary": {"due": 2500}}),
+        _FakeResp(200, {"config_id": "cfg_2", "total_summary": {"due": 2500}}),
+        OSError("connection reset mid-confirm"),
+    ]
+    client = HostedCheckoutProtocolClient(session=session, sleep_fn=lambda _: None)
+    res = client.pay(
+        f"https://pay.openai.com/c/pay/{SYNTHETIC_CS}",
+        publishable_key=SYNTHETIC_PK,
+        payment_method_id="pm_test_1",
+        country="US",
+    )
+    assert res["ok"] is False
+    assert res["state"] == "unknown"
+    assert res["status"] == "unknown"
+    assert res["requires_reconciliation"] is True
+    assert res["side_effect_started"] is True
+
+
+def test_hosted_pay_amount_mismatch_refreshes_eid_and_classifies_second_confirm_failure() -> None:
+    session = MagicMock()
+    session.headers = {}
+    confirm_bodies: list[str] = []
+
+    responses = [
+        _FakeResp(200, {"eid": "eid_1", "currency": "usd", "config_id": "cfg_1", "total_summary": {"due": 2500}}),
+        _FakeResp(200, {"config_id": "cfg_1", "total_summary": {"due": 2500}}),
+        _FakeResp(200, {"config_id": "cfg_1", "total_summary": {"due": 2500}}),
+        _FakeResp(200, {"config_id": "cfg_1", "total_summary": {"due": 2500}}),
+        _FakeResp(200, {"config_id": "cfg_2", "total_summary": {"due": 2500}}),
+        _FakeResp(400, {"error": {"code": "checkout_amount_mismatch", "message": "Amount changed"}}),
+        _FakeResp(200, {"eid": "eid_2", "currency": "usd", "config_id": "cfg_3", "total_summary": {"due": 2600}}),
+        _FakeResp(200, {"config_id": "cfg_3", "total_summary": {"due": 2600}}),
+        _FakeResp(200, {"config_id": "cfg_3", "total_summary": {"due": 2600}}),
+        _FakeResp(200, {"config_id": "cfg_3", "total_summary": {"due": 2600}}),
+        _FakeResp(
+            402,
+            {"error": {"code": "card_declined", "decline_code": "insufficient_funds", "message": "Insufficient funds"}},
+        ),
+    ]
+
+    def fake_post(url: str, **kwargs: Any) -> _FakeResp:
+        if url.endswith("/confirm"):
+            confirm_bodies.append(str(kwargs.get("data") or ""))
+        return responses.pop(0)
+
+    session.get.side_effect = [_FakeResp(200, {"session_id": "elements_1"}), _FakeResp(200, text="")]
+    session.post.side_effect = fake_post
+    client = HostedCheckoutProtocolClient(session=session, sleep_fn=lambda _: None)
+    res = client.pay(
+        f"https://pay.openai.com/c/pay/{SYNTHETIC_CS}",
+        publishable_key=SYNTHETIC_PK,
+        payment_method_id="pm_test_1",
+        country="US",
+    )
+    assert len(confirm_bodies) == 2
+    assert "eid=eid_1" in confirm_bodies[0]
+    assert "eid=eid_2" in confirm_bodies[1]
+    assert res["ok"] is False
+    assert res["state"] == "card_declined"
+    assert res["decline_code"] == "insufficient_funds"
+    assert "余额或额度不足" in res["message"]
+
+
+def test_custom_checkout_forwards_country_polls_settlement_supports_team_plan_and_rejects_pm_id() -> None:
+    # 1. oaics_ + pm_ fails fast with explicit error code
+    with pytest.raises(ProtocolPaymentError) as exc_info:
+        execute_protocol_card_payment(
+            f"https://chatgpt.com/checkout/openai_llc/{SYNTHETIC_OAICS}",
+            publishable_key=SYNTHETIC_PK,
+            payment_method_id="pm_existing_1",
+            access_token="at_test",
+        )
+    assert exc_info.value.error_code == "oaics_payment_method_id_unsupported"
+
+    # 2. Country propagates from execute_protocol_card_payment -> pay_custom_checkout -> /taxes
+    open_jp = {
+        "checkout_session_id": SYNTHETIC_OAICS,
+        "publishable_key": SYNTHETIC_PK,
+        "status": "open",
+        "payment_status": "unpaid",
+        "currency": "jpy",
+        "checkout_state": {"currency": "jpy", "total": {"total": {"minorUnitsAmount": 3000}}},
+    }
+    complete_jp = {**open_jp, "status": "complete", "payment_status": "paid"}
+    recorded_taxes: list[dict[str, Any]] = []
+
+    stripe_http = MagicMock()
+    stripe_http.get.side_effect = [
+        _FakeResp(200, {"customer": "cus_jp_1"}),
+        _FakeResp(200, {"id": "pi_jp_1", "status": "requires_confirmation", "amount": 3000, "currency": "jpy"}),
+        # First poll after Stripe confirm: intent succeeded while ChatGPT webhook hasn't settled yet
+        _FakeResp(200, {"id": "pi_jp_1", "status": "succeeded", "amount": 3000, "currency": "jpy"}),
+    ]
+    stripe_http.post.side_effect = [
+        _FakeResp(200, {"id": "ctoken_jp_1", "payment_method_preview": {"id": "pm_jp_1"}}),
+        _FakeResp(200, {"id": "pi_jp_1", "status": "succeeded"}),
+    ]
+    get_seq = [
+        _FakeResp(200, open_jp),  # initial read
+        _FakeResp(200, open_jp),  # pre-confirm reconcile
+        _FakeResp(200, open_jp),  # poll #1: webhook not settled yet
+        _FakeResp(200, complete_jp),  # poll #2: webhook settled!
+        _FakeResp(200, {"plan_type": "team", "is_active": True}),  # non-Plus paid plan recognized
+    ]
+    post_seq = [
+        _FakeResp(200, {"checkout_session": open_jp}),
+        _FakeResp(200, {"ok": True}),
+        _FakeResp(
+            200,
+            {
+                "payment_intent": {"id": "pi_jp_1", "client_secret": "pi_jp_1_secret_abc"},
+                "confirm_return_url": "https://chatgpt.com/checkout/verify",
+            },
+        ),
+        _FakeResp(200, {"success": True}),
+    ]
+
+    def fake_post(url: str, body: dict[str, Any], *_rest: Any) -> _FakeResp:
+        if url.endswith("/taxes"):
+            recorded_taxes.append(body)
+        return post_seq.pop(0)
+
+    sleeps: list[float] = []
+    client = CustomCheckoutProtocolClient(
+        access_token="at_test",
+        checkout_get_fn=lambda *_a: get_seq.pop(0),
+        checkout_post_fn=fake_post,
+        stripe_session=stripe_http,
+        sleep_fn=sleeps.append,
+        max_poll_tries=3,
+        poll_interval_seconds=0.25,
+    )
+    res = client.run(
+        {},
+        {
+            "checkout_url": f"https://chatgpt.com/checkout/openai_llc/{SYNTHETIC_OAICS}",
+            "checkout_id": SYNTHETIC_OAICS,
+            "publishable_key": SYNTHETIC_PK,
+            "currency": "JPY",
+            "country": "JP",
+            "amount_minor": 3000,
+        },
+        card=SYNTHETIC_CARD,
+    )
+    assert recorded_taxes[0]["billing_details"]["country"] == "JP"
+    assert recorded_taxes[0]["billing_details"]["currency"] == "JPY"
+    assert sleeps == [0.25]
+    assert res["ok"] is True
+    assert res["state"] == "paid"
+    assert res["amount_minor"] == 3000
+    assert res["currency"] == "JPY"
+
+    # 3. Auto-router passes country="JP" through to pay_custom_checkout
+    with patch(
+        "sms_tool.payment.protocol_pay.pay_custom_checkout", return_value={"ok": True, "state": "read_only"}
+    ) as m:
+        out = execute_protocol_card_payment(
+            f"https://chatgpt.com/checkout/openai_llc/{SYNTHETIC_OAICS}",
+            publishable_key=SYNTHETIC_PK,
+            access_token="at_test",
+            country="JP",
+            quote_only=True,
+        )
+    assert out["ok"] is True
+    assert m.call_args.kwargs["country"] == "JP"
+    assert m.call_args.kwargs["currency"] == "JPY"
+    assert m.call_args.kwargs["read_only"] is True
+
+
+def test_execute_protocol_card_payment_uses_operation_journal_replay_guard(tmp_path: Path) -> None:
+    runtime_cfg = {"runtime_dir": str(tmp_path)}
+    url = f"https://pay.openai.com/c/pay/{SYNTHETIC_CS}"
+
+    # 1. Clean card_declined allows retrying with a different card on the same checkout session
+    with patch(
+        "sms_tool.payment.protocol_pay.pay_team_hosted_checkout",
+        return_value={"ok": False, "status": "failed", "state": "card_declined", "decline_code": "insufficient_funds"},
+    ):
+        declined = execute_protocol_card_payment(
+            url,
+            publishable_key=SYNTHETIC_PK,
+            payment_method_id="pm_card_1",
+            runtime_config=runtime_cfg,
+        )
+    assert declined["state"] == "card_declined"
+    assert declined["operation_id"]
+
+    # 2. Succeeding on retry finalizes the operation and blocks duplicate replay
+    with patch(
+        "sms_tool.payment.protocol_pay.pay_team_hosted_checkout",
+        return_value={"ok": True, "status": "completed", "state": "paid", "amount_minor": 2500, "currency": "USD"},
+    ):
+        paid = execute_protocol_card_payment(
+            url,
+            publishable_key=SYNTHETIC_PK,
+            payment_method_id="pm_card_2",
+            runtime_config=runtime_cfg,
+        )
+    assert paid["ok"] is True
+    assert paid["state"] == "paid"
+
+    with patch("sms_tool.payment.protocol_pay.pay_team_hosted_checkout") as replay_mock:
+        blocked = execute_protocol_card_payment(
+            url,
+            publishable_key=SYNTHETIC_PK,
+            payment_method_id="pm_card_3",
+            runtime_config=runtime_cfg,
+        )
+    replay_mock.assert_not_called()
+    assert blocked["ok"] is False
+    assert blocked["error_code"] == "payment_operation_reconciliation_required"
+
+    # 3. Unknown outcome also blocks blind replay until reconciled
+    url2 = "https://pay.openai.com/c/pay/cs_test_unknown_guard_001"
+    with patch(
+        "sms_tool.payment.protocol_pay.pay_team_hosted_checkout",
+        return_value={
+            "ok": False,
+            "status": "unknown",
+            "state": "unknown",
+            "requires_reconciliation": True,
+            "code": "payment_outcome_unknown",
+        },
+    ):
+        unknown = execute_protocol_card_payment(
+            url2,
+            publishable_key=SYNTHETIC_PK,
+            payment_method_id="pm_card_4",
+            runtime_config=runtime_cfg,
+        )
+    assert unknown["state"] == "unknown"
+
+    with patch("sms_tool.payment.protocol_pay.pay_team_hosted_checkout") as replay_mock2:
+        blocked2 = execute_protocol_card_payment(
+            url2,
+            publishable_key=SYNTHETIC_PK,
+            payment_method_id="pm_card_4",
+            runtime_config=runtime_cfg,
+        )
+    replay_mock2.assert_not_called()
+    assert blocked2["ok"] is False
+    assert blocked2["state"] == "unknown"
+    assert blocked2["requires_reconciliation"] is True

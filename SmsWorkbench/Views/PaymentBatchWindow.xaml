@@ -1,7 +1,8 @@
-<Window x:Class="SmsWorkbench.Views.PaymentBatchWindow"
+<ui:FluentWindow x:Class="SmsWorkbench.Views.PaymentBatchWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:loc="clr-namespace:SmsWorkbench.Localization"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:local="clr-namespace:SmsWorkbench.Views"
         Title="{loc:Tr Key='支付链接提取'}"
         Width="1120"
@@ -10,29 +11,48 @@
         MinHeight="760"
         ResizeMode="CanResize"
         WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource AppBg}">
-  <Grid Margin="20">
+        Background="{DynamicResource Surface.Chrome}"
+        FontFamily="{StaticResource Font.Ui}"
+        FontSize="{StaticResource Type.Body.Size}"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType"
+        TextOptions.TextHintingMode="Fixed"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica"
+        WindowCornerPreference="Round">
+  <Grid Background="{DynamicResource Surface.Chrome}">
     <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="38"/>
       <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
 
-    <Grid Margin="0,0,0,14">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="Auto"/>
-      </Grid.ColumnDefinitions>
-      <TextBlock Text="{loc:Tr Key='支付链接提取'}" FontSize="{StaticResource Type.Title.Size}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-      <TextBlock Grid.Column="1" Text="{Binding AccountSummary}" Foreground="{DynamicResource TextSub}" VerticalAlignment="Center"/>
-    </Grid>
+    <local:SecondaryTitleBar Grid.Row="0"
+                             TitleText="{loc:Tr Key='支付链接提取'}"
+                             BadgeText="{Binding AccountSummary}"/>
 
     <Border Grid.Row="1"
-            Margin="0,0,0,12"
-            Padding="16,14"
-            CornerRadius="{StaticResource Corner.Xl}"
-            Background="{DynamicResource Surface.Card}">
+            Margin="8,0,8,8"
+            CornerRadius="{DynamicResource Corner.Xl}"
+            Background="{DynamicResource Surface.Page}"
+            BorderBrush="{DynamicResource WorkspaceFrameOutline}"
+            BorderThickness="1"
+            ClipToBounds="True">
+      <Grid Margin="18,14,18,16">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                Margin="0,0,0,12"
+                Padding="16,14"
+                CornerRadius="{DynamicResource Corner.Xl}"
+                Background="{DynamicResource Surface.Card}"
+                BorderBrush="{DynamicResource Divider}"
+                BorderThickness="1">
     <Grid>
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*"/>
@@ -136,20 +156,24 @@
           <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,7,10">
             <TextBlock Text="{loc:Tr Key='Checkout 代理池（host:port:user:password；支持 http/https/socks5/socks5h）'}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
             <TextBox Text="{Binding CheckoutProxyPool, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{StaticResource MultilineTextBox}"
                      FontFamily="{StaticResource Font.Mono}" FontSize="{StaticResource Type.Mono.Size}"
-                     AcceptsReturn="True"
                      TextWrapping="NoWrap"
-                     Height="62"
+                     MinHeight="62"
+                     MaxHeight="88"
+                     Padding="10,6"
                      VerticalScrollBarVisibility="Auto"/>
             <TextBlock Text="{Binding CheckoutRegionSummary, Converter={StaticResource PoolSummaryConverter}}" Foreground="{DynamicResource TextSub}" FontSize="{StaticResource Type.Caption.Size}" Margin="0,3,0,0"/>
           </StackPanel>
           <StackPanel Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="2" Margin="7,0,0,10">
             <TextBlock Text="{loc:Tr Key='Approve / Update 代理池（host:port:user:password；支持 http/https/socks5/socks5h）'}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
             <TextBox Text="{Binding ApproveProxyPool, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{StaticResource MultilineTextBox}"
                      FontFamily="{StaticResource Font.Mono}" FontSize="{StaticResource Type.Mono.Size}"
-                     AcceptsReturn="True"
                      TextWrapping="NoWrap"
-                     Height="62"
+                     MinHeight="62"
+                     MaxHeight="88"
+                     Padding="10,6"
                      VerticalScrollBarVisibility="Auto"/>
             <TextBlock Text="{Binding ApproveRegionSummary, Converter={StaticResource PoolSummaryConverter}}" Foreground="{DynamicResource TextSub}" FontSize="{StaticResource Type.Caption.Size}" Margin="0,3,0,0"/>
           </StackPanel>
@@ -182,9 +206,11 @@
       <StackPanel Grid.Row="4" Grid.ColumnSpan="4" Margin="0,0,0,10">
         <TextBlock Text="{loc:Tr Key='未选择邮箱时，可输入 Access Token（每行一个，最多 10 个）'}" Style="{StaticResource FieldLabel}"/>
         <TextBox Text="{Binding ManualAccessTokens, UpdateSourceTrigger=PropertyChanged}"
-                 AcceptsReturn="True"
+                 Style="{StaticResource MultilineTextBox}"
                  TextWrapping="NoWrap"
-                 Height="72"
+                 MinHeight="72"
+                 MaxHeight="96"
+                 Padding="10,6"
                  FontFamily="{StaticResource Font.Mono}" FontSize="{StaticResource Type.Mono.Size}"
                  VerticalScrollBarVisibility="Auto"
                  ToolTip="{loc:Tr Key='每行一个 JWT Access Token；选择了邮箱时此项不会参与任务'}"/>
@@ -199,10 +225,12 @@
 
     <!-- 账号地区 / 支付资格矩阵已移除：所有账号统一使用上方设置的代理地区。 -->
 
-    <Border Grid.Row="2"
+    <Border Grid.Row="1"
             Margin="0,0,0,12"
-            CornerRadius="{StaticResource Corner.Xl}"
-            Background="{DynamicResource Surface.Card}">
+            CornerRadius="{DynamicResource Corner.Xl}"
+            Background="{DynamicResource Surface.Card}"
+            BorderBrush="{DynamicResource Divider}"
+            BorderThickness="1">
         <DataGrid x:Name="ResultsGrid"
                 ItemsSource="{Binding Results}"
                 IsReadOnly="True"
@@ -263,20 +291,27 @@
       </DataGrid>
     </Border>
 
-    <Grid Grid.Row="3">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="Auto"/>
-      </Grid.ColumnDefinitions>
-      <TextBlock Text="{Binding Status}" Foreground="{DynamicResource TextSub}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,16,0"/>
-      <StackPanel Grid.Column="1" Orientation="Horizontal">
-        <Button Content="{loc:Tr Key='测试代理'}" Command="{Binding TestProxiesCommand}" MinWidth="84" Margin="0,0,8,0"/>
-        <Button Content="{loc:Tr Key='保存代理配置'}" Command="{Binding SaveProxyConfigurationCommand}" MinWidth="108" Margin="0,0,8,0"/>
-        <Button Content="{loc:Tr Key='打开报告'}" Command="{Binding OpenReportCommand}" MinWidth="84" Margin="0,0,8,0"/>
-        <Button Content="{loc:Tr Key='取消'}" Command="{Binding RunCancelCommand}" MinWidth="72" Margin="0,0,8,0"/>
-        <Button Content="{loc:Tr Key='开始执行'}" Command="{Binding RunCommand}" MinWidth="96" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
-        <Button Content="{loc:Tr Key='关闭'}" MinWidth="72" IsCancel="True"/>
-      </StackPanel>
-    </Grid>
+    <Border Grid.Row="2"
+            BorderBrush="{DynamicResource Divider}"
+            BorderThickness="0,1,0,0"
+            Padding="0,10,0,0">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <TextBlock Text="{Binding Status}" Foreground="{DynamicResource TextSub}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,16,0"/>
+        <StackPanel Grid.Column="1" Orientation="Horizontal">
+          <Button Content="{loc:Tr Key='测试代理'}" Command="{Binding TestProxiesCommand}" MinWidth="84" Margin="0,0,8,0"/>
+          <Button Content="{loc:Tr Key='保存代理配置'}" Command="{Binding SaveProxyConfigurationCommand}" MinWidth="108" Margin="0,0,8,0"/>
+          <Button Content="{loc:Tr Key='打开报告'}" Command="{Binding OpenReportCommand}" MinWidth="84" Margin="0,0,8,0"/>
+          <Button Content="{loc:Tr Key='取消'}" Command="{Binding RunCancelCommand}" MinWidth="72" Margin="0,0,8,0"/>
+          <Button Content="{loc:Tr Key='开始执行'}" Command="{Binding RunCommand}" MinWidth="96" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
+          <Button Content="{loc:Tr Key='关闭'}" MinWidth="72" IsCancel="True"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+      </Grid>
+    </Border>
   </Grid>
-</Window>
+</ui:FluentWindow>

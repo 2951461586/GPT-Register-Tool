@@ -20,8 +20,6 @@ from sms_tool.payment.errors import error_code_of, error_stage_of, retryable_of
 OAICS_MIGRATED = ("ideal", "pix", "kakao", "blik", "twint", "momo")
 ONLINE = ("paypal", "gopay", "gcash", "grabpay", "upi", "direct_card", *OAICS_MIGRATED)
 
-pytestmark = pytest.mark.enforce_offline_methods
-
 
 def _patch_method_offline(method: str):
     """Temporarily mark one catalog method offline to exercise the refusal gate."""

@@ -1,0 +1,220 @@
+{"fn": "_parse_token_claims_and_hash", "args": ["src/a/b.tsabc"], "ok": {"$tuple": ["3524ed55a7d6cfc9", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["{name} has {count} items"], "ok": {"$tuple": ["42ff2ad309da81ff", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a..b"], "ok": {"$tuple": ["f62b42414c514fa6", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["hello world"], "ok": {"$tuple": ["b94d27b9934d3e08", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [".leading"], "ok": {"$tuple": ["9c74491a21e8fc7a", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ab"], "ok": {"$tuple": ["fb8e20fc2e4c3f24", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["Hello World"], "ok": {"$tuple": ["a591a6d40bf42040", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["😀"], "ok": {"$tuple": ["f0443a342c5ef547", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [":"], "ok": {"$tuple": ["e7ac0786668e0ff0", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [""], "ok": {"$tuple": ["", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a.b.c"], "ok": {"$tuple": ["845e30448809e2bc", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["5b04c6021d490c76", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["abc"], "ok": {"$tuple": ["ba7816bf8f01cfea", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [".leading{name} has {count} items"], "ok": {"$tuple": ["12d886f1b552ac87", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["日本語のテキスト"], "ok": {"$tuple": ["d4192d3b01dfa9f5", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["tab\tseparated"], "ok": {"$tuple": ["737304a727e038b1", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["src/a/b.ts"], "ok": {"$tuple": ["eb7041468cb32fea", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["line1\nline2straße"], "ok": {"$tuple": ["e4497c6787d0ca69", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["  padded  {name} has {count} items"], "ok": {"$tuple": ["4cdee7a88ddfe2fb", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["key_name-1ns:key.path"], "ok": {"$tuple": ["86f308f6d5d57fce", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["key_name-1"], "ok": {"$tuple": ["4184db5447df2761", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ünïcödétrailing."], "ok": {"$tuple": ["67c302418b985f94", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["  padded  "], "ok": {"$tuple": ["c7f9b538b93ce513", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["  padded  hello"], "ok": {"$tuple": ["5f8d4f7f053b9f7c", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["./x/**/*.json"], "ok": {"$tuple": ["018071a777fc8b56", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["abé"], "ok": {"$tuple": ["8ab8d394beeed9cb", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a"], "ok": {"$tuple": ["ca978112ca1bbdca", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["trailing."], "ok": {"$tuple": ["44c12a4e432eba3f", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["hello"], "ok": {"$tuple": ["2cf24dba5fb0a30e", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["HELLO"], "ok": {"$tuple": ["3733cd977ff8eb18", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["﻿bom"], "ok": {"$tuple": ["2623148f0d047ef6", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a😀b😀c"], "ok": {"$tuple": ["3b0fa9d763b5cb38", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["straße"], "ok": {"$tuple": ["787f4770613d3824", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["é"], "ok": {"$tuple": ["bf12767b0f2a56b2", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["line1\nline2HELLO"], "ok": {"$tuple": ["736409fab076d251", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["  padded  hello world"], "ok": {"$tuple": ["f4e58bdcf383450c", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["emoji 👍🏽 mix"], "ok": {"$tuple": ["7839fd7a65ab6e7d", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["line1\nline2"], "ok": {"$tuple": ["683376e290829b48", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ns:key.pathΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["9a5b5a6eab7784a5", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["hello world.leading"], "ok": {"$tuple": ["9206754c15eca9be", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["İstanbul"], "ok": {"$tuple": ["24ec8f72b5eac459", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ns:key.path"], "ok": {"$tuple": ["090ed4bc851381c0", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["hello world./x/**/*.json"], "ok": {"$tuple": ["361d20e2ab750ae6", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ünïcödé"], "ok": {"$tuple": ["b09ad3e278dfb341", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["abcHello World"], "ok": {"$tuple": ["84ca8fb02e63559d", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["﻿bomns:key.path"], "ok": {"$tuple": ["857073b913c1fdb6", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a..bhello"], "ok": {"$tuple": ["305bb473073577c5", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["{name} has {count} itemssrc/a/b.ts"], "ok": {"$tuple": ["507c2a38a18d55dd", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["line1\nline2abc"], "ok": {"$tuple": ["8a7bc5d1d3dcb9c0", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["trailing.a:b:c"], "ok": {"$tuple": ["e0d0290a7f093cd4", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ΣΊΣΥΦΟΣhello"], "ok": {"$tuple": ["98ed191d39ca4a95", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a:b:c"], "ok": {"$tuple": ["b0ee04f880c4ff42", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [".leadingabc"], "ok": {"$tuple": ["be1588f0e7023b0f", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["trailing.key_name-1"], "ok": {"$tuple": ["1fc2e9144b108d80", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["﻿boma..b"], "ok": {"$tuple": ["8bb35bb7afa9b1d2", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [".leadinga:b:c"], "ok": {"$tuple": ["5b1ebf11c8456ce1", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [".leading﻿bom"], "ok": {"$tuple": ["b89e202c65591b92", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a..b./x/**/*.json"], "ok": {"$tuple": ["446c6e277d96817e", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["aa.b.c"], "ok": {"$tuple": ["ad60b06dfa77da38", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ns:key.pathé"], "ok": {"$tuple": ["0ab37631ddd81fa6", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["abtab\tseparated"], "ok": {"$tuple": ["1ab664e2cc7adffb", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a😀b😀c日本語のテキスト"], "ok": {"$tuple": ["3756f92941d7e14f", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["﻿bomΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["7e8174d07ceb7144", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["HELLOa"], "ok": {"$tuple": ["1bf560f2ddb45f3d", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["HELLOhello world"], "ok": {"$tuple": ["ee76fe84df05becc", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [".leading.leading"], "ok": {"$tuple": ["eceb2abae5d6f4e6", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["İstanbulsrc/a/b.ts"], "ok": {"$tuple": ["072789b918da01ef", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["﻿bomabc"], "ok": {"$tuple": ["925f7ba1cd07c157", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["日本語のテキストHello World"], "ok": {"$tuple": ["77337d4b27aa8315", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["key_name-1straße"], "ok": {"$tuple": ["10f67803d7d3a6fe", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["straßesrc/a/b.ts"], "ok": {"$tuple": ["3ba038f242c126e0", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["HELLOns:key.path"], "ok": {"$tuple": ["9621ca424252abcf", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["line1\nline2  padded  "], "ok": {"$tuple": ["ed9cb92a767d4b9e", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a.b.c./x/**/*.json"], "ok": {"$tuple": ["c089233df4f6fd96", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["日本語のテキストab"], "ok": {"$tuple": ["9365ccc75ca03631", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a.b.c:"], "ok": {"$tuple": ["ac6f34955bee4ee4", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["Hello WorldHello World"], "ok": {"$tuple": ["60b3aaa7a9c94c59", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a.b.cΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["94f7a1639a9d55fd", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["trailing.tab\tseparated"], "ok": {"$tuple": ["5a1fa01045ca4ffc", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a😀b😀cünïcödé"], "ok": {"$tuple": ["dc0f6aa5e709928a", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["hello worldstraße"], "ok": {"$tuple": ["ca26fc72cd37797b", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["straße😀"], "ok": {"$tuple": ["3c4644aa5117c97b", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [".leadinga😀b😀c"], "ok": {"$tuple": ["65a7e156a7d83b6b", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["İstanbula..b"], "ok": {"$tuple": ["38310a725e09f1e0", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["日本語のテキスト😀"], "ok": {"$tuple": ["58e103d558597f8e", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["abc.leading"], "ok": {"$tuple": ["44b29710406d6a15", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["emoji 👍🏽 mixé"], "ok": {"$tuple": ["2043cc3228476d2c", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["Hello World😀"], "ok": {"$tuple": ["d71dbe2f67be37cd", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["éHELLO"], "ok": {"$tuple": ["2eb8307b01a6ad87", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["emoji 👍🏽 mixa😀b😀c"], "ok": {"$tuple": ["009ea861f1efa574", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a😀b😀c  padded  "], "ok": {"$tuple": ["2a81a49284158dc3", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["{name} has {count} itemstrailing."], "ok": {"$tuple": ["c9c8256db897194d", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a:b:ca:b:c"], "ok": {"$tuple": ["df94251479d645f4", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["éİstanbul"], "ok": {"$tuple": ["e47692c0d49cfeca", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["abstraße"], "ok": {"$tuple": ["c13da615f5ca1ec8", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a..ba"], "ok": {"$tuple": ["eb024435b5187009", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["absrc/a/b.ts"], "ok": {"$tuple": ["3cc3f41ed640cbaa", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["Hello World./x/**/*.json"], "ok": {"$tuple": ["9568d8ffe4991fda", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["tab\tseparatedHELLO"], "ok": {"$tuple": ["3b3c77449049601c", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a.b.c  padded  "], "ok": {"$tuple": ["450f5fd2e645fe69", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ΣΊΣΥΦΟΣünïcödé"], "ok": {"$tuple": ["e98bc69abec604e9", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["hello worldtab\tseparated"], "ok": {"$tuple": ["aa84aaefa7b817ab", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["Hello Worlda😀b😀c"], "ok": {"$tuple": ["df00a2ae68d4dd87", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a..b.leading"], "ok": {"$tuple": ["e58445463c6bf725", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["HELLO日本語のテキスト"], "ok": {"$tuple": ["c19bf81f460fee5c", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["straße./x/**/*.json"], "ok": {"$tuple": ["49c53eed8f3a9777", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ns:key.pathhello"], "ok": {"$tuple": ["4578366d06e63a53", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["hello worldemoji 👍🏽 mix"], "ok": {"$tuple": ["1fe276adce00a0d6", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a:b:cİstanbul"], "ok": {"$tuple": ["ad6f06dc85612a66", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a..bünïcödé"], "ok": {"$tuple": ["80e09be83bdc5d24", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["日本語のテキスト﻿bom"], "ok": {"$tuple": ["f8d2eaf205be88c3", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["key_name-1:"], "ok": {"$tuple": ["dedc59ebc87fb143", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["key_name-1{name} has {count} items"], "ok": {"$tuple": ["e529d7f314035d59", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a😀b😀cé"], "ok": {"$tuple": ["a3a50fe5936b1606", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["Hello World{name} has {count} items"], "ok": {"$tuple": ["3a61a88c1aa45abb", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["trailing.line1\nline2"], "ok": {"$tuple": ["136fc2a13f23b8f2", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ΣΊΣΥΦΟΣsrc/a/b.ts"], "ok": {"$tuple": ["aee84a599a3aa52d", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["tab\tseparated日本語のテキスト"], "ok": {"$tuple": ["992cbab908b013ca", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a:b:ctab\tseparated"], "ok": {"$tuple": ["fc433ceb8605f566", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ünïcödé😀"], "ok": {"$tuple": ["f64f77397ca646c7", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["aabc"], "ok": {"$tuple": ["223189358b15aac5", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a😀b😀cabc"], "ok": {"$tuple": ["a0a278ee6280ef6a", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a..bkey_name-1"], "ok": {"$tuple": ["0e49d0a4e79301de", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ΣΊΣΥΦΟΣ  padded  "], "ok": {"$tuple": ["53fdcd34409b8941", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["tab\tseparatedsrc/a/b.ts"], "ok": {"$tuple": ["2eb73afa969b2154", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ns:key.pathHello World"], "ok": {"$tuple": ["62d1fb809e3d5f19", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ns:key.path😀"], "ok": {"$tuple": ["1b4618aad6f38ff8", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["hello worldab"], "ok": {"$tuple": ["b109d68627206acf", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["line1\nline2a😀b😀c"], "ok": {"$tuple": ["b37ce1a0d7eae2e7", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["line1\nline2emoji 👍🏽 mix"], "ok": {"$tuple": ["232feee2d1bc0956", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a😀b😀cΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["d254bf97fba59eaf", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["hello worlda:b:c"], "ok": {"$tuple": ["5821fd1d796e3419", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [".leading😀"], "ok": {"$tuple": ["5801e4f923b2f0d2", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["straßekey_name-1"], "ok": {"$tuple": ["022ffc14022a8914", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ünïcödéabc"], "ok": {"$tuple": ["8fce8192db7fd1a2", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["{name} has {count} itemsabc"], "ok": {"$tuple": ["fc804b63b5c1dc5c", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["{name} has {count} itemsa.b.c"], "ok": {"$tuple": ["8a82376661c417a2", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ns:key.path  padded  "], "ok": {"$tuple": ["5a44fcf6b57b82cd", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["﻿bomhello world"], "ok": {"$tuple": ["37df646d4cf5cdf0", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ΣΊΣΥΦΟΣemoji 👍🏽 mix"], "ok": {"$tuple": ["8daaa730e8d6e6fb", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ΣΊΣΥΦΟΣa.b.c"], "ok": {"$tuple": ["b8503957fc3f6e6e", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["./x/**/*.json.leading"], "ok": {"$tuple": ["7f3e794e3072e88c", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["helloİstanbul"], "ok": {"$tuple": ["5773e5d88c378905", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a:b:cünïcödé"], "ok": {"$tuple": ["d98ac6da66c1502b", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["line1\nline2.leading"], "ok": {"$tuple": ["28dba022a95c7477", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["😀Hello World"], "ok": {"$tuple": ["3fa73e986571377d", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["line1\nline2trailing."], "ok": {"$tuple": ["85cb1f6fd8b15924", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["HELLOa..b"], "ok": {"$tuple": ["6955605f46ef666e", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ΣΊΣΥΦΟΣhello world"], "ok": {"$tuple": ["69f5cb36c02e6bf9", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a:b:cab"], "ok": {"$tuple": ["6478aefec30b7ed3", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["key_name-1a😀b😀c"], "ok": {"$tuple": ["7d42b7d1319c56e6", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["hello worldHello World"], "ok": {"$tuple": ["0eb455b7f931a179", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a.b.c😀"], "ok": {"$tuple": ["83606195ffad63e4", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["src/a/b.ts.leading"], "ok": {"$tuple": ["2ee75535f08aeb86", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["  padded  :"], "ok": {"$tuple": ["e97f45d2edd43278", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["tab\tseparated./x/**/*.json"], "ok": {"$tuple": ["7c322d8252601b49", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ab./x/**/*.json"], "ok": {"$tuple": ["839280eec84d48e0", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a日本語のテキスト"], "ok": {"$tuple": ["d16afa090e85498b", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [":HELLO"], "ok": {"$tuple": ["da7dbdf40d669aa9", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ünïcödé.leading"], "ok": {"$tuple": ["9a76001dc3d659b0", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["{name} has {count} itemsHello World"], "ok": {"$tuple": ["2457269b4036d225", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["key_name-1emoji 👍🏽 mix"], "ok": {"$tuple": ["e26ac5e8dce4be20", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a.b.cemoji 👍🏽 mix"], "ok": {"$tuple": ["82cb7a3609d714ac", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["trailing.abc"], "ok": {"$tuple": ["693a6f5d4d37734d", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["abc日本語のテキスト"], "ok": {"$tuple": ["64236f4a0e284c2b", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["abc😀"], "ok": {"$tuple": ["90e58f5f0fff026a", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [":é"], "ok": {"$tuple": ["649b7c9cc046687c", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [":a😀b😀c"], "ok": {"$tuple": ["b36bb3210de3e652", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ans:key.path"], "ok": {"$tuple": ["b00e51e382c1567a", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["éünïcödé"], "ok": {"$tuple": ["5acca5db7c497340", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["HELLOHELLO"], "ok": {"$tuple": ["f9dda013774cacc6", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["😀a.b.c"], "ok": {"$tuple": ["1ffb95406871ee3f", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["{name} has {count} itemsa"], "ok": {"$tuple": ["ac4e4997f1ea3d88", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["😀trailing."], "ok": {"$tuple": ["7153f37c5f0b819b", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a.b.cİstanbul"], "ok": {"$tuple": ["d5e48a278e15187f", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["İstanbulab"], "ok": {"$tuple": ["1013f08db2ff68a5", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["./x/**/*.jsonstraße"], "ok": {"$tuple": ["e3fc6893b938aa0b", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ΣΊΣΥΦΟΣa..b"], "ok": {"$tuple": ["80fcd58cce38ffb2", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a😀b😀c.leading"], "ok": {"$tuple": ["51cc50dddb84e120", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a:b:c😀"], "ok": {"$tuple": ["0779ba72409ad583", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a:b:c.leading"], "ok": {"$tuple": ["9fe4eedcd8f8a404", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a😀b😀cHELLO"], "ok": {"$tuple": ["ecf9c4486b273c1d", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [":.leading"], "ok": {"$tuple": ["03942d354f49d7a4", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a:b:c  padded  "], "ok": {"$tuple": ["bfaacffc919cf2af", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a..b日本語のテキスト"], "ok": {"$tuple": ["d18d8d58c7620b20", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [".leadinga"], "ok": {"$tuple": ["1832634402b4b46f", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["﻿bomtab\tseparated"], "ok": {"$tuple": ["c4bfbfac21f6ae58", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [":  padded  "], "ok": {"$tuple": ["db9d455eca931b7e", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a😀b😀cstraße"], "ok": {"$tuple": ["0e11caa966cd51ef", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["straßeΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["12797cb3e3737b4c", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["abHELLO"], "ok": {"$tuple": ["5a680fa684c06250", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["key_name-1日本語のテキスト"], "ok": {"$tuple": ["3845444d13ed6179", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["{name} has {count} itemsΣΊΣΥΦΟΣ"], "ok": {"$tuple": ["f7f15ce950e312ca", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["helloa"], "ok": {"$tuple": ["9abfe77d5eb12f4a", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [".leadinghello"], "ok": {"$tuple": ["c2c3c1e805bd5d27", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ab{name} has {count} items"], "ok": {"$tuple": ["e06af2ed944081b1", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["Hello Worldkey_name-1"], "ok": {"$tuple": ["ca7ed9a0a6a64c71", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a..bHELLO"], "ok": {"$tuple": ["e54816bd1321cb63", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a  padded  "], "ok": {"$tuple": ["82b27efd45999c9e", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ns:key.path日本語のテキスト"], "ok": {"$tuple": ["2928cd56c531cc39", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["héllo wörld"], "ok": {"$tuple": ["a1003f7d04a41157", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["👍🏽 thumbs"], "ok": {"$tuple": ["2752e65dacf50732", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["日本語"], "ok": {"$tuple": ["77710aedc74ecfa3", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["ılık ırmak"], "ok": {"$tuple": ["60dc09d56c2ba920", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["👨‍👩‍👧 family"], "ok": {"$tuple": ["bb5f3770a5817fd9", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a b"], "ok": {"$tuple": ["9507017c6d887511", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a😀b"], "ok": {"$tuple": ["6fba5b2ea783ded0", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a²b x½ y①"], "ok": {"$tuple": ["a950cdbd5ee71632", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["aⅠb Ⅻ"], "ok": {"$tuple": ["da9cf8ae08a90546", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["a𐐀b 𝐀bc"], "ok": {"$tuple": ["abf46dba5dae8b50", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["कि ٣٤"], "ok": {"$tuple": ["9dc1759d14c77f74", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MTcwMDAwMzYwMH0.sig"], "ok": {"$tuple": ["d178e6a593da15a1", 1700000000, 1700003600]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["  eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOiIxNzAwMDAwMDAwIiwiZXhwIjoxNzAwMDAzNjAwLjV9.sig  "], "ok": {"$tuple": ["816f8354b6b31095", 1700000000, 1700003600]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOnRydWUsImV4cCI6ZmFsc2V9.sig"], "ok": {"$tuple": ["8e1f912ff4e4cb6a", 1, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["eyJhbGciOiJIUzI1NiJ9.W10.sig"], "ok": {"$tuple": ["d8fb88b92abea925", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["not-a-jwt-token"], "ok": {"$tuple": ["254e3d361cd97dcc", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["hdr.invalid!!!base64.sig"], "ok": {"$tuple": ["758e1c3f34edd5ea", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [""], "ok": {"$tuple": ["", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": [null], "ok": {"$tuple": ["", 0, 0]}}
+{"fn": "_parse_token_claims_and_hash", "args": ["hdr.eyJpYXQiOiAiIDEyMzQgIiwgImV4cCI6ICItOTkifQ.sig"], "ok": {"$tuple": ["1cc0e0978a01d133", 1234, -99]}}

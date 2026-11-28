@@ -239,6 +239,39 @@ class SurfaceLadderTests(unittest.TestCase):
                 brushes["PrimaryHover"], brushes["OnPrimary"], "%s: PrimaryHover equals OnPrimary" % _relative(path)
             )
 
+    def test_wcag_aa_contrast_ratios_hold(self):
+        """Automated WCAG 2.1 AA contrast guard (>= 4.5:1 text, >= 3.0:1 large/chrome).
+
+        Replaces manual comment assertions so any palette edit that dims text,
+        primary CTA labels, or status badges below AA fails CI loudly.
+        """
+        pairs = (
+            ("TextMain", "Surface.Page", 4.5),
+            ("TextMain", "Surface.Card", 4.5),
+            ("TextSub", "Surface.Card", 4.5),
+            ("TextMuted", "Surface.Card", 4.5),
+            ("LogText", "Surface.Terminal", 4.5),
+            ("OnPrimary", "Primary", 4.5),
+            ("OnDanger", "Danger", 3.0),
+            ("BadgeSuccessFg", "BadgeSuccessBg", 4.5),
+            ("BadgeWarnFg", "BadgeWarnBg", 4.5),
+            ("BadgeDangerFg", "BadgeDangerBg", 4.5),
+            ("BadgeInfoFg", "BadgeInfoBg", 4.5),
+            ("BadgeNeutralFg", "BadgeNeutralBg", 4.5),
+        )
+        for path in (LIGHT_XAML, DARK_XAML):
+            brushes = _brushes(path)
+            for fg_key, bg_key, floor in pairs:
+                l1 = _luminance(brushes[fg_key])
+                l2 = _luminance(brushes[bg_key])
+                ratio = (max(l1, l2) + 0.05) / (min(l1, l2) + 0.05)
+                self.assertGreaterEqual(
+                    ratio,
+                    floor,
+                    "%s: %s (%s) on %s (%s) has contrast %.2f:1 (< %.1f:1)"
+                    % (_relative(path), fg_key, brushes[fg_key], bg_key, brushes[bg_key], ratio, floor),
+                )
+
 
 class DynamicResourceResolutionTests(unittest.TestCase):
     """Every ``{DynamicResource X}`` a view asks for must be declared somewhere."""

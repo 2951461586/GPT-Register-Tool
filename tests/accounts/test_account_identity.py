@@ -146,3 +146,37 @@ def test_registration_identity_allocates_canonical_profile_from_shared_pool():
         )
 
     assert identity["fingerprint_key"] == pool_profile_name
+
+
+def test_account_identity_preserves_underscore_safari_profiles_and_legacy_geo_suffix():
+    from sms_tool.registration.funnel import summarize_registration_funnel
+
+    for profile_name in ("safari18_0", "safari17_0", "safari18_0_ios", "safari17_2_ios", "safari184_ios"):
+        identity = create_registration_identity(
+            "http://proxy.example:8080",
+            fingerprint_key=profile_name,
+            device_id="dev-safari",
+        )
+        assert identity["fingerprint_key"] == profile_name
+        funnel = summarize_registration_funnel(
+            [
+                {
+                    "success": True,
+                    "auth_fingerprint_profile": profile_name,
+                    "device_id": "dev-safari",
+                    "identity_context": identity,
+                }
+            ],
+            attempted=1,
+        )
+        assert funnel["fingerprint_consistency"] == {"matched": 1}
+
+    # Legacy geo-suffixed profile names still strip only the trailing suffix.
+    assert (
+        create_registration_identity("http://proxy.example:8080", fingerprint_key="chrome146_jp")["fingerprint_key"]
+        == "chrome146"
+    )
+    assert (
+        create_registration_identity("http://proxy.example:8080", fingerprint_key="safari18_0_jp")["fingerprint_key"]
+        == "safari18_0"
+    )

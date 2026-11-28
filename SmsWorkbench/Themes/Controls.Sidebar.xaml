@@ -58,8 +58,8 @@
 
   <Style x:Key="IconNavButtonStyle" TargetType="local:IconNavButton">
     <Setter Property="HorizontalAlignment" Value="Stretch"/>
-    <Setter Property="Margin" Value="0,0,0,2"/>
-    <Setter Property="Height" Value="34"/>
+    <Setter Property="Margin" Value="0,0,0,1"/>
+    <Setter Property="Height" Value="29"/>
     <Setter Property="Padding" Value="10,0,10,0"/>
     <Setter Property="HorizontalContentAlignment" Value="Left"/>
     <Setter Property="Background" Value="Transparent"/>
@@ -272,9 +272,26 @@
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="HoverFill" Property="Opacity" Value="1"/>
               <Setter TargetName="Glyph" Property="Stroke" Value="{DynamicResource TextMain}"/>
               <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource TextMain}"/>
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Fast}">
+                      <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource Motion.Normal}">
+                      <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
               <Setter TargetName="PressedFill" Property="Opacity" Value="1"/>
@@ -340,7 +357,7 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
     <Setter Property="FontSize" Value="{StaticResource Type.Micro.Size}"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
-    <Setter Property="Margin" Value="10,10,8,4"/>
+    <Setter Property="Margin" Value="10,5,8,2"/>
     <Setter Property="TextWrapping" Value="NoWrap"/>
     <Setter Property="TextAlignment" Value="Left"/>
     <Style.Triggers>
