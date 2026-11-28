@@ -101,13 +101,11 @@ def _check_doc_totals(doc_texts: dict[str, str], facts: dict[str, dict[str, obje
         "README.md": (
             f"[{crate_count} 个 PyO3 热点加速扩展]",
             f"{crate_count} 个 `rust-anything` PyO3 扩展加速 {fn_count} 个热点函数",
-            f"（{crate_count} 个 PyO3 热点扩展 · {fn_count} 函数）",
             f"{crate_count} 个由 `rust-anything` 管理的 PyO3 扩展加速 {fn_count} 个热点函数（{cases_fmt} 条录制用例",
         ),
         "README_EN.md": (
             f"[{crate_count} PyO3 hot-path extensions]",
             f"{crate_count} `rust-anything` PyO3 extensions accelerate {fn_count} hot CPU functions",
-            f"({crate_count} PyO3 Hot-Path Crates · {fn_count} Functions)",
             f"{crate_count} `rust-anything`-managed PyO3 crates under `rust/` accelerate {fn_count} hot functions ({cases_fmt} recorded cases",
         ),
         "docs/README.md": (f"{crate_count} 个 `rust-anything` PyO3 热点扩展",),

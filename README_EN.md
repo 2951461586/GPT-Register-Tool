@@ -5,13 +5,14 @@
   <p>
     <a href="./README.md">简体中文</a> · <a href="./README_EN.md">English</a>
   </p>
-  <p>
-    <a href="https://github.com/2951461586/GPT-Register-Tool/actions/workflows/ci.yml"><img src="https://github.com/2951461586/GPT-Register-Tool/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-    <a href="https://github.com/2951461586/GPT-Register-Tool/releases"><img src="https://img.shields.io/github/v/release/2951461586/GPT-Register-Tool?logo=github&color=6A20D0" alt="Latest Release" /></a>
-    <a href="./LICENSE"><img src="https://img.shields.io/github/license/2951461586/GPT-Register-Tool?color=22C55E" alt="License: MIT" /></a>
-    <a href="https://github.com/2951461586/GPT-Register-Tool/stargazers"><img src="https://img.shields.io/github/stars/2951461586/GPT-Register-Tool?logo=github" alt="GitHub Stars" /></a>
-    <a href="https://github.com/2951461586/GPT-Register-Tool/releases"><img src="https://img.shields.io/github/downloads/2951461586/GPT-Register-Tool/total?logo=github&color=0EA5E9" alt="GitHub Downloads" /></a>
-  </p>
+
+  [![CI](https://github.com/2951461586/GPT-Register-Tool/actions/workflows/ci.yml/badge.svg)](https://github.com/2951461586/GPT-Register-Tool/actions/workflows/ci.yml)
+  [![Latest Release](https://img.shields.io/github/v/release/2951461586/GPT-Register-Tool?logo=github&color=6A20D0)](https://github.com/2951461586/GPT-Register-Tool/releases)
+  [![License: MIT](https://img.shields.io/github/license/2951461586/GPT-Register-Tool?color=22C55E)](./LICENSE)
+  [![GitHub Stars](https://img.shields.io/github/stars/2951461586/GPT-Register-Tool?logo=github)](https://github.com/2951461586/GPT-Register-Tool/stargazers)
+  [![GitHub Downloads](https://img.shields.io/github/downloads/2951461586/GPT-Register-Tool/total?logo=github&color=0EA5E9)](https://github.com/2951461586/GPT-Register-Tool/releases)
+  [![Buy me AI tokens](https://buymeatokens.com/api/badge/2951461586?style=flat)](https://buymeatokens.com/2951461586?ref=badge-gpt-register-tool)
+
   <p>
     <img src="https://img.shields.io/badge/Windows-10%2F11-0078D4?logo=windows&logoColor=white" alt="Windows 10/11" />
     <img src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white" alt=".NET 10" />
@@ -30,10 +31,10 @@
 
 Current release notes: [v2026.11.28](./docs/releases/release-v2026.11.28.md)
 
-[![Buy me AI tokens](https://buymeatokens.com/api/badge/2951461586)](https://buymeatokens.com/2951461586?ref=badge-gpt-register-tool)
-
-
 ## Sponsor
+
+[![Buy me AI tokens](https://buymeatokens.com/api/badge/2951461586)](https://buymeatokens.com/2951461586?ref=badge-gpt-register-tool)
+<script src="https://buymeatokens.com/widget.js" data-user="2951461586" data-mode="inline" async></script>
 
 <img width="5728" height="672" alt="IPWO residential proxy" src="./docs/sponsors/ipwo.png" />
 
@@ -47,108 +48,32 @@ Dynamic and static IP resources are available with free testing through the [IPW
 Built for account ↔ proxy-slot binding: append a session name and city to the username to keep the same residential IP for up to 72 hours, and stay in the same city even when the IP rotates.<br>
 Chinese interface, USDT payments supported, and 30% off your first purchase with code GPTREG30.
 
+## Interface Overview
+
+<div align="center">
+  <img src="./docs/assets/ui-overview-workbench.jpg" alt="GPT-Register-Tool Dark Mode Workbench Overview" width="100%" />
+  <br><br>
+  <img src="./docs/assets/ui-overview-themes.jpg" alt="GPT-Register-Tool Dual-Theme & Bilingual Interface Overview" width="100%" />
+</div>
+
 ## Highlights
 
-| Area | Capability |
+| Area | Core Capabilities |
 | --- | --- |
-| **Registration** | Mailbox pools / ReMail long-lived mailboxes / CFWorker domains / iCloud relay links plus multi-vendor SMS; single, concurrent, and target-success (`--target-success` + `--max-attempts`) batches; each account mints its own Sentinel token and `oai-did`; success means the AT probe answered HTTP 200; registration only stores the AT/Session and never builds payment links |
-| **Protocol consistency and recovery** | Preflight of the ChatGPT / Auth / Sentinel hops before a mailbox is spent; one proxy session per account, rotated only on failure; NextAuth / Auth / ChatGPT share a stable `oai-did`, UA and client hints with GeoIP-derived locale and timezone; 403/429 opens a circuit with no plain-HTTP PoW fallback; the checkpoint is persisted before the AT probe so a resume never re-spends an OTP |
-| **Mailbox and OTP** | One mailbox seam: ReMail, Smailr, CFWorker, Microsoft Graph/OAuth, Outlook/Hotmail IMAP, Gmail, iCloud relay links and legacy pool formats; OTP parsing filters by subject, sender, exact recipient and server timestamp, then ranks candidates; ReMail adds adaptive polling, detail-body fetch and a 30s resend |
-| **Payment links & protocol card engine** | 16 catalog methods total: 15 Plus protocol methods route through `sms_tool/pay_link/extract_server.py` to an external Paylink Extraction Server (CDK passes strictly via env vars); plus a native in-process **GPT Team 5-seat trial hosted checkout extractor** (`team_trial`, `sms_tool/pay_link/team_trial.py`, 25-region billing currency alignment) and a non-CAPTCHA **Stripe Hosted (`cs_`) / ChatGPT Custom (`oaics_`) protocol card payment engine** (`sms_tool/payment/protocol_pay.py` + `protocol_codec.py`, `--protocol-card-quote` / `--protocol-card-pay`; card JSON loaded only from `--card-file` or `GPT_CARD_JSON`, stopping cleanly with `challenge_required` on 3DS/challenges) |
-| **Native Rust acceleration** | `native/sentinel_vm/` compiles to an in-process `sentinel_vm.dll` FFI with **zero Node.js dependency**; 71 `rust-anything` PyO3 extensions accelerate 132 hot CPU functions (protocol payment `rv_timestamp` codec/Stripe.js extraction & deep quote parsing **9.4×** / up to **31×**, sanitizer 8.3×, OTP extraction 6.9× / up to 63×, Sentinel PoW 6.9×, extraction-server URL validation 6.3×, error classification 6.2×, reauthorize URL query stripping 6.0×, coupon URL building 4.9×, payment wire attestation/diagnostics 4.6× / up to 14.4×, HTML/JS/API-path/URL stripping 4.0×/2.3×/2.2×, browser-flow failure classification & DOM URL/recovery/navigation parsing 3.9×/3.1×/2.6×/1.6× / up to 5.0×, Codex OAuth JWT/safe-URL/stage parsing 3.8×/2.3× / up to 4.7×, proxy normalization/masking/retargeting/stage-key/bridge/phone-proxy URL rewriting & interleaving 3.4×/2.1×/1.9×/1.7×/1.5× / up to 15×, profile token matching 3.3×, PayPal proxy error & scheme-candidate parsing 3.2× / up to 3.7×, account identity egress-key & JWT extraction 3.2× / up to 3.4×, batch report ID sanitization & account hash 3.0× / up to 3.2×, PayPal reverse HTML/form/challenge parsing & auth-queue hash 2.8×/2.4× / up to 4.1×, auth fingerprint headers & TLS extension permutation 2.8×/1.3×, session-cookie reassembly & refresh parsing 2.8×/2.3×, SUB2API parsing 2.7×, capability-browser proxy conversion 2.6×, Agent Identity JWT parsing 2.6×, CAPTCHA config & bridge HTML generation 2.6× / up to 5.7×, transient transport error classification 2.4×, Team trial / Codex / scan / liveness JWT & error parsing 2.4×/2.4×/2.3×/2.0×, 2FA reauth & deactivation marker scanning 2.3×/2.0×, qualification-batch proxy fingerprint & Stripe reason extraction 2.3× / up to 4.3×, NexSMS/SMSBower phone normalization 2.3×/2.1×, Sentinel secret digest & impersonate version parsing 2.2×/1.5×, auth-flow step/password/SO-token predicates 2.2×/1.8×, PayPal DOM value matching 2.1×, account email-core normalization 2.0×, pay-link contract normalization 2.0×, auth-wire redirect check 1.9×, `.env` line parsing 1.7×, wham quota window parsing 1.5×, qualification state & method selection parsing 1.5×/1.2×, edge-probe classification 1.3×), with 0 `unsafe` and 0 MinGW runtime DLLs; see [Rust acceleration](docs/current/rust-acceleration.md) |
-| **Accounts and data** | Session JSON plus SQLite dual index; liveness probe, offline JWT lightweight inspection (`--inspect-accounts`) and upgraded 401 recovery (dedicated `relogin` proxy lane rotation, pre-OTP exit rotation, passwordless email-OTP fallback for legacy accounts, and transport-drop retry on post-relogin liveness verification); promotion badge probing and persisting machine-readable Plus trial and **GPT Team 5-seat trial (`team-1-month-free`)** flags; Codex / CPA / SUB2API import-export; local data lives in `sessions/` and `runtime/`, both Git-ignored |
-| **Desktop operations** | Role-folder namespace isolation (`Models` / `Services` / `ViewModels` / `Views` / `Dialogs` / `Interop`) + window-independent Coordinators; selected accounts drive the "Payment link extraction" window (extraction server config, masked CDK, concurrency, retries, Canary, collapsible proxy pools, checkpoint resume); each `Saved session:` debounces an account-pool refresh; multi-select delete is one backend batch command; browser drivers support `--block-assets` traffic saving |
-| **SMS** | SMSBower, HeroSMS, Grizzly and NexSMS provider selection with online catalog lookup (availability depends on each vendor), plus send retry, timeout and poll-interval settings; see the [one-click SMS contract](docs/current/one-click-sms.md) |
+| **Dual-lane registration & OTP** | Built-in protocol lane + browser drivers (Playwright / Camoufox / Roxy / Cloak), unified ReMail / Smailr / CFWorker / Graph / IMAP / Gmail / iCloud mailbox pools, multi-vendor SMS (SMSBower / HeroSMS / Grizzly / NexSMS), pulse scheduling, checkpoint resume, and HTTP 200 AT verification |
+| **Protocol consistency & isolation** | Per-account sticky proxy binding, GeoIP-aligned locale & timezone headers, in-process Sentinel token minting, three-hop network preflight, and 403/429 circuit protection before consuming mailboxes or OTPs |
+| **Account health & governance** | Session JSON + SQLite dual index; concurrent liveness probing, offline JWT lightweight inspection (`--inspect-accounts`), layered 401 relogin recovery, auto 2FA enrollment, Plus & GPT Team 5-seat trial detection, and Codex / CPA / SUB2API import-export |
+| **16 payment methods & card engine** | 15 Plus methods routed via `sms_tool/pay_link/extract_server.py` to an external Paylink Extraction Server, plus native in-process GPT Team 5-seat trial checkout (`team_trial`) and non-CAPTCHA Stripe `cs_` / ChatGPT `oaics_` protocol card payment (stopping safely on 3DS challenges) |
+| **Native Rust acceleration** | `native/sentinel_vm/` compiles to an in-process `sentinel_vm.dll` FFI with **zero Node.js dependency**; 71 `rust-anything` PyO3 extensions accelerate 132 hot CPU functions with 0 `unsafe` and 0 MinGW runtime DLLs; see [Rust acceleration](docs/current/rust-acceleration.md) |
+| **Modern desktop workbench** | Light / Dark / System theme modes and Chinese / English UI switching; live throughput & failure-class metrics bar, collapsible log/task drawer, inline proxy-pool speed testing, system tray & `Ctrl+Alt+R` hotkey, and one-click workspace backup/restore |
 
+## Architecture Overview
 
-## Architecture
-
-The codebase is organized into five inward-only layers — **① Surface → ② CLI / Command Adapters → ③ Application Workflows → ④ Provider / Driver / Persistence Adapters → ⑤ Foundation Kernel & Domain Contracts** (`scripts/layer_manifest.json` is the single authority). Module-scope imports point strictly inward (`source layer <= target layer`); a lower layer never imports a higher one, and the innermost `sms_tool/kernel/` imports only the Python standard library.
-
-The WPF desktop client (.NET 10) and the Python core communicate across a **dual read/write channel**, validated on both sides against the repository's cross-language schema manifests (`config_schema.json`, `ipc_schema.json`, `result_schema.json`, `sensitive_policy.json`, `payment_methods.json`):
-
-- **Write path (task execution)**: `PythonBackendClient` spawns `python -m sms_tool` subprocesses for registration, liveness/recovery, email change, and batch payment; proxy credentials pass via environment variables (never in `argv`), and stdout streams versioned `@@SMSWORKBENCH_V2@@` progress/result envelopes written solely by `sms_tool/desktop/ipc.py`.
-- **Read path (read-only snapshots)**: `DesktopReadClient` talks to `sms_tool/desktop/serve.py` / `sms_tool/desktop/read.py` over a resident JSONL request-response channel (with one-shot fallback) for side-effect-free account pool, mailbox pool, and SMS catalog reads.
-
-Registration has two lanes — **protocol** (built-in default) and **browser drivers** — sharing one mailbox-OTP, session-extraction, and AT HTTP 200 probe boundary. Sharded configs and runtime data stay outside the repository (Git-ignored).
-
-```mermaid
-flowchart TB
-    subgraph L1["① Surface · Desktop UI & Process Entry"]
-        direction LR
-        WPF["SmsWorkbench/ (WPF · .NET 10)<br/>Views · Dialogs · ViewModels · Services<br/>Models · Interop · Themes · Assets/Fonts"]
-        CONTRACTS["SmsWorkbench.Contracts/<br/>CommandPlanner · PaymentMethods<br/>Sanitizer · Read/IPC Contracts"]
-        DREAD["sms_tool/desktop/<br/>serve.py · read.py<br/>Resident JSONL Read Surface"]
-    end
-
-    subgraph L2["② CLI / Command Adapters"]
-        direction LR
-        CLI["sms_tool/cli.py (lazy dispatch)"]
-        CMDS["commands/ · cli_parsers/"]
-        DIAG["doctor.py · config/usage.py"]
-    end
-
-    subgraph L3["③ Application Workflows"]
-        direction LR
-        REG["registration/ · auth_flow/<br/>Protocol Signup · Batch · Pulse"]
-        BFLOW["registration_drivers/browser_flow/<br/>Browser Page Flow"]
-        MBFLOW["mailbox/<br/>Router · Strategies · Polling"]
-        ACC["accounts/ · codex/ · importers/<br/>Probe · Recovery · Inspect · Export"]
-        PAYFLOW["payment/ (batch · auth · qualification_batch)<br/>paypal/ (orchestrator · reverse)"]
-    end
-
-    subgraph L4["④ Provider / Driver / Persistence Adapters"]
-        direction LR
-        PROV["providers/ · phone/<br/>Mailbox & SMS Adapters"]
-        DRV["registration_drivers/ · browser/<br/>playwright · camoufox · roxy · cloak"]
-        SEN["sentinel/<br/>native/sentinel_vm Rust FFI<br/>Zero Node.js Dependency"]
-        PAYAD["pay_link/ (extract_server · team_trial)<br/>paypal/ (auto authorization)"]
-        STO["store/ · session/<br/>SQLite + Session JSON"]
-    end
-
-    subgraph L5["⑤ Foundation Kernel & Domain Contracts (Innermost)"]
-        direction LR
-        KERN["kernel/ (stdlib-only)<br/>paths · sanitizer · timeouts · flags<br/>circuit_breaker · cross_process_gate · humanize · native_loader"]
-        INFRA["config/ · transport/ · proxy/ · geo/<br/>observability/"]
-        SEAMS["Immutable Contracts & Cross-Lane Primitives<br/>account_models · payment/wire & checkout_contract<br/>desktop/ipc · operation_journal · store/account_seed"]
-        RUST["rust/ (71 PyO3 Hot-Path Crates · 132 Functions)<br/>protocol_payment · sanitizer · env_loader · mail_otp · sentinel_pow · sentinel_digest · sentinel_runner · tls_fingerprint · auth_headers · auth_flow_steps · auth_password_step · auth_wire · account_stages · account_promotion · account_2fa · account_terminal · captcha_config · profile_reclaim · proxy · stage_proxy_key · proxy_bridge · phone_proxy · batch_proxy · edge_probe · html · sms · smsbower · nexsms · data_saver · http · http_client · browser_flow_session · browser_flow_dom · browser_flow_recovery · browser_flow_decisions · session_builder · session_refresh · session · codex_jwt · codex_oauth · codex_oauth_stage · agent_identity · store · cpa · sub2api · accounts · lifecycle · liveness · wham_usage · team_trial · payment_wire · batch_report · paypal_dom · paypal_proxy · paypal_reverse_html · paypal_auth_queue · pay_link · extract_server · capability_browser · qualification · qualification_batch"]
-    end
-
-    EXT["External Paylink Extraction Server<br/>HTTP API · EXTRACT_LINK_* env auth"]
-    DATA[("Local Config & Runtime Data (Git-ignored)<br/>%LOCALAPPDATA%\\GPTRegisterTool\\config · sessions/ · runtime/")]
-
-    WPF --> CONTRACTS
-    WPF -. "DesktopReadClient · JSONL Read-Only" .-> DREAD
-    L1 -- "PythonBackendClient · CLI + V2 Envelope" --> L2
-    L2 --> L3
-    L3 --> L4
-    L4 --> L5
-    PAYAD -. "HTTPS / extraction server" .-> EXT
-    L4 --> DATA
-    L5 --> DATA
-```
-
-Module ownership and responsibility per layer:
-
-| Layer | Modules | Responsibility |
-| --- | --- | --- |
-| ① Surface (Desktop UI) | `SmsWorkbench/` (`Views` · `Dialogs` · `ViewModels` · `Services` · `Models` · `Interop` · `Localization` · `Themes` · `Assets/Fonts/`) | Generic Host / DI, role-folder namespace isolation, MVVM shell & XAML dialogs, window-independent Coordinators, framed chrome/canvas Light & Dark themes with embedded `Atkinson Hyperlegible Next` typography, collapsible log/queue drawer, tray & global hotkey, workspace backup/restore |
-| ① Surface (Contracts & Read Channel) | `SmsWorkbench.Contracts/`, `sms_tool/desktop/serve.py`, `sms_tool/desktop/read.py` | Window-independent CLI planning (`BackendCommandPlanner`), payment method catalog, log redaction, resident JSONL read-only snapshot server and `DesktopReadClient` wire contracts |
-| ② CLI / Command Adapters | `sms_tool/cli.py`, `sms_tool/commands/`, `sms_tool/cli_parsers/`, `sms_tool/doctor.py`, `sms_tool/config/usage.py` | Lazy command dispatch, declaration-only parser groups, exit-code translation and environment diagnostics; owns no provider wire logic or direct DB writes |
-| ③ Application Workflows (Registration & Auth) | `sms_tool/registration/` (`orchestrator.py` · `handlers.py` · `batch_runner.py` · `pulse.py`), `sms_tool/auth_flow/`, `sms_tool/registration_drivers/browser_flow/` | Entry dispatch with immutable `RegistrationOperations` binding, protocol stage ordering, target-success & pulse scheduling, resumable checkpoints, browser page state machine; protocol and browser lanes share one OTP / Session / AT 200 boundary |
-| ③ Application Workflows (Mailbox · Accounts · Payment) | `sms_tool/mailbox/`, `sms_tool/accounts/`, `sms_tool/codex/`, `sms_tool/importers/`, `sms_tool/payment/batch.py`, `sms_tool/payment/qualification_batch.py` | Mailbox routing/strategies/polling, existing-account liveness / layered 401 recovery / offline JWT inspection (`sms_tool/accounts/account_inspection.py`) / promotion & health batches / email change / terminal cleanup, Codex OAuth & CPA/SUB2API import-export, batch payment & qualification orchestration |
-| ④ Provider & Driver Adapters | `sms_tool/providers/`, `sms_tool/phone/`, `sms_tool/registration_drivers/`, `sms_tool/browser/`, `sms_tool/sentinel/`, `sms_tool/registration/sentinel_tokens.py` | Mailbox & SMS vendor clients and phone-slot reuse; browser drivers (playwright · camoufox · roxy · cloak), static-asset blocking (`sms_tool/registration_drivers/data_saver.py`), process/fingerprint pools; in-process native Rust Sentinel FFI (`sms_tool/sentinel/native_ffi.py`) issuance |
-| ④ Payment Lanes & Persistence | `sms_tool/pay_link/`, `sms_tool/paypal/`, `sms_tool/store/`, `sms_tool/session/` | Multi-method registry & unified external Paylink Extraction Server HTTP adapter (`sms_tool/pay_link/extract_server.py`, serving all 15 catalog methods), PayPal authorization execution; SQLite + Session JSON dual-index persistence (`sms_tool/storage.py` back-compat shell) and canonical session building/refresh |
-| ⑤ Foundation Kernel | `sms_tool/kernel/` | Zero-application-dependency stdlib-only core: paths, sanitizer, timeout constants, frozen-config boolean flags, failure vocabulary, error classification, batch circuit breaker, cross-process file locks, humanize pacing, and shared native extension loader |
-| ⑤ Infrastructure Primitives | `sms_tool/config/`, `sms_tool/transport/`, `sms_tool/proxy/`, `sms_tool/geo/`, `sms_tool/observability/` | Sharded config loading & read-only freezing; `curl_cffi` / `wreq` dual transport backends, single endpoint authority (`sms_tool/transport/endpoints.py`) and fingerprint pool; single proxy parser authority (`sms_tool/proxy/entry.py`), lane routing, health and two-hop local bridge (`sms_tool/proxy/bridge.py`); single exit GeoIP/timezone authority and sanitized telemetry |
-| ⑤ Domain Contracts & Shared Seams | `sms_tool/accounts/account_models.py`, `sms_tool/payment/wire.py`, `sms_tool/payment/checkout_contract.py`, `sms_tool/payment/catalog.py`, `sms_tool/desktop/ipc.py`, `sms_tool/operation_journal.py`, `sms_tool/store/account_seed.py` | Immutable cross-lane seams: typed account models, Checkout & payment wire kernel, method catalog, promotion/qualification states, sole `@@SMSWORKBENCH_V2@@` IPC writer, durable idempotency journal, and account-seed lookup |
-
-- **External extraction server boundary**: Legacy in-repo protocol-payment extractors have been retired; all 15 catalog payment methods route through `sms_tool/pay_link/extract_server.py` (`protocol_payments.extract_link_server` / `EXTRACT_LINK_*` env vars).
-- **Native Rust acceleration & zero Node.js**: `native/sentinel_vm/` provides the in-process Sentinel VM FFI; 71 `rust-anything`-managed PyO3 crates under `rust/` accelerate 132 hot functions (23,952 recorded cases 100% matched, 0 `unsafe`; see [Rust acceleration](docs/current/rust-acceleration.md)).
-- **Enforced architecture gates**: Layer direction (0 outward allow-list edges, 0 cross-lane coupling), 24 machine-validated boundary specs, 71 Rust PyO3 crate compilation checks, and namespace isolation are enforced automatically in CI and pre-commit by `scripts/import_layer_ratchet.py`, `scripts/kernel_boundary_ratchet.py`, `scripts/root_module_ratchet.py`, `scripts/lane_coupling_ratchet.py`, `scripts/spec_validate.py`, `scripts/rust_crates_guard.py`, `scripts/architecture_scan.py`, and `tests/SmsWorkbench.Tests/NamespaceArchitectureTests.cs`.
+- **Five inward-only layers**: Surface → CLI / Command Adapters → Application Workflows → Provider / Driver / Persistence Adapters → Stdlib-only Foundation Kernel (`sms_tool/kernel/`), governed by `scripts/layer_manifest.json`.
+- **Dual read/write IPC**: `PythonBackendClient` runs write workflows over versioned `@@SMSWORKBENCH_V2@@` envelopes (passing proxy credentials via environment variables rather than `argv`), while `DesktopReadClient` queries a resident side-effect-free JSONL snapshot server.
+- **Native Rust core & CI gates**: `native/sentinel_vm/` provides the in-process Sentinel VM FFI; 71 `rust-anything`-managed PyO3 crates under `rust/` accelerate 132 hot functions (23,952 recorded cases 100% matched, 0 `unsafe`), guarded end-to-end by pre-commit and GitHub Actions CI ratchets.
 
 See [architecture and boundaries](docs/architecture.md), [desktop UI architecture](docs/current/ui-architecture.md), [Rust acceleration](docs/current/rust-acceleration.md), and [directory map](docs/directory-map.md).
-
 
 ## Installation
 
@@ -186,7 +111,6 @@ Do not edit a legacy file expecting it to override active shards.
 validation remains in Python config/driver preflight. Local configuration files
 contain credentials and must stay ignored. See
 [configuration ownership](docs/current/configuration.md).
-
 
 Desktop icons come from [tabler-icons](https://github.com/tabler/tabler-icons) v3.50.0
 (MIT License). The path data is copied verbatim from the upstream outline SVGs, and each
