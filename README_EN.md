@@ -33,9 +33,6 @@ Current release notes: [v2026.11.28](./docs/releases/release-v2026.11.28.md)
 
 ## Sponsor
 
-[![Buy me AI tokens](https://buymeatokens.com/api/badge/2951461586)](https://buymeatokens.com/2951461586?ref=badge-gpt-register-tool)
-<script src="https://buymeatokens.com/widget.js" data-user="2951461586" data-mode="inline" async></script>
-
 <img width="5728" height="672" alt="IPWO residential proxy" src="./docs/sponsors/ipwo.png" />
 
 [IPWO](https://www.ipwo.net) provides global residential proxy resources for ChatGPT automation tools, with multi-region IP selection and flexible proxy configuration.<br>
@@ -47,6 +44,8 @@ Dynamic and static IP resources are available with free testing through the [IPW
 [ProxyLane](https://proxylane.dev/?utm_source=gpt-register-tool&utm_medium=partnership&utm_campaign=gpt-register-tool_sponsor_202610&utm_content=github_readme) residential proxies cover 195 countries, with 95%+ of IPs rated low-risk by Scamalytics, and targeting by city, ISP, and ASN.<br>
 Built for account ↔ proxy-slot binding: append a session name and city to the username to keep the same residential IP for up to 72 hours, and stay in the same city even when the IP rotates.<br>
 Chinese interface, USDT payments supported, and 30% off your first purchase with code GPTREG30.
+
+[![Buy me AI tokens](https://buymeatokens.com/api/badge/2951461586)](https://buymeatokens.com/2951461586?ref=badge)
 
 ## Interface Overview
 
